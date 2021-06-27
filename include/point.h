@@ -1,3 +1,6 @@
+#if !defined(POINT)
+#define POINT
+
 #include <iostream>
 #include "entity.h"
 
@@ -109,3 +112,5 @@ public:
     vector3d cross(const vector3d &vector) const;
     double dot(const vector3d &vector) const;
 };
+
+#endif // POINT
