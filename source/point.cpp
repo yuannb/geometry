@@ -1,6 +1,11 @@
 #include <iostream>
 #include "point.h"
 
+vector3d operator*(const double u, const vector3d vec)
+{
+    return (vec * u);
+}
+
 point3d::point3d(const vector3d &vector)
 {
     m_x = vector.getX();
@@ -157,6 +162,15 @@ vector3d vector3d::cross(const vector3d &vector) const
     result.m_x = m_y * vector.m_z - m_z * vector.m_z;
     result.m_y = m_z * vector.m_x - m_x * vector.m_z;
     result.m_z = m_x * vector.m_y - m_y * vector.m_x;
+    return result;
+}
+
+vector3d vector3d::operator*(const double scale) const
+{
+    vector3d result;
+    result.m_x = m_x * scale;
+    result.m_y = m_y * scale;
+    result.m_z = m_z * scale;
     return result;
 }
 

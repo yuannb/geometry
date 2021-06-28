@@ -7,6 +7,8 @@
 #define     ELLIPSE         2
 #define     NURBS           3
 
-#define     error       1e-6
+#define     error           1e-6
+
+#define     infinite        -1
 
 #endif

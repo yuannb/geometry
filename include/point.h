@@ -60,6 +60,9 @@ public:
 
 class vector3d
 {
+
+friend vector3d operator*(const double u, const vector3d vec);
+
 private:
     double m_x;
     double m_y;
@@ -90,6 +93,8 @@ public:
     //overload
     vector3d operator+(const point3d &point)const ;
     vector3d operator+(const vector3d &vector) const ;
+
+    vector3d operator*(const double sacle) const ;
 
     vector3d operator-(const point3d &point) const;
     vector3d operator-(const vector3d &vector) const ;
