@@ -49,18 +49,6 @@ bool range::isvalid() const
     return true;
 }
 
-bool range::get_low(double &low) const
-{
-    low = m_low;
-    return isvalid();
-}
-
-bool range::get_height(double &height) const
-{
-    height = m_height;
-    return isvalid();
-}
-
 
 bool range::set_height(double height)
 {
@@ -74,8 +62,14 @@ bool range::set_low(double low)
     return isvalid();
 }
 
-bool range::set_type(range_type type)
+bool range::contain(double u) const
 {
-    m_type = type;
-    return isvalid();
+    if (m_type == UNKNOWN_RANGE)
+        return false;
+    else if (m_type == BOUNDED)
+        return (m_low - error < u) && (m_height + error > u);
+    else if (m_type == ABOVE_UNBOUNDED)
+        return (m_low - error < u);
+    else
+        return (m_height + error > u);
 }

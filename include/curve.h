@@ -5,10 +5,7 @@
 #include "point.h"
 
 
-class range
-{
-public:
-    enum range_type
+enum range_type
     {
         UNKNOWN_RANGE = 0,
         BOUNDED = 1,
@@ -16,13 +13,16 @@ public:
         BELOW_UNBOUNDED = 3,
         UNBOUNDED = 4
     };
+
+class range
+{
 private:
      double m_low;
      double m_height;
      range_type m_type;
 public:
     //default construct
-    range() : m_low(0.0), m_height(0.0), m_type(BOUNDED) { };
+    range() : m_low(0.0), m_height(1.0), m_type(UNBOUNDED) { };
 
     //construct
     range(double low, double height, range_type type);
@@ -41,11 +41,11 @@ public:
     //valid
     bool isvalid() const;
 
-    //if range is not valid, return false
-    bool get_low(double &low) const;
+    //get low of range
+    double get_low() const { return m_low; };
 
     //if range is not valid, return false
-    bool get_height(double &height) const;
+    double get_height() const { return m_height; }
 
     //set low : if [low, m_hight] is not valid, return false
     bool set_low(double low);
@@ -55,7 +55,25 @@ public:
 
     //set range type : if {[m_low, m_height], type} is invaid, return false
     bool set_type(range_type type);
+
+    //get range type
+    int get_range_type() { return m_type; }
+
+    double range_length() { return m_height - m_low; }
+
+    //if m_range contain u, return true; else return false;
+    bool contain(double u) const;
 };
+
+
+enum limit_type
+{
+    both_side = 0,      //the limit on both side
+    left_side = 1,      //the limit on left side
+    right_side = 2,     //the limit on right side
+    unknown_side = 3    //unknown side
+};
+
 
 class curve
 {
@@ -64,17 +82,29 @@ private:
     range m_range;
 public:
     //calculate length of curve
-    virtual double length() = 0;
+    virtual double length() const = 0;
     
     //get start point
-    virtual bool get_start_point(point3d &point) = 0;
+    virtual bool get_start_point(point3d &point) const = 0;
 
-    //get start point
-    virtual bool get_end_point(point3d &point) = 0;
+    //get end point
+    virtual bool get_end_point(point3d &point) const = 0;
     
     //get point at parameter v
-    virtual bool get_point(double v, point3d &point) = 0;
+    virtual bool get_point(double v, point3d &point) const = 0;
 
+    //derivative
+    virtual bool eval_der(const double u, vector3d **der = nullptr, 
+                            unsigned n_th = 0, limit_type side = unknown_side) const = 0;
+
+    //get range
+    range get_range() const {return m_range; }
+
+    //set range
+    virtual bool set_range(const range &krange) = 0;
+
+    //set_range_type
+    virtual bool set_range_type(const range_type krange_type) = 0;
 };
 
 
