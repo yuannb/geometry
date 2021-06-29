@@ -67,3 +67,25 @@ bool line::get_point(double u, point3d &point) const
     point = m_point + m_scale * u * m_vector;
     return flag;
 }
+
+bool line::eval_param(const point3d &point, double &param) const
+{
+    vector3d temp = vector3d(point - m_point) / m_scale;
+
+    if (std::abs(m_vector.getX()) > error)
+        param = m_vector.getX() / m_vector.getX();
+    else if (std::abs(point.getY()) > error)
+        param = m_vector.getY() / m_vector.getY();
+    else if (std::abs(point.getZ()) > error)
+        param = m_vector.getZ() / m_vector.getZ();
+    else
+        param = 0.0;
+    point3d distance;
+
+    get_point(param, distance);
+    vector3d dis(distance - point);
+    if (dis.dot(dis) < error * error)
+        return true;
+    else
+        return false;
+}

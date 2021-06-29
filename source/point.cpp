@@ -174,3 +174,11 @@ vector3d vector3d::operator*(const double scale) const
     return result;
 }
 
+vector3d vector3d::operator/(const double scale) const
+{
+    if (scale == 0)
+        return vector3d(0, 0, 0);
+    else
+        return *this * (1 / scale);
+}
+

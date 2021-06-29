@@ -1,11 +1,12 @@
-#ifndef CURVETYPE
+#ifndef CURVETYPE_H
 
-#define CURVETYPE
+#define CURVETYPE_H
 
 #define     UNKNOWN         0
 #define     LINE            1
 #define     ELLIPSE         2
-#define     NURBS           3
+#define     BEZIER          3
+#define     NURBS           4
 
 #define     error           1e-6
 

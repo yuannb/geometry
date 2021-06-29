@@ -1,5 +1,5 @@
-#if !defined(LINE)
-#define LINE
+#if !defined(LINE_H)
+#define LINE_H
 #include "curve.h"
 
 //  \alpha(t) = m_point + scale * param * m_vector
@@ -53,6 +53,9 @@ public:
 
     //line type
     virtual bool curve_type() { return LINE; }
+
+    //eval param u such that \alpha(u) = point
+    virtual bool eval_param(const point3d &point, double &param) const override;
 
 };
 

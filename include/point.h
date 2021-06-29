@@ -1,5 +1,5 @@
-#if !defined(POINT)
-#define POINT
+#if !defined(POINT_H)
+#define POINT_H
 
 #include <iostream>
 #include "entity.h"
@@ -94,7 +94,8 @@ public:
     vector3d operator+(const point3d &point)const ;
     vector3d operator+(const vector3d &vector) const ;
 
-    vector3d operator*(const double sacle) const ;
+    vector3d operator*(const double scale) const ;
+    vector3d operator/(const double scale) const;
 
     vector3d operator-(const point3d &point) const;
     vector3d operator-(const vector3d &vector) const ;
