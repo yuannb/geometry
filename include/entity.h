@@ -1,5 +1,5 @@
-#if !defined(ENTITY)
-#define ENTITY
+#if !defined(ENTITY_H)
+#define ENTITY_H
 
 #include <iostream>
 

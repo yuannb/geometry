@@ -1,5 +1,5 @@
-#if !defined(CURVE)
-#define CURVE
+#if !defined(CURVE_H)
+#define CURVE_H
 #include <iostream>
 #include "curvetype.h"
 #include "point.h"
@@ -105,6 +105,9 @@ public:
 
     //set_range_type
     virtual bool set_range_type(const range_type krange_type) = 0;
+
+    //eval param u such that \alpha(u) = point
+    virtual bool eval_param(const point3d &point, double &param) const = 0;
 };
 
 
