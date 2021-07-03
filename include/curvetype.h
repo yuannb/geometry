@@ -7,6 +7,7 @@
 #define     ELLIPSE         2
 #define     BEZIER          3
 #define     NURBS           4
+#define     bspline         5
 
 #define     error           1e-6
 

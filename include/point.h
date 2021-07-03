@@ -9,6 +9,7 @@ class vector3d;
 //will become template
 class point3d
 {
+friend point3d operator*(const double scale, const point3d &point);
 private:
     double m_x;
     double m_y;
@@ -38,6 +39,8 @@ public:
     //overload
     point3d operator+(const point3d &point) const;
     point3d operator+(const vector3d &vector) const;
+
+    point3d operator*(const double sacle) const;
 
     point3d operator-(const point3d &point) const;
     point3d operator-(const vector3d &vector) const;
