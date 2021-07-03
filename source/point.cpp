@@ -6,6 +6,11 @@ vector3d operator*(const double u, const vector3d vec)
     return (vec * u);
 }
 
+point3d operator*(const double scale, const point3d &point)
+{
+    return point * scale;
+}
+
 point3d::point3d(const vector3d &vector)
 {
     m_x = vector.getX();
@@ -77,6 +82,15 @@ bool point3d::set_point(const vector3d &vector)
 {
     this->set_point(point3d(vector));
     return true;
+}
+
+point3d point3d::operator*(const double scale) const
+{
+    point3d point;
+    point.m_x = scale * m_x;
+    point.m_y = scale * m_y;
+    point.m_z = scale * m_z;
+    return point;
 }
 
 
