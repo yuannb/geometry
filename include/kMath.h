@@ -144,5 +144,32 @@ bool find_span(const unsigned n, const unsigned p, const double u, std::vector<d
     
 }
 
+//the document for this function in basisFuns.svg
+bool basisFuns(const unsigned i, const double u, const unsigned p, std::vector<double> &knots, std::vector<double> N)
+{
+    //initial N;
+    N.clear();
+    N.resize(p + 1);
+    N[0] = 1.0;
+
+    //we do not use left[0], right[0]
+    std::vector<double> left(p + 1);
+    std::vector<double> right(p + 1);
+
+    for (unsigned j = 1; j <= p; ++j)
+    {
+        left[j] = u - knots[i + 1 - j];
+        right[j] = knots[i + j] - u;
+        double saved = 0.0;
+        for (unsigned r = 0; r <= j; ++r)
+        {
+            double temp = N[r] / (right[r + 1] + left[j - r]);
+            N[r] = saved + right[r + 1] * N[r];
+            saved = left[j - r] * temp;
+        }
+        N[j] = saved;
+    }
+}
+
 #endif  //KMATH_H
 
