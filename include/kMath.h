@@ -237,8 +237,8 @@ bool DerBasisFuns(const unsigned i, const double u, const unsigned p, const unsi
         for (unsigned k = 1; k < n; ++k)
         {
             double d = 0.0;
-            double rk = r - k;
-            double pk = p - k;
+            int rk = static_cast<int>(r) - static_cast<int>(k);
+            int pk = static_cast<int>(p) - static_cast<int>(k);
             unsigned j1 = 0;
             unsigned j2 = 0;
             if (r >= k)
@@ -247,7 +247,7 @@ bool DerBasisFuns(const unsigned i, const double u, const unsigned p, const unsi
                 d = a[s2][0] * ndu[rk][pk];
             }
             j1 = rk >= -1 ? 1 : -rk;
-            j2 = r - 1 <= pk ? k - 1; p -r;
+            j2 = r - 1 <= pk ? k - 1: p - r;
             for (unsigned j = j1; j <= j2; ++j)
             {
                 a[s2][j] = (a[s1][j] - a[s1][j - 1] / ndu[pk + 1][rk + j]);
@@ -258,7 +258,7 @@ bool DerBasisFuns(const unsigned i, const double u, const unsigned p, const unsi
                 a[s2][k] = -a[s1][k - 1] / ndu[pk + 1][r];
                 d += a[s2][k] * ndu[r][pk];
             }
-            der[k][j] = d;
+            der[k][r] = d;
             std::swap(s1, s2);
         }
     }
@@ -271,6 +271,58 @@ bool DerBasisFuns(const unsigned i, const double u, const unsigned p, const unsi
             der[k][j] *= r;
         r *= (p - k);
     }
+    return true;
+}
+
+//Nip : N^i_p(u)    : NURBS P55
+bool oneBasisFun(const unsigned p, const unsigned m, const unsigned i, const double u
+                , const std::vector<double> &U, double &Nip)
+{
+    if ((i == 0 && u == U[0]) || (i == (m - p - 1) && u == U[m]))
+    {
+        Nip = 1.0;
+        return true;
+    }
+    if (u < U[i] || u >= U[i + p + 1])
+    {
+        Nip = 0.0;
+        return true;
+    }
+
+    std::vector<double> N(p + 1);
+    for (unsigned j = 0; j <= p; ++j)
+    {
+        if (u >= U[i + j] && u < U[i + j + 1])
+            N[j] = 1.0;
+        else
+            N[j] = 0.0;
+    }
+    for (unsigned k = 1; k <= p; ++k)
+    {
+        double saved = 0.0;
+        if (N[0] == 0.0)
+            saved = 0.0;
+        else
+            saved = U[i + k] - U[i] > error ? ((u - U[i]) * N[0]) / (U[i + k] - U[i]) : 0.0;
+        for (unsigned j = 0; j < (p - k + 1); ++j)
+        {
+            double Uleft = U[i + j + 1];
+            double Uright = U[i + j + k + 1];
+            //N[j + 1][k - 1] is large than 0, consider error of value, we use abs();
+            if (std::abs(N[j + 1]) <= error)
+            {
+                N[j] = saved;
+                saved = 0.0;
+            }
+            else
+            {
+                double temp = N[j + 1] / (Uright - Uleft);
+                N[j] = saved + (Uright - u) * temp;
+                saved = (u - Uleft) * temp;
+            }
+        }
+    }
+    Nip = N[0];
     return true;
 }
 
