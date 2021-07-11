@@ -145,7 +145,7 @@ bool find_span(const unsigned n, const unsigned p, const double u, std::vector<d
 }
 
 //the document for this function in basisFuns.svg
-bool basisFuns(const unsigned i, const double u, const unsigned p, std::vector<double> &knots, std::vector<double> N)
+bool basisFuns(const unsigned i, const double u, const unsigned p, const std::vector<double> &knots, std::vector<double> &N)
 {
     //initial N;
     N.clear();
@@ -169,6 +169,109 @@ bool basisFuns(const unsigned i, const double u, const unsigned p, std::vector<d
         }
         N[j] = saved;
     }
+    return true;
+}
+/*
+* @brief                                    evaluate nozero basis function and derivatives of bspline
+* @param i                                  u contain in [ u_i, u_(i + 1) )
+* @param u                                  param u
+* @param p                                  degree
+* @param unsigned n                         0_th - n_th derivative
+* @const std::vector<double> &U             knots vector
+* @std::vector<std::vector<double>> &der    0_th - n_th derivative of bspline
+*/
+
+//the document for this function in basisFuns.svg
+bool DerBasisFuns(const unsigned i, const double u, const unsigned p, const unsigned n
+                  , const std::vector<double> &U, std::vector<std::vector<double>> &der)
+{
+    //ndu[p + 1][p + 1] storage basis function and difference between the node
+    std::vector<std::vector<double>> ndu(p + 1);
+    for (auto it = ndu.begin(); it != ndu.end(); ++it)
+    {
+        it->resize(p + 1);
+    }
+
+    //a[2][p + 1] storage lasted a^k_j and a^(k - 1)_j
+    std::vector<std::vector<double>> a(2);
+    for (auto it = a.begin(); it != a.end(); ++it)
+    {
+        it->resize(p + 1);
+    }
+
+    //left[j] = u - U[i + 1 - j]
+    //right[j] = u_(i + j) - u
+    std::vector<double> left(p + 1);
+    std::vector<double> right(p + 1);//will waste storage left[0] and right[0]
+
+
+
+    for (unsigned j = 1; j <= p; ++j)
+    {
+        left[j] = u - U[i + 1 - j];
+        right[j] = U[i + j] - u;
+        double saved = 0.0;
+        for (unsigned r = 0; r < j; ++r)
+        {
+            ndu[j][r] = right[r + 1] - left[j - r];
+            double temp = ndu[r][j - 1] / ndu[j][r];
+            ndu[r][j] = saved + right[r + 1] * temp;
+            saved = left[j - r] * temp;
+        }
+        ndu[j][j] = saved;
+    }
+
+    //0_th der
+    for (unsigned j = 0; j <= p; ++j)
+    {
+        der[0][j] = ndu[j][p];
+    }
+
+    //evaluate k_th der of N_p^(i - p + r)
+    for (unsigned r = 0; r <= p; ++r)
+    {
+        unsigned s1 = 0, s2 = 1;
+        a[0][0] = 1.0;
+
+        //evaluate n_th der
+        for (unsigned k = 1; k < n; ++k)
+        {
+            double d = 0.0;
+            double rk = r - k;
+            double pk = p - k;
+            unsigned j1 = 0;
+            unsigned j2 = 0;
+            if (r >= k)
+            {
+                a[s2][0] = a[s1][0] / ndu[pk + 1][rk];
+                d = a[s2][0] * ndu[rk][pk];
+            }
+            j1 = rk >= -1 ? 1 : -rk;
+            j2 = r - 1 <= pk ? k - 1; p -r;
+            for (unsigned j = j1; j <= j2; ++j)
+            {
+                a[s2][j] = (a[s1][j] - a[s1][j - 1] / ndu[pk + 1][rk + j]);
+                d += a[s2][j] * ndu[rk + j][pk];
+            }
+            if (r <= pk)
+            {
+                a[s2][k] = -a[s1][k - 1] / ndu[pk + 1][r];
+                d += a[s2][k] * ndu[r][pk];
+            }
+            der[k][j] = d;
+            std::swap(s1, s2);
+        }
+    }
+
+    //coefficient
+    unsigned r = p;
+    for (unsigned k = 1; k <= n; ++k)
+    {
+        for (unsigned j = 0; j <= p; ++j)
+            der[k][j] *= r;
+        r *= (p - k);
+    }
+    return true;
 }
 
 #endif  //KMATH_H
