@@ -1,0 +1,11 @@
+#pragma once
+#include    "solid.h"
+#include    "face.h"
+#include    "loop.h"
+#include    "halfedge.h"
+#include    "halfedge.h"
+#include    "vertex.h"
+#include    "edge.h"
+#include    "globalSymbol.h"
+#include    "nodes.h"
+#include    "params.h"
