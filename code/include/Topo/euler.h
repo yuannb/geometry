@@ -22,6 +22,7 @@ Vertex *getvertex(Solid *s, Id vno);
 Solid *mvfs(Id s, Id f, Id v, double x, double y, double z);
 
 void lmev(HalfEdge *he1, HalfEdge *he2, Id v, double x, double y, double z);
+void lmev2(HalfEdge *he1, HalfEdge *he2, Id v, double x, double y, double z);
 
 Face *lmef(HalfEdge *he1, HalfEdge *he2, Id f);
 
@@ -43,7 +44,7 @@ void lkfmrh(Face *fac1, Face *fac2);
 
 int kfmrh(Id s, Id f1, Id f2);
 
-void lmfkrh(Loop *l, Id f);
+Face* lmfkrh(Loop *l, Id f);
 
 int mfkrh(Id s, Id f1, Id v1, Id v2, Id f2);
 

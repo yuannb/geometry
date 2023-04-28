@@ -1,5 +1,6 @@
 #include "face.h"
 #include "solid.h"
+#include "surface.h"
 
 face::face(Solid *s)
 {
@@ -30,4 +31,9 @@ bool face::RemoveListFromSolid(Solid *s)
             nextf->prevf = prevf;
     }
     return true;
+}
+
+Eigen::Vector3d face::get_normal()
+{
+    return surf->get_normal();
 }

@@ -178,6 +178,36 @@ void lmev(HalfEdge *he1, HalfEdge *he2, Id v, double x, double y, double z)
     he2->vtx->vedge = he2;
 }
 
+void lmev2(HalfEdge *he1, HalfEdge *he2, Id v, double x, double y, double z)
+{
+    HalfEdge *he;
+    Vertex  *newvertex;
+    Edge    *newedge;
+
+    // newedge = (Edge*)gnew(EDGE, (Node*)he1->wloop->lface->fsolid);
+    newedge = new Edge(he1->wloop->lface->fsolid);
+    // newvertex = (Vertex*)gnew(VERTEX, (Node*)he1->wloop->lface->fsolid);
+    newvertex = new Vertex(he1->wloop->lface->fsolid);
+    newvertex->vcoord[0] = x;
+    newvertex->vcoord[1] = y;
+    newvertex->vcoord[2] = z;
+    newvertex->vertexno = v;
+
+    he = mate(he1)->nxt;
+    while (he != mate(he2)->nxt)
+    {
+        he->vtx = newvertex;
+        he = mate(he)->nxt;
+    }
+    
+    // the code of book may be wrong (P184)
+    addhe(newedge, he2->vtx, he1, MINUS);
+    addhe(newedge, newvertex, he2, PLUS);
+    newvertex->vedge = he2->prv;
+    he2->vtx->vedge = he2;
+}
+
+
 Face *lmef(HalfEdge *he1, HalfEdge *he2, Id f)
 {
     Face *newface;
@@ -337,6 +367,7 @@ void lkemr(HalfEdge *h1, HalfEdge *h2)
     h3 = h1->nxt;
     h1->nxt = h2->nxt;
     h2->nxt->prv = h1;
+    h2->nxt = h3;
     h3->prv = h2;
     h4 = h2;
     do
@@ -541,28 +572,33 @@ int kfmrh(Id s, Id f1, Id f2)
     return ERROR;
 }
 
-void lmfkrh(Loop *l, Id f)
+Face* lmfkrh(Loop *l, Id f)
 {
     // assume l is a inner loop
     // Face *newface = (Face*)gnew(FACE, (Node*)l->lface->fsolid);
     Face *newface = new Face(l->lface->fsolid);
     newface->faceno = f;
-    newface->floops = l;
+    // newface->floops = l;
+    // newface->flout = l;
+    removelist(LOOP, (Node*)l, (Node*)l->lface);
+    addlist(LOOP, (Node*)l, (Node*)newface);
     newface->flout = l;
-    if (l == l->lface->floops)
-    {
-        l->lface->floops = l->nextl;
-        l->nextl->prevl = NIL;
-        l->nextl = NIL;
-    }
-    else
-    {
-        l->prevl->nextl = l->nextl;
-        l->nextl->prevl = l->prevl;
-        l->prevl = NIL;
-        l->nextl = NIL;
-    }
-    l->lface = newface;
+    // if (l == l->lface->floops)
+    // {
+    //     l->lface->floops = l->nextl;
+    //     l->nextl->prevl = NIL;
+    //     l->nextl = NIL;
+    // }
+    // else
+    // {
+    //     l->prevl->nextl = l->nextl;
+    //     if (l->nextl)
+    //         l->nextl->prevl = l->prevl;
+    //     l->prevl = nullptr;
+    //     l->nextl = nullptr;
+    // }
+    // l->lface = newface;
+    return newface;
 }
 
 int mfkrh(Id s, Id f1, Id v1, Id v2, Id f2)

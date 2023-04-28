@@ -1,5 +1,7 @@
 
 # include_directories(${gwb_global_dir}/include/Geo)
+set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+
 file(GLOB INC_FILES ${gwb_global_dir}/include/Geo/*.h)
 file(GLOB SRC_FILES *.cpp)
 

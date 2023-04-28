@@ -1,5 +1,7 @@
 #pragma once
 #include "globalSymbol.h"
+#include <Eigen/Core>
+#include <Eigen/Dense>
 
 class surface;
 class face
@@ -9,6 +11,7 @@ public:
     
     //have to call it before deconstruct
     bool RemoveListFromSolid(Solid *s);
+    Eigen::Vector3d get_normal();
     
     ~face() { };
 public:

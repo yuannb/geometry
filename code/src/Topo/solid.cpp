@@ -1,5 +1,7 @@
 #include "solid.h"
 #include "params.h"
+#include "face.h"
+#include "vertex.h"
 
 solid::solid()
 {
@@ -29,4 +31,28 @@ bool solid::RemoveListFromSolid()
     }
     
     return true;
+}
+
+Face *solid::getface(Id faceno)
+{
+    Face *f = sfaces;
+    while (f)
+    {
+        if (f->faceno == faceno)
+            return f;
+        f = f->nextf;
+    }
+    return nullptr;
+}
+
+Vertex *solid::getvertex(Id vertexno)
+{
+    Vertex *v = svertes;
+    while (v)
+    {
+        if (v->vertexno == vertexno)
+            return v;
+        v = v->nextv;
+    }
+    return nullptr;
 }

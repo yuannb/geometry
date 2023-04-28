@@ -1,50 +1,50 @@
-{
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-    "version": "0.2.0",
-    "configurations": [
-        {
-        "name": "(Windows) 启动",
-        "type": "cppvsdbg",
-        "request": "launch",
-        "program": "C:/Users/Administrator/Desktop/workbench/build/Debug/GWB.exe",
-        "args": [],
-        "stopAtEntry": false,
-        "cwd": "${fileDirname}",
-        "environment": [],
-        "console": "externalTerminal"
-    }]
-}
-
 // {
 //     // Use IntelliSense to learn about possible attributes.
 //     // Hover to view descriptions of existing attributes.
 //     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
 //     "version": "0.2.0",
-//     "configurations": [{
-//         "name": "(gdb) 启动",
-//         "type": "cppdbg",
+//     "configurations": [
+//         {
+//         "name": "(Windows) 启动",
+//         "type": "cppvsdbg",
 //         "request": "launch",
 //         "program": "C:/Users/Administrator/Desktop/workbench/build/Debug/GWB.exe",
 //         "args": [],
 //         "stopAtEntry": false,
 //         "cwd": "${fileDirname}",
 //         "environment": [],
-//         "externalConsole": false,
-//         "MIMode": "gdb",
-//         "miDebuggerPath": "C:/msys64/mingw64/bin/gdb.exe",
-//         "setupCommands": [
-//             {
-//                 "description": "为 gdb 启用整齐打印",
-//                 "text": "-enable-pretty-printing",
-//                 "ignoreFailures": true
-//             },
-//             {
-//                 "description": "将反汇编风格设置为 Intel",
-//                 "text": "-gdb-set disassembly-flavor intel",
-//                 "ignoreFailures": true
-//             }
-//         ]
+//         "console": "externalTerminal"
 //     }]
 // }
+
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [{
+        "name": "(gdb) 启动",
+        "type": "cppdbg",
+        "request": "launch",
+        "program": "C:/Users/Administrator/Desktop/workbench/build/GWB.exe",
+        "args": [],
+        "stopAtEntry": false,
+        "cwd": "${fileDirname}",
+        "environment": [],
+        "externalConsole": false,
+        "MIMode": "gdb",
+        "miDebuggerPath": "C:/msys64/mingw64/bin/gdb.exe",
+        "setupCommands": [
+            {
+                "description": "为 gdb 启用整齐打印",
+                "text": "-enable-pretty-printing",
+                "ignoreFailures": true
+            },
+            {
+                "description": "将反汇编风格设置为 Intel",
+                "text": "-gdb-set disassembly-flavor intel",
+                "ignoreFailures": true
+            }
+        ]
+    }]
+}

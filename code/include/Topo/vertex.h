@@ -9,6 +9,7 @@ class vertex
 {
 public:
     vertex() = default;
+    vertex(double x, double y, double z) : vcoord(x, y, z) {}
     vertex(Solid *s);
     //have to call it before deconstruct
     bool RemoveListFromSolid(Solid *s);

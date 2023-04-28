@@ -106,7 +106,7 @@ void removelist(int what, Node *which, Node *where)
         {
             where->s.sfaces = where->s.sfaces->nextf;
             if (where->s.sfaces)
-                where->s.sfaces = (Face*)NIL;
+                where->s.sfaces->prevf = (Face*)NIL;
         }
         else
         {
@@ -136,7 +136,7 @@ void removelist(int what, Node *which, Node *where)
         {
             where->f.floops = where->f.floops->nextl;
             if (where->f.floops)
-                where->f.floops = (Loop*)NIL;
+                where->f.floops->prevl = nullptr;
         }
         else
         {

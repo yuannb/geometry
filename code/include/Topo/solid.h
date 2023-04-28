@@ -7,7 +7,8 @@ public:
     solid();
     //have to call it before deconstruct
     bool RemoveListFromSolid();
-
+    Face *getface(Id faceno);
+    Vertex *getvertex(Id vertexno);
     ~solid(){ }
 public:
     Id      solidno;  //solid identifier
