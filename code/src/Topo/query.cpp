@@ -1,10 +1,10 @@
 #include "query.h"
 
-void listsolid(Solid *s)
+void listsolid(std::shared_ptr<Solid> s)
 {
-    Face *f;
-    Loop *l;
-    HalfEdge *he;
+    std::shared_ptr<Face> f = nullptr;
+    std::shared_ptr<Loop> l = nullptr;
+    std::shared_ptr<HalfEdge> he = nullptr;
     f = s->sfaces;
     while (f)
     {
@@ -28,16 +28,16 @@ void listsolid(Solid *s)
     }   
 }
 
-void listneighbors(Vertex *v)
+void listneighbors(std::shared_ptr<Vertex> v)
 {
-    HalfEdge    *adj;
-    adj = v->vedge;
+    std::shared_ptr<HalfEdge> adj = v->vedge.lock();
+    std::shared_ptr<HalfEdge> first = adj;
     if (adj)
     {
         do
         {
             std::cout << adj->nxt->vtx->vertexno << ", ";
-        } while ((adj = mate(adj)->nxt) != v->vedge);
+        } while ((adj = adj->mate()->nxt) != first);
     }
     else
     {

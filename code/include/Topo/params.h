@@ -1,5 +1,6 @@
 #pragma once
 #include "globalSymbol.h"
+#include "memory"
 
 // return values and misc constants
 # define    ERROR       -1
@@ -28,14 +29,8 @@
 #define  EPS        1e-4      // tolerance for geometric tests
 #define  BIGEPS     1e-8      // a more permissive tolerance 
 
-// macros
-# define    mate(he)    (((he) == (he)->edg->he1) ? \
-                        (he)->edg->he2 : (he)->edg->he1)
-// # define    max(x, y)   ((x) > (y) ? (x) : (y))
-// # define     abs(x)      ((x) > 0.0 ? (x) : (-y))
-
 // global variables
-extern  Solid           *firsts;    // head of the list of all solids
+extern  std::weak_ptr<Solid>   firsts;    // head of the list of all solids
 extern  Id      maxs;       // largest solid no
 extern  Id      maxf;       // largest face no
 extern  Id      maxv;       // largest vertes no

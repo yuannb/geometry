@@ -1,29 +1,23 @@
 #include "loop.h"
 #include "face.h"
-loop::loop(Face *f)
+loop::loop()
 {
-    nextl = f->floops;
-    prevl = nullptr;
-    if (f->floops)
-        f->floops->prevl = this;
-    f->floops = this;
-    lface = f;
 }
 
 
-bool loop::RemoveListFromFace(Face *f)
+bool loop::RemoveListFromFace(std::shared_ptr<Face> f)
 {
-    if (this == f->flout)
+    if (this == f->flout.get())
         f->flout = nullptr;
-    if (this == f->floops)
+    if (this == f->floops.get())
     {
         f->floops = this->nextl;
         if (f->floops)
-            f->floops->prevl = nullptr;
+            f->floops->prevl.reset();
     }
     else
     {
-        prevl->nextl = nextl;
+        prevl.lock()->nextl = nextl;
         if (nextl)
             nextl->prevl = prevl;
     }

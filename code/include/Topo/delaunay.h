@@ -3,11 +3,13 @@
 #include <vector>
 #include <unordered_map>
 #include <algorithm>
+#include "memory"
 
 struct triangel
 {
-    std::vector<Vertex*> vtxarry;
+    // std::vector<Vertex*> vtxarry;
+    std::vector<std::shared_ptr<Vertex>> vtxarry;
     std::vector<std::vector<int>> face;
 };
 
-triangel  delaunay(Solid *s);
+triangel  delaunay(std::shared_ptr<Solid> s);

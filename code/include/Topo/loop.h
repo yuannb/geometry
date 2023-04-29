@@ -1,17 +1,27 @@
 #pragma once
 #include "globalSymbol.h"
+#include <memory>
+#include <iostream>
+#include <fstream>
+#include <algorithm>
+#include <iosfwd>
 
-class loop
+class loop : public std::enable_shared_from_this<loop>
 {
 public:
-    loop(Face *f);
+    loop();
     //have to call it before deconstruct
-    bool RemoveListFromFace(Face *f);
+    bool RemoveListFromFace(std::shared_ptr<Face> f);
 
-    ~loop() { }
+    ~loop() { 
+    }
 public:
-    HalfEdge    *ledg; // ptr to ring of halfedges
-    Face        *lface; // back pointer to face
-    Loop        *nextl; // pointer to next loop
-    Loop        *prevl; // pointer to previous loop
+    std::shared_ptr<HalfEdge> ledg; // ptr to ring of halfedges
+    // HalfEdge    *ledg; // ptr to ring of halfedges
+    std::weak_ptr<Face> lface; // back pointer to face
+    // Face        *lface; // back pointer to face
+    std::shared_ptr<Loop> nextl; // pointer to next loop
+    // Loop        *nextl; // pointer to next loop
+    std::weak_ptr<Loop> prevl; // pointer to previous loop
+    // Loop        *prevl; // pointer to previous loop
 };

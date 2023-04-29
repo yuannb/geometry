@@ -1,23 +1,24 @@
 #pragma once
 #include "globalSymbol.h"
+#include <memory>
 
 class curve;
 
 // class Solid;
 
-class edge
+class edge : public std::enable_shared_from_this<edge>
 {
 public: 
-    edge(Solid *s);
+    edge();
 
     //have to call it before deconstruct
-    bool RemoveListFromSolid(Solid *s);
-    
+    bool RemoveListFromSolid(std::shared_ptr<Solid> s);
+
     ~edge();
 public:
-    HalfEdge    *he1;  // pointer to right halfedge
-    HalfEdge    *he2;  // pointer to left halfedge
-    Edge        *nexte;// pointer to next edge
-    Edge        *preve;// pointer to previous edge
-    curve       *cur;
+    std::weak_ptr<HalfEdge> he1;  // pointer to right halfedge
+    std::weak_ptr<HalfEdge> he2;  // pointer to left halfedge
+    std::shared_ptr<Edge>   nexte;// pointer to next edge
+    std::weak_ptr<Edge>     preve;// pointer to previous edge
+    std::shared_ptr<curve>    cur;
 };

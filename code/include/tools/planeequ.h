@@ -6,9 +6,10 @@
 #include <set>
 #include <vector>
 #include "euler.h"
+#include "memory"
 
-extern HalfEdge *hithe;
-extern Vertex *hitvetex;
+// extern HalfEdge *hithe;
+// extern Vertex *hitvetex;
 
 bool three_plane_intersect(const Eigen::Vector4d &p1, const Eigen::Vector4d &p2, const Eigen::Vector4d &p3, Eigen::Vector3d &intVtx);
 
@@ -46,9 +47,9 @@ int intrev(Edge *edg, Vertex *v, double *t);
 
 int contev(Vertex *v1, Vertex *v2, Vertex *v3);
 
-int bndrlv(Loop *l, Vertex *v);
+int bndrlv(Loop* l, Vertex* v);
 
-int int2ee(Vertex *v1, Vertex *v2, Vertex *v3, Vertex *v4, int drop, double *t1, double *t2);
+int int2ee(Vertex* v1, Vertex* v2, Vertex* v3, Vertex* v4, double* t1, double* t2);
 
 int contlv(Loop *l, Vertex *v, int drop);
 
@@ -60,28 +61,4 @@ int contfv(Face* f, Vertex* v);
 
 int contfp(Face* f, double x, double y, double z);
 
-void laringmv(Face* f1, Face* f2);
-
-// int checkwideness(HalfEdge* he);
-
-// void getneighborhood(const Vertex* v, const Eigen::Vector4d& SP);
-
-// void reclassifyonsectors(const Eigen::Vector4d& SP);
-
-// double dist(const Eigen::Vector3d& v, const Eigen::Vector4d& vec);
-
-// void reclassifyonedges();
-
-// void insertnulledges();
-
-// void bisector(HalfEdge* he, Eigen::Vector3d& bisect);
-
-// void splitgenerate(Solid* S, Eigen::Vector4d& SP);
-
-// void splitclassify(Eigen::Vector4d SP);
-
-// void splitconnect();
-
-// void splitfinish(Solid* S, Solid** Above, Solid** Below);
-
-// void split(Solid* S, Eigen::Vector4d &SP, Solid** Above, Solid** Below);
+void laringmv(std::shared_ptr<Face> f1, std::shared_ptr<Face> f2);

@@ -1,25 +1,30 @@
 #pragma once
 #include "globalSymbol.h"
-// #include    "../../../3rd/Eigen3/include/eigen3/Eigen/Core"
-// #include "../../../3rd/eigen/Eigen/Dense"
 #include <Eigen/Dense>
-// #include <Eigen/Dense>
+#include <memory>
+        #include <fstream>
+#include <algorithm>
+#include <iosfwd>
 
-class vertex
+class vertex : public std::enable_shared_from_this<vertex>
 {
 public:
-    vertex() = default;
+    vertex()
+    {
+    };
     vertex(double x, double y, double z) : vcoord(x, y, z) {}
-    vertex(Solid *s);
+    // vertex(std::shared_ptr<Solid> s);
     //have to call it before deconstruct
-    bool RemoveListFromSolid(Solid *s);
+    bool RemoveListFromSolid(std::shared_ptr<Solid> s);
 
     ~vertex() { }
 public:
     Id          vertexno; // vertex identifier
-    HalfEdge    *vedge;   // pointer to halfedge
-    // vector      vcoord;   // vertex coordinates
-    Vertex      *nextv;   // pointer to next vertex
-    Vertex      *prevv;   // pointer to previous vertex
-    Eigen::Vector3d vcoord;
+    std::weak_ptr<HalfEdge> vedge;   // pointer to halfedge
+    // HalfEdge    *vedge;   // pointer to halfedge
+    std::shared_ptr<Vertex> nextv;   // pointer to next vertex
+    // Vertex      *nextv;   // pointer to next vertex
+    std::weak_ptr<Vertex> prevv;   // pointer to previous vertex
+    // Vertex      *prevv;   // pointer to previous vertex
+    Eigen::Vector3d vcoord; // vertex coordinates
 };

@@ -1,27 +1,28 @@
 #include "vertex.h"
 #include "solid.h"
 
-vertex::vertex(Solid *s)
-{
-    nextv = s->svertes;
-    prevv = nullptr;
-    if (s->svertes)
-        s->svertes->prevv = this;
-    s->svertes = this;
-    this->vedge = nullptr;
-}
+// vertex::vertex(std::shared_ptr<Solid> s)
+// {
+//     nextv = s->svertes;
+//     prevv.reset();
+//     std::shared_ptr<Vertex> thisv = shared_from_this();
+//     if (s->svertes)
+//         s->svertes->prevv = thisv;
+//     s->svertes = thisv;
+//     this->vedge.reset();
+// }
 
-bool vertex::RemoveListFromSolid(Solid *s)
+bool vertex::RemoveListFromSolid(std::shared_ptr<Solid> s)
 {
-    if (this == s->svertes)
+    if (this == s->svertes.get())
     {
         s->svertes = s->svertes->nextv;
         if (s->svertes)
-            s->svertes->prevv = nullptr;
+            s->svertes->prevv.reset();
     }
     else
     {
-        prevv->nextv = nextv;
+        prevv.lock()->nextv = nextv;
         if (nextv)
             nextv->prevv = prevv;
     }

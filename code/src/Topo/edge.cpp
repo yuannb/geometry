@@ -1,30 +1,24 @@
 #include "edge.h"
 #include "solid.h"
-
-edge::edge(Solid *s)
+#include <fstream>
+#include <algorithm>
+#include <iosfwd>
+edge::edge()
 {
-    he1 = nullptr;
-    he2 = nullptr;
-    nexte = s->sedges;
-    preve = nullptr;
-
-    if (s->sedges)
-        s->sedges->preve = this;
-    s->sedges = this;
 }
-bool edge::RemoveListFromSolid(Solid *s)
+bool edge::RemoveListFromSolid(std::shared_ptr<Solid> s)
 {
-    if (this == s->sedges)
+    if (this == s->sedges.get())
     {
         s->sedges = s->sedges->nexte;
         if (s->sedges)
-            s->sedges->preve = nullptr;
+            s->sedges->preve.reset();
     }
     else
     {
-        this->preve->nexte = this->nexte;
+        preve.lock()->nexte = nexte;
         if (this->nexte)
-            this->nexte->preve = this->preve;
+            this->nexte->preve = preve;
     }
 
     return true;

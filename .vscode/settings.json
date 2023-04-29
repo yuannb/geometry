@@ -57,6 +57,8 @@
         "streambuf": "cpp",
         "thread": "cpp",
         "typeinfo": "cpp",
-        "dense": "cpp"
+        "dense": "cpp",
+        "*.inc": "cpp",
+        "core": "cpp"
     }
 }

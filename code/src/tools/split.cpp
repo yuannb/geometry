@@ -9,12 +9,10 @@
 #include "plane.h"
 #include "planeequ.h"
 
-// static std::vector<HalfEdge*> ends;
-static std::map<Vertex*, std::vector<Edge*>> nulledges;
-// std::unordered_set<HalfEdge*> ends;
-std::unordered_set<HalfEdge*> hasconnect;
+std::map<std::shared_ptr<Vertex>, std::vector<std::shared_ptr<Edge>>> nulledges;
+std::unordered_set<std::shared_ptr<HalfEdge>> hasconnect;
 
-std::vector<Face*> sonf;
+std::vector<std::shared_ptr<Face>> sonf;
 
 double dist(const Eigen::Vector3d& v, const Eigen::Vector4d& vec)
 {
@@ -58,27 +56,29 @@ double dist(const Eigen::Vector3d& v, const Eigen::Vector4d& vec)
 	return distance;
 };
 
-int neighbor(HalfEdge* h1, HalfEdge* h2)
+int neighbor(std::shared_ptr<HalfEdge> h1, std::shared_ptr<HalfEdge> h2)
 {
-	return (h1->wloop->lface == h2->wloop->lface && (
-		(h1 == h1->edg->he1 && h2 == h2->edg->he2) || (h1 == h1->edg->he2 && h2 == h2->edg->he1)
+	return (h1->wloop.lock()->lface.lock() == h2->wloop.lock()->lface.lock() && (
+		(h1 == h1->edg->he1.lock() && h2 == h2->edg->he2.lock()) || (h1 == h1->edg->he2.lock() && h2 == h2->edg->he1.lock())
 		));
 }
 
-void cut(HalfEdge* he)
+void cut(std::shared_ptr<HalfEdge> he)
 {
-	if (he->edg->he1->wloop == he->edg->he2->wloop)
+	std::shared_ptr<HalfEdge> edghe1 = he->edg->he1.lock();
+	std::shared_ptr<HalfEdge> edghe2 = he->edg->he2.lock();
+	if (edghe1->wloop.lock() == edghe2->wloop.lock())
 	{
-		sonf.push_back(he->wloop->lface);
-		lkemr(he->edg->he1, he->edg->he2);
+		sonf.push_back(he->wloop.lock()->lface.lock());
+		lkemr(edghe1, edghe2);
 	}
 	else
 	{
-		lkef(he->edg->he1, he->edg->he2);
+		lkef(edghe1, edghe2);
 	}
 }
 
-HalfEdge* canjoine(HalfEdge* he, std::unordered_set<Edge*> nulledgs)
+std::shared_ptr<HalfEdge> canjoine(std::shared_ptr<HalfEdge> he, std::unordered_set<std::shared_ptr<Edge>> nulledgs)
 {
 	size_t cnt = hasconnect.count(he);
 	if (cnt == 1)
@@ -86,29 +86,29 @@ HalfEdge* canjoine(HalfEdge* he, std::unordered_set<Edge*> nulledgs)
 	auto end = nulledgs.end();
 	for (auto it = nulledgs.begin(); it != end; ++it)
 	{
-		if (neighbor(he, (*it)->he1))
+		if (neighbor(he, (*it)->he1.lock()))
 		{
-			hasconnect.insert((*it)->he1);
+			hasconnect.insert((*it)->he1.lock());
 			hasconnect.insert(he);
-			return (*it)->he1;
+			return (*it)->he1.lock();
 		}
-		if (neighbor(he, (*it)->he2))
+		if (neighbor(he, (*it)->he2.lock()))
 		{
-			hasconnect.insert((*it)->he2);
+			hasconnect.insert((*it)->he2.lock());
 			hasconnect.insert(he);
-			return (*it)->he2;
+			return (*it)->he2.lock();
 		}
 	}
 	return nullptr;
 }
 
-void join(HalfEdge* h1, HalfEdge* h2)
+void join(std::shared_ptr<HalfEdge> h1, std::shared_ptr<HalfEdge> h2)
 {
-	Face* oldface = h1->wloop->lface;
-	Face* newface = nullptr;
-	if (h1->wloop == h2->wloop)
+	std::shared_ptr<Face> oldface = h1->wloop.lock()->lface.lock();
+	std::shared_ptr<Face> newface = nullptr;
+	if (h1->wloop.lock() == h2->wloop.lock())
 	{
-		if (h1->prv->prv != h2)
+		if (h1->prv.lock()->prv.lock() != h2)
 			newface = lmef(h1, h2->nxt, ++maxf);
 	}
 	else lmekr(h1, h2->nxt);
@@ -128,10 +128,10 @@ bool comparevertex(intVertex *v1, intVertex *v2, Eigen::Vector3d dir)
 	return false;
 }
 
-bool sortintvertex(intEdge* intEdg, Eigen::Vector3d dir)
+bool sortintvertex(std::shared_ptr<intEdge> intEdg, Eigen::Vector3d dir)
 {	
-	std::sort(intEdg->stl.begin(), intEdg->stl.end(), [&](intVertex *v1, intVertex *v2) {return (v2->pos - v1->pos).dot(dir) > 0; });
-	std::sort(intEdg->edl.begin(), intEdg->edl.end(), [&](intVertex *v1, intVertex *v2) {return (v2->pos - v1->pos).dot(dir) > 0; });
+	std::sort(intEdg->stl.begin(), intEdg->stl.end(), [&](std::shared_ptr<intVertex> v1, std::shared_ptr<intVertex> v2) {return (v2->pos - v1->pos).dot(dir) > 0; });
+	std::sort(intEdg->edl.begin(), intEdg->edl.end(), [&](std::shared_ptr<intVertex> v1, std::shared_ptr<intVertex> v2) {return (v2->pos - v1->pos).dot(dir) > 0; });
 
 	//debug : chekcout vailid
 	size_t stcount = intEdg->stl.size();
@@ -144,14 +144,14 @@ bool sortintvertex(intEdge* intEdg, Eigen::Vector3d dir)
 	{
 		if (i == 0)
 		{
-			if (!comparevertex(intEdg->stl[0], intEdg->edl[0], dir))
+			if (!comparevertex(intEdg->stl[0].get(), intEdg->edl[0].get(), dir))
 			{
 				std::cerr << "sortintvertex : intEdg->stl[0] >  intEdg->edl[0]" << std::endl;
 			}
 		}
 		else if (i == stcount - 1) //除掉了stcount == 1的情况
 		{
-			if (!comparevertex(intEdg->edl[i - 1], intEdg->stl[i], dir))
+			if (!comparevertex(intEdg->edl[i - 1].get(), intEdg->stl[i].get(), dir))
 			{
 				std::cerr << "sortintvertex : intEdg->edl[i - 1] > intEdg->stl[i]" << std::endl;
 			}
@@ -160,11 +160,10 @@ bool sortintvertex(intEdge* intEdg, Eigen::Vector3d dir)
 	return true;
 }
 
-std::map<intVertex*, std::vector<intVertex*>> makeconnectgraphic(std::map<vertexName, intVertex*> &intVertexMap, 
-												std::map<edgeName, intEdge*> &intEdgeMap, Solid *S, Eigen::Vector3d normal)
+std::map<std::shared_ptr<intVertex>, std::vector<std::shared_ptr<intVertex>>> makeconnectgraphic(std::map<vertexName, std::shared_ptr<intVertex>> &intVertexMap, 
+												std::map<edgeName, std::shared_ptr<intEdge>> &intEdgeMap, Solid *S, Eigen::Vector3d normal)
 {
-	std::map<intVertex*, std::vector<intVertex*>> ans;
-	//sort intvertex
+	std::map<std::shared_ptr<intVertex>, std::vector<std::shared_ptr<intVertex>>> ans;
 	auto end = intEdgeMap.end();
 	for (auto it = intEdgeMap.begin(); it != end; ++it)
 	{
@@ -181,7 +180,7 @@ std::map<intVertex*, std::vector<intVertex*>> makeconnectgraphic(std::map<vertex
 			}
 			else
 			{
-				std::vector<intVertex*> endpoint{it->second->edl[index]};
+				std::vector<std::shared_ptr<intVertex>> endpoint{it->second->edl[index]};
 				ans.emplace(it->second->stl[index], endpoint);
 			}
 		}
@@ -189,14 +188,14 @@ std::map<intVertex*, std::vector<intVertex*>> makeconnectgraphic(std::map<vertex
 	return ans;
 }
 
-std::unordered_set<Vertex*> splitgenerate(Solid* S, Eigen::Vector4d& SP)
+std::unordered_set<std::shared_ptr<Vertex>> splitgenerate(std::shared_ptr<Solid> S, Eigen::Vector4d& SP)
 {
 	//nvtx = 0;
-    std::unordered_set<Vertex*> soov;
-	for (Edge* e = S->sedges; e != nullptr; e = e->nexte)
+    std::unordered_set<std::shared_ptr<Vertex>> soov;
+	for (std::shared_ptr<Edge> e = S->sedges; e != nullptr; e = e->nexte)
 	{
-		Vertex* v1 = e->he1->vtx;
-		Vertex* v2 = e->he2->vtx;
+		std::shared_ptr<Vertex> v1 = e->he1.lock()->vtx;
+		std::shared_ptr<Vertex> v2 = e->he2.lock()->vtx;
 		double d1 = dist(v1->vcoord, SP);
 		double d2 = dist(v2->vcoord, SP);
 		int s1 = compare(d1, 0.0, EPS);
@@ -205,9 +204,10 @@ std::unordered_set<Vertex*> splitgenerate(Solid* S, Eigen::Vector4d& SP)
 		{
 			double t = d1 / (d1 - d2);
 			Eigen::Vector3d point = v1->vcoord + t * (v2->vcoord - v1->vcoord);
-			HalfEdge* he = nullptr;
-			lmev(e->he1, (he = e->he2->nxt), ++maxv, point[0], point[1], point[2]);
-			soov.insert(he->prv->vtx);
+			// HalfEdge* he = nullptr;
+			std::shared_ptr<HalfEdge> he = e->he2.lock()->nxt;
+			lmev(e->he1.lock(), he, ++maxv, point[0], point[1], point[2]);
+			soov.insert(he->prv.lock()->vtx);
 		}
 		else
 		{
@@ -218,40 +218,30 @@ std::unordered_set<Vertex*> splitgenerate(Solid* S, Eigen::Vector4d& SP)
     return soov;
 }
 
-int checkwideness(HalfEdge* he)
+int checkwideness(std::shared_ptr<HalfEdge> he)
 {
-	Eigen::Vector3d nor = ((plane*)mate(he)->wloop->lface->surf)->get_normal();
-	HalfEdge* nxthe = he->nxt;
+	Eigen::Vector3d nor = he->mate()->wloop.lock()->lface.lock()->surf->get_normal();
+	std::shared_ptr<HalfEdge> nxthe = he->nxt;
 	Eigen::Vector3d v0 = he->vtx->vcoord;
 	Eigen::Vector3d v1 = nxthe->vtx->vcoord;
-	Eigen::Vector3d v2 = he->prv->vtx->vcoord;
+	Eigen::Vector3d v2 = he->prv.lock()->vtx->vcoord;
 	Eigen::Vector3d v0v1 = v1 - v0;
 	Eigen::Vector3d v2v0 = v0 - v2;
 	Eigen::Vector3d c = v2v0.cross(v0v1);
 	double d = nor.dot(c);
-	// if (std::abs(d) > EPS)
-	// {
-	// 	Eigen::Vector3d bisec = (v0v1 + v0v2) / 2.0;
-	// 	Vertex *v = new Vertex(bisec[0], bisec[1], bisec[2]);;
-	// 	int flag = contlv(he->wloop, v, 0);
-	// 	if (flag != 1)
-	// 		return 0;
-	// 	return 1;
-	// }
-	// if (std::abs(d) < EPS)
-	// 	return ERROR;
 	return d < -EPS ? 0 : 1;
-	// return 1;
 }
 inline void bisector(HalfEdge* he, Eigen::Vector3d& bisect)
 {
-	bisect = -(he->vtx->vcoord + he->prv->vtx->vcoord) / 2;
+	bisect = -(he->vtx->vcoord + he->prv.lock()->vtx->vcoord) / 2;
 };
 
 std::vector<hefrel> getneighborhood(const Vertex* v, const Eigen::Vector4d& SP)
 {
 	std::vector<hefrel> nbr;
-	HalfEdge* he = v->vedge;
+	std::shared_ptr<HalfEdge> he = v->vedge.lock();
+	std::shared_ptr<HalfEdge> first = he;
+	// HalfEdge* he = v->vedge;
 	do
 	{
 		double d = dist(he->nxt->vtx->vcoord, SP);
@@ -261,13 +251,13 @@ std::vector<hefrel> getneighborhood(const Vertex* v, const Eigen::Vector4d& SP)
 		if (checkwideness(he) != 1)
 		{
 			Eigen::Vector3d bisec;
-			bisector(he, bisec);
+			bisector(he.get(), bisec);
 			d = dist(bisec, SP);
 			int cl2 = compare(d, 0.0, EPS);
 			hefrel rel2{ he, cl2 };
 			nbr.push_back(rel2);
 		}
-	} while ((he = mate(he)->nxt) != v->vedge);
+	} while ((he = he->mate()->nxt) != first);
     return nbr;
 }
 
@@ -276,8 +266,8 @@ void reclassifyonsectors(const Eigen::Vector4d& SP, std::vector<hefrel> &nbr)
 	auto end = nbr.end();
 	for (auto it = nbr.begin(); it != end; ++it)
 	{
-		Face* f = it->sector->wloop->lface;
-		Eigen::Vector4d eq = ((plane*)f->surf)->equation;
+		Face* f = it->sector->wloop.lock()->lface.lock().get();
+		Eigen::Vector4d eq = ((plane*)f->surf.get())->equation;
 		eq[3] = 0.0;
 		Eigen::Vector4d c = eq.cross3(SP);
 		double d = c.squaredNorm();
@@ -345,12 +335,14 @@ int findfirstwidesector(std::vector<hefrel> &nbr)
     return 0;
 }
 
-bool createintvertex(HalfEdge *he, std::map<vertexName, intVertex*> &intVertexMap, std::map<edgeName, intEdge*> &intEdgeMap, Eigen::Vector4d SP)
+bool createintvertex(HalfEdge *he, std::map<vertexName, std::shared_ptr<intVertex>> &intVertexMap, 
+						std::map<edgeName, std::shared_ptr<intEdge>> &intEdgeMap, Eigen::Vector4d SP)
 {
 	faceSolidMap f0No{0, 0};
-	int soildN0 = he->edg->he1->wloop->lface->fsolid->solidno;
-	Face *f1 = he->wloop->lface;
-	Face *f2 = mate(he)->wloop->lface;
+	// int soildN0 = he->edg->he1->wloop->lface->fsolid->solidno;
+	Face *f1 = he->wloop.lock()->lface.lock().get();
+	Face *f2 = he->mate()->wloop.lock()->lface.lock().get();
+	int soildN0 = f1->fsolid.lock()->solidno;
 	// Face *f1 = he->edg->he1->wloop->lface;
 	// Face *f2 = he->edg->he2->wloop->lface;
 	faceSolidMap f1No{f1->faceno, soildN0};
@@ -372,13 +364,13 @@ bool createintvertex(HalfEdge *he, std::map<vertexName, intVertex*> &intVertexMa
 	Eigen::Vector3d c = f1Nor.cross(f2Nor);
 	
 	Eigen::Vector3d testv = he->nxt->nxt->vtx->vcoord - he->vtx->vcoord;
-	double x  = testv.dot(c);
-	int check = x < -EPS ? -1 : 1; //testv.dot(c) > 0 ? 1 : -1;
+	// double x  = testv.dot(c);
+	int check = testv.dot(c) < -EPS ? -1 : 1; //testv.dot(c) > 0 ? 1 : -1;
 
 	double mixproduct = f0Nor.dot(c) * check;
 	if (std::abs(mixproduct) < EPS)
 	{
-		//不应该出现这种情况
+		//不应该出现这种情况(除非是非流形或者精度问题)
 		std::cerr << "createintvertex: null edge on split plane" << std::endl;
 		return false;
 	}
@@ -399,7 +391,8 @@ bool createintvertex(HalfEdge *he, std::map<vertexName, intVertex*> &intVertexMa
 	return true;
 }
 
-bool insertnulledges(std::vector<hefrel> &nbr, std::map<vertexName, intVertex*> &intVertexMap, std::map<edgeName, intEdge*> &intEdgeMap, Eigen::Vector4d SP)
+bool insertnulledges(std::vector<hefrel> &nbr, std::map<vertexName, std::shared_ptr<intVertex>> &intVertexMap, 
+						std::map<edgeName, std::shared_ptr<intEdge>> &intEdgeMap, Eigen::Vector4d SP)
 {
     int i = 0;
 	int nnbr = (int)nbr.size();
@@ -409,25 +402,25 @@ bool insertnulledges(std::vector<hefrel> &nbr, std::map<vertexName, intVertex*> 
 	}
 	int start = i;
 	//book may have bug
-	std::vector<Edge*> nulledgs;
+	std::vector<std::shared_ptr<Edge>> nulledgs;
 	while (1)
 	{
-		HalfEdge* head = nbr[(i + 1) % nnbr].sector;
+		std::shared_ptr<HalfEdge> head = nbr[(i + 1) % nnbr].sector;
 		if  (nbr[i].sector == nbr[(i + 1) % nnbr].sector)
 			head = nbr[(i + 2) % nnbr].sector;
 		while (!(nbr[i].cl == ABOVE && nbr[(i + 1) % nnbr].cl == BELOW))
 		{
 			i = (i + 1) % nnbr;
 		}
-		HalfEdge* tail = nbr[(i + 1) % nnbr].sector;
+		std::shared_ptr<HalfEdge> tail = nbr[(i + 1) % nnbr].sector;
 		if (nbr[i].sector == nbr[(i + 1) % nnbr].sector)
-			tail = mate(nbr[i].sector)->nxt;
+			tail = nbr[i].sector->mate()->nxt;
 		lmev(head, tail, ++maxv, head->vtx->vcoord[0],
 			head->vtx->vcoord[1],
 			head->vtx->vcoord[2]);
 		// sone.insert(head->prv->edg);
-		nulledgs.push_back(head->prv->edg);
-		createintvertex(head->prv, intVertexMap, intEdgeMap, SP);
+		nulledgs.push_back(head->prv.lock()->edg);
+		createintvertex(head->prv.lock().get(), intVertexMap, intEdgeMap, SP);
 		while (!(nbr[i].cl == BELOW && nbr[(i + 1) % nnbr].cl == ABOVE))
 		{
 			i = (i + 1) % nnbr;
@@ -435,7 +428,7 @@ bool insertnulledges(std::vector<hefrel> &nbr, std::map<vertexName, intVertex*> 
 			{
 				if (!nulledgs.empty())
 				{
-					nulledges[head->prv->vtx] = nulledgs;
+					nulledges[head->prv.lock()->vtx] = nulledgs;
 				}
 				return true;
 			}
@@ -444,146 +437,89 @@ bool insertnulledges(std::vector<hefrel> &nbr, std::map<vertexName, intVertex*> 
 	return true;
 }
 
-bool splitclassify(Eigen::Vector4d SP, std::unordered_set<Vertex*> &soov, std::map<vertexName, intVertex*> &intVertexMap, std::map<edgeName, intEdge*> &intEdgeMap)
+bool splitclassify(Eigen::Vector4d SP, std::unordered_set<std::shared_ptr<Vertex>> &soov, std::map<vertexName, std::shared_ptr<intVertex>> &intVertexMap, 
+						std::map<edgeName, std::shared_ptr<intEdge>> &intEdgeMap)
 {
     auto end = soov.end();
 	for (auto it = soov.begin(); it != end; ++it)
 	{
-		std::vector<hefrel> nbr = getneighborhood(*it, SP);
+		std::vector<hefrel> nbr = getneighborhood(it->get(), SP);
 		reclassifyonsectors(SP, nbr);
 		reclassifyonedges(nbr);
         insertnulledges(nbr, intVertexMap, intEdgeMap, SP);
-        // createintvertex()
-        // creatintVertex(nbr)
-		// insertnulledges();
 	}
+	return true;
 }
 
-bool splitconnect(std::map<intVertex*, std::vector<intVertex*>> wire, Solid *S)
+bool splitconnect(std::map<std::shared_ptr<intVertex>, std::vector<std::shared_ptr<intVertex>>> wire, std::shared_ptr<Solid> S)
 {
 	auto wireend = wire.end();
 	for (auto wireit = wire.begin(); wireit != wireend; ++wireit)
 	{
-		Vertex *v = S->getvertex(wireit->first->vertexno);
-		std::vector<Edge*> edgs = nulledges[v];
+		std::shared_ptr<Vertex> v = S->getvertex(wireit->first->vertexno);
+		std::vector<std::shared_ptr<Edge>> edgs = nulledges[v];
 		auto edgsend = edgs.end();
-		std::unordered_set<Edge*> canjoineedge;
+		std::unordered_set<std::shared_ptr<Edge>> canjoineedge;
 		auto intvetxend = wireit->second.end();
 		for (auto intvetxeit = wireit->second.begin(); intvetxeit != intvetxend; ++intvetxeit)
 		{
-			Vertex *vs = S->getvertex((*intvetxeit)->vertexno);
+			std::shared_ptr<Vertex> vs = S->getvertex((*intvetxeit)->vertexno);
 			canjoineedge.insert(nulledges[vs].begin(), nulledges[vs].end());
 		}
 		for (auto edgsit = edgs.begin(); edgsit != edgsend; ++edgsit)
 		{
-			HalfEdge* h1 = canjoine((*edgsit)->he1, canjoineedge);
+			std::shared_ptr<HalfEdge> h1 = canjoine((*edgsit)->he1.lock(), canjoineedge);
 			if (h1)
 			{
-				join(h1, (*edgsit)->he1);
-				size_t cnt = hasconnect.count(mate(h1));
+				join(h1, (*edgsit)->he1.lock());
+				size_t cnt = hasconnect.count(h1->mate());
 				if (cnt == 1) cut(h1);
-				cnt = hasconnect.count(mate((*edgsit)->he1));
-				if (cnt == 1) cut((*edgsit)->he1);
-				// auto loophalfedgeit = std::find(ends.begin(), ends.end(), mate(h1));
-				// if (loophalfedgeit == ends.end()) cut(h1);
+				cnt = hasconnect.count((*edgsit)->he1.lock()->mate());
+				if (cnt == 1) cut((*edgsit)->he1.lock());
 			}
-			HalfEdge* h2 = canjoine((*edgsit)->he2, canjoineedge);
+			std::shared_ptr<HalfEdge> h2 = canjoine((*edgsit)->he2.lock(), canjoineedge);
 			if (h2)
 			{
-				join(h2, (*edgsit)->he2);
-				size_t cnt = hasconnect.count(mate(h2));
+				join(h2, (*edgsit)->he2.lock());
+				size_t cnt = hasconnect.count(h2->mate());
 				if (cnt == 1) cut(h2);
-				cnt = hasconnect.count(mate((*edgsit)->he2));
-				if (cnt == 1) cut((*edgsit)->he2);
-				// auto loophalfedgeit = std::find(ends.begin(), ends.end(), mate(h2));
-				// if (loophalfedgeit == ends.end()) cut(h2);
+				cnt = hasconnect.count((*edgsit)->he2.lock()->mate());
+				if (cnt == 1) cut((*edgsit)->he2.lock());
 			}
 			if (h1 && h2)
 			{
 				std::cerr << "splitconnect : some unkown error occured" << std::endl;
 			}
-			// bool flag1 = ends.count(h1);
-			// bool flag2 = ends.count(h2);
-			// if (flag1)
-			// 	cut((*edgsit)->he1);
-			// if (flag2)
-			// 	cut((*edgsit)->he2);
 		}
 	}
 	return true;
 	
 }
 
-void movefac(Face* f, Solid* s)
+void movefac(std::shared_ptr<Face> f, std::shared_ptr<Solid> s)
 {
-	// Face *f1 = s->sfaces;
-	// int count = 0;
-	// while (f1 && f1->nextf)
-	// {
-	// 	++count;
-	// 	f1 = f1->nextf;
-	// }
-	// if (f1 && f1->faceno != 10204)
-	// {
-	// 	std::cerr << "--------" << count << "-------" << std::endl;
-	// }
-	removelist(FACE, (Node*)f, (Node*)f->fsolid);
-	// f1 = s->sfaces;
-	// while (f1 && f1->nextf)
-	// {
-	// 	f1 = f1->nextf;
-	// }
-	// if (f1 && f1->faceno != 10204)
-	// {
-	// 	std::cerr << "---------------" << std::endl;
-	// }
-	// count = 0;
-	// f1 = s->sfaces;
-	// while (f1 && f1->nextf)
-	// {
-	// 	++count;
-	// 	f1 = f1->nextf;
-	// }
-	// if (f1 && f1->faceno != 10204)
-	// {
-	// 	std::cerr << "--------" << count << "-------" << std::endl;
-	// }
-	addlist(FACE, (Node*)f, (Node*)s);
-	// count = 0;
-	// f1 = s->sfaces;
-	// while (f1 && f1->nextf)
-	// {
-	// 	++count;
-	// 	f1 = f1->nextf;
-	// }
-	// if (f1 && f1->faceno != 10204)
-	// {
-	// 	std::cerr << "--------" << count << "-------" << std::endl;
-	// }
-	// f1 = s->sfaces;
-	// while (f1 && f1->nextf)
-	// {
-	// 	f1 = f1->nextf;
-	// }
-	// if (f1 && f1->faceno != 10204)
-	// {
-	// 	std::cerr << "---------------" << std::endl;
-	// }
-	Loop* l = f->floops;
+	// removelist(FACE, (Node*)f, (Node*)f->fsolid);
+	// f->fsolid.lock()->RemoveListFromSolid()
+	f->RemoveListFromSolid(f->fsolid.lock());
+
+	s->addlist(f);
+	// addlist(FACE, (Node*)f, (Node*)s);
+	std::shared_ptr<Loop> l = f->floops;
 	while (l)
 	{
-		HalfEdge* he = l->ledg;
+		std::shared_ptr<HalfEdge> he = l->ledg;
+		std::shared_ptr<HalfEdge> first = he;
 		do
 		{
-			Face* f2 = mate(he)->wloop->lface;
-			if (f2->fsolid != s)
+			std::shared_ptr<Face> f2 = he->mate()->wloop.lock()->lface.lock();
+			if (f2->fsolid.lock() != s)
 				movefac(f2, s);
-		} while ((he = he->nxt) != l->ledg);
+		} while ((he = he->nxt) != first);
 		l = l->nextl;
 	}
 }
 
-void classify(Solid* S, Solid* Above, Solid* Below)
+void classify(std::shared_ptr<Solid> S, std::shared_ptr<Solid> &Above, std::shared_ptr<Solid> &Below)
 {
 	int nfac = sonf.size() / 2;
 	for (int i = 0; i != nfac; ++i)
@@ -591,26 +527,11 @@ void classify(Solid* S, Solid* Above, Solid* Below)
 		//暂时不支持内环，稍微修改一下即可
 		movefac(sonf[i], Above);
 		movefac(sonf[i + nfac], Below);
-	//debug
-	// Face *af1 = Above->sfaces;
-	// Face *f = af1;
-	// while (f->nextf)
-	// {
-	// 	f = f->nextf;
-	// }
-	// Face *af2 = f;
-	// Face *bf1 = Below->sfaces;
-	// f = bf1;
-	// while (f->nextf)
-	// {
-	// 	f = f->nextf;
-	// }
-	// Face *bf2 = f;
 	}
 
 }
 
-static bool isin(Edge *e, Edge* egelist)
+static bool isin(std::shared_ptr<Edge> e, std::shared_ptr<Edge> egelist)
 {
 	while (egelist)
 	{
@@ -619,7 +540,7 @@ static bool isin(Edge *e, Edge* egelist)
 	}
 	return false;
 }
-static bool isin(Vertex *v, Vertex* vertexlist)
+static bool isin(std::shared_ptr<Vertex> v, std::shared_ptr<Vertex> vertexlist)
 {
 	while (vertexlist)
 	{
@@ -629,28 +550,30 @@ static bool isin(Vertex *v, Vertex* vertexlist)
 	return false;
 }
 
-void cleanup(Solid* s)
+void cleanup(std::shared_ptr<Solid> s)
 {
-	Face* f = s->sfaces;
+	std::shared_ptr<Face> f = s->sfaces;
 	while (f)
 	{
-		Loop* l = f->floops;
+		std::shared_ptr<Loop> l = f->floops;
 		while (l)
 		{
-			HalfEdge* he = l->ledg;
+			std::shared_ptr<HalfEdge> he = l->ledg;
 			do
 			{
-				Edge* e = he->edg;
-				Edge* elist = s->sedges;
+				std::shared_ptr<Edge> e = he->edg;
+				std::shared_ptr<Edge> elist = s->sedges;
 				if (!isin(e, elist))
 				{
-					addlist(EDGE, (Node*)e, (Node*)s);
+					s->addlist(e);
+					// addlist(EDGE, (Node*)e, (Node*)s);
 				}
-				Vertex* v = he->vtx;
-				Vertex* vlist = s->svertes;
+				std::shared_ptr<Vertex> v = he->vtx;
+				std::shared_ptr<Vertex> vlist = s->svertes;
 				if (!isin(v, vlist))
 				{
-					addlist(VERTEX, (Node*)v, (Node*)s);
+					s->addlist(v);
+					// addlist(VERTEX, (Node*)v, (Node*)s);
 				}
 			} while ((he = he->nxt) != l->ledg);
 			l = l->nextl;
@@ -659,57 +582,56 @@ void cleanup(Solid* s)
 	}
 }
 
-void splitfinish(Solid* S, Solid** Above, Solid** Below)
+void splitfinish(std::shared_ptr<Solid> S, std::shared_ptr<Solid> &Above, std::shared_ptr<Solid> &Below)
 {
 	int nfac = (int)sonf.size();
 	for (int i = 0; i != nfac; ++i)
 	{
-		Loop *l = sonf[i]->floops;
+		std::shared_ptr<Loop> l = sonf[i]->floops;
 		if (l == sonf[i]->flout)
 			l = sonf[i]->floops->nextl;
-		Face* f = lmfkrh(l, ++maxf);
+		std::shared_ptr<Face> f = lmfkrh(l, ++maxf);
 		sonf.push_back(f);
 	}
-	*Above = new Solid();
-	*Below = new Solid();
-	classify(S, *Above, *Below);
-	cleanup(*Above);
-	cleanup(*Below);
+	Above = std::make_shared<Solid>();
+	Above->addlist();
+	Below = std::make_shared<Solid>();
+	Below->addlist();
+	classify(S, Above, Below);
+	cleanup(Above);
+	cleanup(Below);
 }
 
-void split(Solid* S, Eigen::Vector4d& SP, Solid** Above, Solid** Below)
+void split(std::shared_ptr<Solid> S, Eigen::Vector4d &SP, std::shared_ptr<Solid> &Above, std::shared_ptr<Solid> &Below)
 {
-    std::map<vertexName, intVertex*> intVertexMap;
-    std::map<edgeName, intEdge*> intEdgeMap;
-	for (Face* f = S->sfaces; f != nullptr; f = f->nextf)
+    std::map<vertexName, std::shared_ptr<intVertex>> intVertexMap;
+    std::map<edgeName, std::shared_ptr<intEdge>> intEdgeMap;
+	for (std::shared_ptr<Face> f = S->sfaces; f != nullptr; f = f->nextf)
 	{
 		Eigen::Vector4d eq;
-		faceeq(f->flout, eq);
-		plane *p = new plane(eq);
-		f->surf = (surface*)p;
+		faceeq(f->flout.get(), eq);
+		std::shared_ptr<plane> p = std::make_shared<plane>(eq);
+		f->surf = std::static_pointer_cast<surface>(p);
 	}
 	getmaxnames(S->solidno);
-	std::unordered_set<Vertex*> soov = splitgenerate(S, SP);
+	std::unordered_set<std::shared_ptr<Vertex>> soov = splitgenerate(S, SP);
     splitclassify(SP, soov, intVertexMap, intEdgeMap);
 	Eigen::Vector3d normal(SP[0], SP[1], SP[2]);
-	std::map<intVertex*, std::vector<intVertex*>> wire = makeconnectgraphic(intVertexMap, intEdgeMap, S, normal);
+	std::map<std::shared_ptr<intVertex>, std::vector<std::shared_ptr<intVertex>>> wire = makeconnectgraphic(intVertexMap, intEdgeMap, S.get(), normal);
 	splitconnect(wire, S);
 	splitfinish(S, Above, Below);
 }
-// segments::~segments()
-// {
-// }
 
 void setintVertexintEdgerelation(vertexName vtxName, edgeName edgName, bool inout, Eigen::Vector3d &point, Id vertexno,
-									std::map<vertexName, intVertex*> &intVertexMap, std::map<edgeName, intEdge*> &intEdgeMap)
+		std::map<vertexName, std::shared_ptr<intVertex>> &intVertexMap, std::map<edgeName, std::shared_ptr<intEdge>> &intEdgeMap)
 {
     auto vtxIt = intVertexMap.find(vtxName);
     auto edgIt = intEdgeMap.find(edgName);
-    intVertex *intVtx = nullptr;
-    intEdge *intEdg = nullptr;
+    std::shared_ptr<intVertex> intVtx = nullptr;
+    std::shared_ptr<intEdge> intEdg = nullptr;
     if (vtxIt == intVertexMap.end())
     {
-        intVtx = new intVertex{vtxName, point, vertexno};
+        intVtx = std::make_shared<intVertex> (vtxName, point, vertexno);
         intVertexMap.emplace(vtxName, intVtx);
     }
     else
@@ -719,7 +641,7 @@ void setintVertexintEdgerelation(vertexName vtxName, edgeName edgName, bool inou
 
     if (edgIt == intEdgeMap.end())
     {
-        intEdg = new intEdge{edgName};
+        intEdg = std::make_shared<intEdge> (edgName);
         intEdgeMap.emplace(edgName, intEdg);
     }
     else
@@ -741,166 +663,3 @@ void setintVertexintEdgerelation(vertexName vtxName, edgeName edgName, bool inou
     }
 }
 
-// onFaceVertex* segments::get_on_face_vertex(const Eigen::Vector4d &SP, Face *f2, Face *f3)
-// {
-//     faceSolidMap fs1{0, 0};
-//     faceSolidMap fs2{f2->faceno, f2->fsolid->solidno};
-//     faceSolidMap fs3{f3->faceno, f3->fsolid->solidno};
-
-//     Eigen::Vector3d face2Normal = f2->get_normal();
-//     Eigen::Vector3d face3Normal = f3->get_normal();
-//     Eigen::Vector3d face2face3Cross = face2Normal.cross(face3Normal);
-//     face2face3Cross.normalize();
-//     if (face2face3Cross.squaredNorm() < EPS * EPS)
-//     {
-//         // 暂时不支持边的相邻两个面平行(或者根本不用支持)
-//         // std::cerr << "get_intVertex : f1 is parallel with f2" << std::endl;
-//         return;
-//     }
-//     Eigen::Vector3d spNormal{SP[0], SP[1], SP[2]};
-//     double mixproduct = spNormal.dot(face1face2Cross);
-//     faceSolidMap f1M{f1->faceno, s->solidno};
-//     faceSolidMap f2M{f2->faceno, s->solidno};
-//     edgeName inEdgeName;
-//     edgeName outEdgeName;
-//     vertexName vtxName;
-//     if (mixproduct > EPS)
-//     {
-//         vtxName = vertexName(f0M, f1M, f2M);
-//         inEdgeName = edgeName(f2M, f0M);
-//         outEdgeName = edgeName(f1M, f0M);
-//     }
-//     else if (mixproduct < -EPS)
-//     {
-//         vtxName = vertexName(f0M, f2M, f1M);
-//         inEdgeName = edgeName(f1M, f0M);
-//         outEdgeName = edgeName(f2M, f0M);
-//     }
-//     else
-//     {
-//         // std::cerr << "get_intVertex : edge(f1, f2) is on SP" << std::endl;
-//         continue;
-//     }
-
-// }
-
-// void segments::get_intVertex(const Solid *S, const Eigen::Vector4d &SP)
-// {
-//     std::vector<onFaceVertex*> onFaceVertexVector;
-//     faceSolidMap f1{0, 0};
-//     for (Edge* e = S->sedges; e != nullptr; e = e->nexte)
-// 	{
-// 		Vertex* v1 = e->he1->vtx;
-// 		Vertex* v2 = e->he2->vtx;
-// 		double d1 = dist(v1->vcoord, SP);
-// 		double d2 = dist(v2->vcoord, SP);
-// 		int s1 = compare(d1, 0.0, EPS);
-// 		int s2 = compare(d2, 0.0, EPS);
-//         faceSolidMap f2 {e->he1->wloop->lface->faceno, S->solidno};
-//         faceSolidMap f3 {e->he2->wloop->lface->faceno, S->solidno};
-// 		if ((s1 == -1 && s2 == 1) || (s1 == 1 && s2 == -1))
-// 		{
-// 			double t = d1 / (d1 - d2);
-// 			Eigen::Vector3d point = v1->vcoord + t * (v2->vcoord - v1->vcoord);
-// 			HalfEdge* he = nullptr;
-// 			lmev(e->he1, (he = e->he2->nxt), ++maxv, point[0], point[1], point[2]);
-//             Face *f2 = e->he1->wloop->lface;
-//             Face *f3 = e->he2->wloop->lface;
-// 			soov.insert(he->prv->vtx);
-// 		}
-// 		else
-// 		{
-// 			if (s1 == 0) soov.insert(v1);
-// 			if (s2 == 0) soov.insert(v2);
-// 		}
-// 	}
-//     // std::vector<intVertex*> intVectexVector;
-//     faceSolidMap f0M{0, 0};
-//     Edge *e = s->sedges;
-//     while (e)
-//     {
-//         Face *f1 = e->he1->wloop->lface;
-//         Face *f2 = e->he2->wloop->lface;
-//         Eigen::Vector4d f1Equ = ((plane*)f1->surf)->equation;
-//         Eigen::Vector4d f2Equ = ((plane*)f2->surf)->equation;
-//         Eigen::Vector3d intPos(0.0, 0.0, 0.0);
-//         bool flag = three_plane_intersect(SP, f1Equ, f2Equ, intPos);
-//         if (flag == false)
-//             continue;
-
-//         if (f1 == f2)
-//         {
-//             // 暂时不支持一个边的相邻两面平行
-//             // std::cerr << "get_intVertex : f1 == f2" << std::endl;
-//             continue;;
-//         }
-//         Eigen::Vector3d face1Normal = f1->get_normal();
-//         Eigen::Vector3d face2Normal = f2->get_normal();
-//         Eigen::Vector3d face1face2Cross = face1Normal.cross(face2Normal);
-//         face1face2Cross.normalize();
-//         if (face1face2Cross.squaredNorm() < EPS * EPS)
-//         {
-//             // 暂时不支持边的相邻两个面平行(或者根本不用支持)
-//             // std::cerr << "get_intVertex : f1 is parallel with f2" << std::endl;
-//             continue;
-//         }
-//         Eigen::Vector3d spNormal{SP[0], SP[1], SP[2]};
-//         double mixproduct = spNormal.dot(face1face2Cross);
-//         faceSolidMap f1M{f1->faceno, s->solidno};
-//         faceSolidMap f2M{f2->faceno, s->solidno};
-//         edgeName inEdgeName;
-//         edgeName outEdgeName;
-//         vertexName vtxName;
-//         if (mixproduct > EPS)
-//         {
-//             vtxName = vertexName(f0M, f1M, f2M);
-//             inEdgeName = edgeName(f2M, f0M);
-//             outEdgeName = edgeName(f1M, f0M);
-//         }
-//         else if (mixproduct < -EPS)
-//         {
-//             vtxName = vertexName(f0M, f2M, f1M);
-//             inEdgeName = edgeName(f1M, f0M);
-//             outEdgeName = edgeName(f2M, f0M);
-//         }
-//         else
-//         {
-//             // std::cerr << "get_intVertex : edge(f1, f2) is on SP" << std::endl;
-//             continue;
-//         }
-//         set_intVertex_intEdge_relation(vtxName, inEdgeName, true, intPos);
-//         set_intVertex_intEdge_relation(vtxName, outEdgeName, false, intPos);
-//         e = e->nexte;
-//     }
-// }
-
-// void segments::make_clusters()
-// {
-//     auto end = intVertexMap.end();
-//     for (auto it = intVertexMap.begin(); it != end; ++it)
-//     {
-//         intVertex *intV = it->second;
-//         Eigen::Vector3d itp = intV->pos;
-//         auto endc = vtxClust.end();
-//         bool flag = false;
-//         for (auto itc = vtxClust.begin(); itc != endc; ++itc)
-//         {
-//             //算不知道什么均值，可能有bug
-//             Eigen::Vector3d itcp = (*itc)->pos;
-//             if ((itcp - itp).squaredNorm() < EPS * EPS)
-//             {
-//                 (*itc)->intVtxSet.push_back(it->second);
-//                 (*itc)->pos = (itcp + itp) / 2.0;
-//                 flag = true;
-//                 VtxVtxclusRel.emplace(it->second, *itc); 
-//                 break;
-//             }
-//         }
-//         if (flag == false)
-//         {
-//             intVetexClusters *intvc = new intVetexClusters{itp};
-//             intvc->intVtxSet.push_back(intV);
-//         }
-
-//     }
-// }

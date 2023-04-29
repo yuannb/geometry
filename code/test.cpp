@@ -11,13 +11,13 @@ using namespace std;
 
 int main()
 {
-    Solid *s = torus(1, 100, 10, 100, 100);
-    Solid* above = nullptr;
-    Solid* below = nullptr;
+    std::shared_ptr<Solid> s = torus(1, 100, 10, 100, 100);
+    std::shared_ptr<Solid> above = nullptr;
+    std::shared_ptr<Solid> below = nullptr;
     Eigen::Vector4d sp{ 1, 0, 0, 0 };
-    // Solid *s = block(1, 10, 10, 10);
-    split(s, sp, &above, &below);
-    // Solid *s = circle(1, 0.0, 100.0, 10, 0.0, 10);
+    // std::shared_ptr<Solid> s = block(1, 10, 10, 10);
+    split(s, sp, above, below);
+    // // Solid *s = circle(1, 0.0, 100.0, 10, 0.0, 10);
     triangel t = delaunay(above);
 
     std::cout << "-----------" << std::endl;
@@ -26,7 +26,7 @@ int main()
     std::string dir("view.obj");
     // std::ofstream outfile(dir);
     std::ofstream outfile(dir);
-    
+
 
     // wirte vetex
     auto it = t.vtxarry.begin();
@@ -52,7 +52,7 @@ int main()
     }
 
     outfile.close();
-    
+
     // write doc
     dir = std::string("view1.obj");
     // std::ofstream outfile(dir);

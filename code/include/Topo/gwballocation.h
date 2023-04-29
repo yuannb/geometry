@@ -1,10 +1,13 @@
 #pragma once
 #include "geodef.h"
 #include <cstdlib>
+#include <memory>
 
-void addlist(int what, Node *which, Node *where);
+// void addlist(int what, Node *which, Node *where);
+void addlist(std::shared_ptr<Solid> s);
+// void addlist(int what, std::shared_ptr<Node> which, Node *where)
 // Node *gnew(int what, Node *where);
-void removelist(int what, Node *which, Node *where);
+// void removelist(int what, Node *which, Node *where);
 // void Free(Solid *dsolid);
 // void Free(Face *face);
 // void Free(Loop *dl);

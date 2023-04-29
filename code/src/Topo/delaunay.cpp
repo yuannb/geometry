@@ -1,19 +1,19 @@
 #include "delaunay.h"
 
-triangel  delaunay(Solid *s)
+triangel  delaunay(std::shared_ptr<Solid> s)
 {
-    Vertex *sv = s->svertes;
+    std::shared_ptr<Vertex> sv = s->svertes;
     triangel tri;
     while (sv)
     {
         tri.vtxarry.push_back(sv);
         sv = sv->nextv; 
     }
-    Face *sf = s->sfaces;
+    std::shared_ptr<Face> sf = s->sfaces;
     while (sf)
     {
-        Loop *l = sf->flout;
-        HalfEdge *he = l->ledg;
+        std::shared_ptr<Loop> l = sf->flout;
+        std::shared_ptr<HalfEdge> he = l->ledg;
         std::vector<int> vec;
         do
         {

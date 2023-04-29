@@ -5,7 +5,7 @@
 // #include <Eigen/Dense>
 #include "surface.h"
 
-class plane : surface
+class plane : public surface
 {
 public:
     Eigen::Vector4d equation;

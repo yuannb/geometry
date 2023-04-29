@@ -1,2 +1,3 @@
 #include "params.h"
-Solid           *firsts;    // head of the list of all solids
+#include <memory>
+std::weak_ptr<Solid>           firsts;    // head of the list of all solids
