@@ -81,7 +81,7 @@ std::shared_ptr<Solid>  cyl(Id sn, double rad, double h, int n)
     return s;
 }
 
-std::shared_ptr<Solid> rsweep(std::shared_ptr<Solid> s, int nfaces)
+std::shared_ptr<Solid> rsweep(std::shared_ptr<Solid> &s, int nfaces)
 {
     // HalfEdge *first, *cfirst, *last, *scan;
     std::shared_ptr<HalfEdge> first = nullptr, cfirst = nullptr, last = nullptr, scan = nullptr;
@@ -149,9 +149,6 @@ std::shared_ptr<Solid> rsweep(std::shared_ptr<Solid> s, int nfaces)
 std::shared_ptr<Solid> torus(Id sn, double r1, double r2, int nf1, int nf2)
 {
     std::shared_ptr<Solid> s = circle(sn, 0.0, r1, r2, 0.0, nf1);
-    // Solid *s;
-    // s = mvfs(sn, 1, 1, 0.0 + r2, r1, 0.0);
-    // arc(sn, 1, 1, 0.0, r1, r2, 0.0, 0.0, ((nf1-1) * 180.0 / nf1), nf1-1);
     rsweep(s, nf2);
     return s;
 }

@@ -2,6 +2,7 @@
 #include "solid.h"
 #include "surface.h"
 #include "loop.h"
+#include "params.h"
 
 face::face()
 {
@@ -10,21 +11,27 @@ face::face()
     surf = nullptr;
     nextf = nullptr;
     prevf.reset();
+    fsolid.reset();
 }
 
-// bool face::addtofacelist(std::shared_ptr<Solid> s)
-// {
-//     floops = nullptr;
-//     flout = nullptr;
+face::~face() 
+{
+        std::shared_ptr<Face> fac = nextf;
+        std::shared_ptr<Face> prefac = fac ? fac->prevf.lock() : nullptr;
+        while (fac)
+        {
+            prefac = fac;
+            fac = fac->nextf;
+        }
+        
+        prefac = prefac ? prefac->prevf.lock() : nullptr;
+        while (prefac)
+        {
+            prefac->nextf = nullptr;
+            prefac = prefac->prevf.lock();
+        } 
 
-//     nextf = s->sfaces;
-//     prevf.reset();
-//     std::shared_ptr<Face> thisface = shared_from_this();
-//     if (s->sfaces)
-//         s->sfaces->prevf = thisface;
-//     s->sfaces = thisface;
-//     fsolid = s;
-// }
+};
 
 bool face::RemoveListFromSolid(std::shared_ptr<Solid> s)
 {
@@ -41,6 +48,8 @@ bool face::RemoveListFromSolid(std::shared_ptr<Solid> s)
         if (nextf)
             nextf->prevf = prevf;
     }
+    nextf = nullptr;
+    prevf.reset();
     return true;
 }
 

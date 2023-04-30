@@ -1,11 +1,19 @@
 #pragma once
-#include "globalSymbol.h"
+
 #include "memory"
+
+typedef int                Id;
+typedef class  solid       Solid;
+typedef class  face        Face;
+typedef class  loop        Loop;
+typedef class  halfedge    HalfEdge;
+typedef class  vertex      Vertex;
+typedef class  edge        Edge;
+typedef union  nodes       Node;
 
 // return values and misc constants
 # define    ERROR       -1
 # define    SUCCESS     -2
-# define    NIL         0
 # define    PI          3.1415926535589793
 
 // node type parameters for memory allocation routines
@@ -15,11 +23,6 @@
 # define    HALFEDGE    3
 # define    EDGE        4
 # define    VERTEX      5
-
-// coordinate plane names
-# define    XPLANE      0
-# define    YPLANE      1
-# define    ZPLANE      2
 
 // orientations
 # define    PLUS    0

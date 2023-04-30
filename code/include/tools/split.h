@@ -1,5 +1,5 @@
 /*
-对于流形. 在任意一点同胚于平面，因此局部上总是可以化成下图的形状
+对于流形. 在任意一点同胚于平面，因此局部上在某一点总是可以画成下图的形状
 
                 A           B          A
                   x         x         x
@@ -44,7 +44,6 @@
 struct hefrel
 {
     std::shared_ptr<HalfEdge> sector;
-	// HalfEdge* sector;
 	int cl;
 };
 
@@ -58,8 +57,6 @@ struct intVertex;
 struct intEdge
 {
     edgeName intEdgeName;
-    // std::vector<intVertex*> stl;
-    // std::vector<intVertex*> edl;
     std::vector<std::shared_ptr<intVertex>> stl;
     std::vector<std::shared_ptr<intVertex>> edl;
     intEdge() = default;
@@ -71,8 +68,6 @@ struct intVertex
     vertexName intVtxName;
     Eigen::Vector3d pos;
     Id vertexno;
-    // std::vector<intEdge*> inEdge;
-    // std::vector<intEdge*> outEdge;
     std::vector<std::shared_ptr<intEdge>> inEdge;
     std::vector<std::shared_ptr<intEdge>> outEdge;
     intVertex(vertexName xintVtxName, Eigen::Vector3d xpos, Id xvertexno): intVtxName(xintVtxName)
@@ -90,7 +85,7 @@ void cleanup(std::shared_ptr<Solid> s);
 
 void classify(std::shared_ptr<Solid> S, std::shared_ptr<Solid> &Above, std::shared_ptr<Solid> &Below);
 
-void movefac(Face* f, Solid* s);
+void  movefac(std::shared_ptr<Face> f, std::shared_ptr<Solid> s);
 
 int neighbor(std::shared_ptr<HalfEdge> h1, std::shared_ptr<HalfEdge> h2);
 
@@ -100,7 +95,7 @@ void splitfinish(std::shared_ptr<Solid> S, std::shared_ptr<Solid> &Above, std::s
 
 std::shared_ptr<HalfEdge> canjoine(std::shared_ptr<HalfEdge> he, std::unordered_set<std::shared_ptr<Edge>> nulledgs);
 
-void join(HalfEdge* h1, HalfEdge* h2);
+void join(std::shared_ptr<HalfEdge> h1, std::shared_ptr<HalfEdge> h2);
 
 bool splitconnect(std::map<std::shared_ptr<intVertex>, std::vector<std::shared_ptr<intVertex>>> wire, std::shared_ptr<Solid> S);
 
@@ -113,8 +108,6 @@ void setintVertexintEdgerelation(vertexName vtxName, edgeName edgName, bool inou
 
 bool createintvertex(HalfEdge *he, std::map<vertexName, std::shared_ptr<intVertex>> &intVertexMap, 
 						std::map<edgeName, std::shared_ptr<intEdge>> &intEdgeMap, Eigen::Vector4d SP);
-
-int findfirstwidesector(std::vector<hefrel> &nbr);
 
 std::unordered_set<std::shared_ptr<Vertex>> splitgenerate(std::shared_ptr<Solid> S, Eigen::Vector4d& SP);
 

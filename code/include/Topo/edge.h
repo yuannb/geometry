@@ -1,5 +1,5 @@
 #pragma once
-#include "globalSymbol.h"
+
 #include <memory>
 
 class curve;
@@ -10,8 +10,6 @@ class edge : public std::enable_shared_from_this<edge>
 {
 public: 
     edge();
-
-    //have to call it before deconstruct
     bool RemoveListFromSolid(std::shared_ptr<Solid> s);
 
     ~edge();

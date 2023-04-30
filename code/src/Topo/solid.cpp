@@ -6,6 +6,27 @@
 
 solid::solid()
 {
+    sfaces = nullptr;
+    sedges = nullptr;
+    svertes = nullptr;
+    nexts = nullptr;
+    prevs.reset();
+}
+solid::~solid()
+{
+    std::shared_ptr<Solid> snext = nexts;
+    std::shared_ptr<Solid> presnext = snext ? snext->prevs.lock() : nullptr;
+    while (snext)
+    {
+        presnext = snext;
+        snext = snext->nexts;
+    }
+    presnext = presnext ? presnext->prevs.lock() : nullptr;
+    while (presnext)
+    {
+        presnext->nexts = nullptr;
+        presnext = presnext->prevs.lock();
+    }
 }
 
 bool solid::addlist()
@@ -14,7 +35,6 @@ bool solid::addlist()
     prevs.reset();
     if (nexts)
         nexts->prevs = shared_from_this();
-        // firsts->prevs = this;
     firsts = shared_from_this();
     this->sedges = nullptr;
     this->sfaces = nullptr;
@@ -37,18 +57,8 @@ bool solid::RemoveListFromSolid()
         if (nexts)
             nexts->prevs = prevs;
     }
-    // if (this == firsts)
-    // {
-    //     firsts = firsts->nexts;
-    //     if (firsts)
-    //         firsts->prevs = nullptr;
-    // }
-    // else
-    // {
-    //     prevs->nexts = nexts;
-    //     if (nexts)
-    //         nexts->prevs = prevs;
-    // }
+    prevs.reset();
+    nexts = nullptr;
     
     return true;
 }

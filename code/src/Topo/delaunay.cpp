@@ -26,3 +26,35 @@ triangel  delaunay(std::shared_ptr<Solid> s)
     }
     return tri;
 }
+
+triangel  discret(std::shared_ptr<Solid> s)
+{
+    std::shared_ptr<Vertex> v = s->svertes;
+    int num = 1;
+    triangel tri;
+    while (v)
+    {
+        v->vertexno = num++;
+        tri.vtxarry.push_back(v);
+        v = v->nextv;
+    }
+    std::shared_ptr<Face> f = s->sfaces;
+    while (f)
+    {
+        std::shared_ptr<Loop> l = f->floops;
+        std::vector<int> facno;
+        while (l)
+        {
+            std::shared_ptr<HalfEdge> he = l->ledg;
+            do
+            {
+                facno.push_back(he->vtx->vertexno);
+
+            }while((he = he->nxt) != l->ledg);
+            l = l->nextl;
+        }
+        tri.face.push_back(facno);
+        f = f->nextf;       
+    }
+    return tri;
+}

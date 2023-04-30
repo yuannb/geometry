@@ -123,7 +123,8 @@ void join(std::shared_ptr<HalfEdge> h1, std::shared_ptr<HalfEdge> h2)
 bool comparevertex(intVertex *v1, intVertex *v2, Eigen::Vector3d dir)
 {
 	Eigen::Vector3d v1v2 = v2->pos - v1->pos;
-	if (v1v2.dot(dir) >= -EPS)
+	double product = v1v2.dot(dir);
+	if (product > 0)
 		return true;
 	return false;
 }
@@ -324,27 +325,13 @@ void reclassifyonedges(std::vector<hefrel> &nbr)
 	}
 }
 
-int findfirstwidesector(std::vector<hefrel> &nbr)
-{
-    int count = (int)nbr.size();
-    for (int index = 0; index != count; ++index)
-    {
-        if (nbr[index].sector == nbr[index + 1].sector)
-            return index;
-    }
-    return 0;
-}
-
 bool createintvertex(HalfEdge *he, std::map<vertexName, std::shared_ptr<intVertex>> &intVertexMap, 
 						std::map<edgeName, std::shared_ptr<intEdge>> &intEdgeMap, Eigen::Vector4d SP)
 {
 	faceSolidMap f0No{0, 0};
-	// int soildN0 = he->edg->he1->wloop->lface->fsolid->solidno;
 	Face *f1 = he->wloop.lock()->lface.lock().get();
 	Face *f2 = he->mate()->wloop.lock()->lface.lock().get();
 	int soildN0 = f1->fsolid.lock()->solidno;
-	// Face *f1 = he->edg->he1->wloop->lface;
-	// Face *f2 = he->edg->he2->wloop->lface;
 	faceSolidMap f1No{f1->faceno, soildN0};
 	faceSolidMap f2No{f2->faceno, soildN0};
 	vertexName vn;
@@ -359,15 +346,8 @@ bool createintvertex(HalfEdge *he, std::map<vertexName, std::shared_ptr<intVerte
 		e2 = edgeName(f1No, f0No); 
 	}
 	Eigen::Vector3d f0Nor(SP[0], SP[1], SP[2]);
-	Eigen::Vector3d f1Nor = f1->get_normal();
-	Eigen::Vector3d f2Nor = f2->get_normal();
-	Eigen::Vector3d c = f1Nor.cross(f2Nor);
-	
 	Eigen::Vector3d testv = he->nxt->nxt->vtx->vcoord - he->vtx->vcoord;
-	// double x  = testv.dot(c);
-	int check = testv.dot(c) < -EPS ? -1 : 1; //testv.dot(c) > 0 ? 1 : -1;
-
-	double mixproduct = f0Nor.dot(c) * check;
+	double mixproduct = testv.dot(f0Nor);
 	if (std::abs(mixproduct) < EPS)
 	{
 		//不应该出现这种情况(除非是非流形或者精度问题)
@@ -418,7 +398,6 @@ bool insertnulledges(std::vector<hefrel> &nbr, std::map<vertexName, std::shared_
 		lmev(head, tail, ++maxv, head->vtx->vcoord[0],
 			head->vtx->vcoord[1],
 			head->vtx->vcoord[2]);
-		// sone.insert(head->prv->edg);
 		nulledgs.push_back(head->prv.lock()->edg);
 		createintvertex(head->prv.lock().get(), intVertexMap, intEdgeMap, SP);
 		while (!(nbr[i].cl == BELOW && nbr[(i + 1) % nnbr].cl == ABOVE))
@@ -496,27 +475,34 @@ bool splitconnect(std::map<std::shared_ptr<intVertex>, std::vector<std::shared_p
 	
 }
 
-void movefac(std::shared_ptr<Face> f, std::shared_ptr<Solid> s)
+void  movefac(std::shared_ptr<Face> f, std::shared_ptr<Solid> s)
 {
-	// removelist(FACE, (Node*)f, (Node*)f->fsolid);
-	// f->fsolid.lock()->RemoveListFromSolid()
-	f->RemoveListFromSolid(f->fsolid.lock());
-
-	s->addlist(f);
-	// addlist(FACE, (Node*)f, (Node*)s);
-	std::shared_ptr<Loop> l = f->floops;
-	while (l)
+	std::vector<std::shared_ptr<Face>> fvec{f};
+	size_t index = 0;
+	while (index != fvec.size())
 	{
-		std::shared_ptr<HalfEdge> he = l->ledg;
-		std::shared_ptr<HalfEdge> first = he;
-		do
+		fvec[index]->RemoveListFromSolid(fvec[index]->fsolid.lock());
+		s->addlist(fvec[index]);
+		std::shared_ptr<Loop> l = fvec[index]->floops;
+		while (l)
 		{
-			std::shared_ptr<Face> f2 = he->mate()->wloop.lock()->lface.lock();
-			if (f2->fsolid.lock() != s)
-				movefac(f2, s);
-		} while ((he = he->nxt) != first);
-		l = l->nextl;
+			std::shared_ptr<HalfEdge> he = l->ledg;
+			std::shared_ptr<HalfEdge> first = he;
+		    do
+			{
+	 			std::shared_ptr<Face> f2 = he->mate()->wloop.lock()->lface.lock();
+					if (f2->fsolid.lock() != s)
+					{
+						// f->RemoveListFromSolid(f->fsolid.lock());
+						// s->addlist(f);
+						fvec.push_back(f2);
+					}
+	 		} while ((he = he->nxt) != first);
+			l = l->nextl;
+		}
+		++index;
 	}
+	
 }
 
 void classify(std::shared_ptr<Solid> S, std::shared_ptr<Solid> &Above, std::shared_ptr<Solid> &Below)
@@ -526,33 +512,19 @@ void classify(std::shared_ptr<Solid> S, std::shared_ptr<Solid> &Above, std::shar
 	{
 		//暂时不支持内环，稍微修改一下即可
 		movefac(sonf[i], Above);
+	}
+	for (int i = 0; i != nfac; ++i)
+	{
 		movefac(sonf[i + nfac], Below);
 	}
 
 }
 
-static bool isin(std::shared_ptr<Edge> e, std::shared_ptr<Edge> egelist)
-{
-	while (egelist)
-	{
-		if (e == egelist) return true;
-		egelist = egelist->nexte;
-	}
-	return false;
-}
-static bool isin(std::shared_ptr<Vertex> v, std::shared_ptr<Vertex> vertexlist)
-{
-	while (vertexlist)
-	{
-		if (v == vertexlist) return true;
-		vertexlist = vertexlist->nextv;
-	}
-	return false;
-}
-
 void cleanup(std::shared_ptr<Solid> s)
 {
 	std::shared_ptr<Face> f = s->sfaces;
+	std::unordered_set<std::shared_ptr<Edge>> edgeset;
+	std::unordered_set<std::shared_ptr<Vertex>> vtxset;
 	while (f)
 	{
 		std::shared_ptr<Loop> l = f->floops;
@@ -562,18 +534,18 @@ void cleanup(std::shared_ptr<Solid> s)
 			do
 			{
 				std::shared_ptr<Edge> e = he->edg;
-				std::shared_ptr<Edge> elist = s->sedges;
-				if (!isin(e, elist))
+				int cnt = edgeset.count(e);
+				if (cnt == 0)
 				{
 					s->addlist(e);
-					// addlist(EDGE, (Node*)e, (Node*)s);
+					edgeset.insert(e);
 				}
 				std::shared_ptr<Vertex> v = he->vtx;
-				std::shared_ptr<Vertex> vlist = s->svertes;
-				if (!isin(v, vlist))
+				cnt = vtxset.count(v);
+				if (cnt == 0)
 				{
 					s->addlist(v);
-					// addlist(VERTEX, (Node*)v, (Node*)s);
+					vtxset.insert(v);
 				}
 			} while ((he = he->nxt) != l->ledg);
 			l = l->nextl;

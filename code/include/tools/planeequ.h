@@ -8,28 +8,9 @@
 #include "euler.h"
 #include "memory"
 
-// extern HalfEdge *hithe;
-// extern Vertex *hitvetex;
 
 bool three_plane_intersect(const Eigen::Vector4d &p1, const Eigen::Vector4d &p2, const Eigen::Vector4d &p3, Eigen::Vector3d &intVtx);
 
-// void cleanup(Solid* s);
-
-// void movefac(Face* f, Solid* s);
-
-// void classify(Solid* S, Solid* Above, Solid* Below);
-
-// int neighbor(HalfEdge* h1, HalfEdge* h2);
-
-// void cut(HalfEdge* he);
-
-// HalfEdge* canjoine(HalfEdge* he);
-
-// void join(HalfEdge* h1, HalfEdge* h2);
-
-// bool compareVector(const Edge* e1, const Edge* e2);
-
-// std::vector<Edge*> sortnulledges();
 
 int faceeq(Loop *l, Eigen::Vector4d &eq);
 

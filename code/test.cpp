@@ -7,18 +7,22 @@
 #include <Eigen/Core>
 #include <Eigen/Dense>
 #include "split.h"
+#include <sstream>
+#include "delaunay.h"
 using namespace std;
 
 int main()
 {
-    std::shared_ptr<Solid> s = torus(1, 100, 10, 100, 100);
+    std::shared_ptr<Solid> s = torus(1, 100, 10, 1000, 1000);
     std::shared_ptr<Solid> above = nullptr;
     std::shared_ptr<Solid> below = nullptr;
     Eigen::Vector4d sp{ 1, 0, 0, 0 };
+    // std::shared_ptr<Face> f = s->sfaces;
+
     // std::shared_ptr<Solid> s = block(1, 10, 10, 10);
     split(s, sp, above, below);
-    // // Solid *s = circle(1, 0.0, 100.0, 10, 0.0, 10);
-    triangel t = delaunay(above);
+    // Solid *s = circle(1, 0.0, 100.0, 10, 0.0, 10);
+    triangel t = discret(above);
 
     std::cout << "-----------" << std::endl;
 
@@ -60,7 +64,7 @@ int main()
 
 
     // wirte vetex
-    triangel t2 = delaunay(below);
+    triangel t2 = discret(below);
     it = t2.vtxarry.begin();
     end = t2.vtxarry.end();
     for (; it != end; ++it)
@@ -85,7 +89,7 @@ int main()
 
     outfile2.close();
 
-     listsolid(s);
+    //  listsolid(s);
      std::cout << 1 <<std::endl;
     return 0;
 }

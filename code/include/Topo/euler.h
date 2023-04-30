@@ -4,7 +4,6 @@
 #include <iostream>
 #include <cmath>
 #include "query.h"
-// #include <cstdlib>
 std::shared_ptr<HalfEdge> addhe(std::shared_ptr<Edge> e, std::shared_ptr<Vertex> v, std::shared_ptr<HalfEdge> where, int sign);
 
 std::shared_ptr<HalfEdge> delhe(std::shared_ptr<HalfEdge> he);
@@ -68,8 +67,6 @@ int kev(Id s, Id f, Id v1, Id v2);
 void getmaxnames(Id sn);
 
 void merge(std::shared_ptr<Solid> s1, std::shared_ptr<Solid> s2);
-
-// double distancetwovector(vector v1, vector v2);
 
 bool match(HalfEdge *h1, HalfEdge *h2);
 
