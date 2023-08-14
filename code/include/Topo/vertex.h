@@ -2,9 +2,10 @@
 
 #include <Eigen/Dense>
 #include <memory>
-        #include <fstream>
+        // #include <fstream>
 #include <algorithm>
 #include <iosfwd>
+#include "params.h"
 
 class vertex : public std::enable_shared_from_this<vertex>
 {

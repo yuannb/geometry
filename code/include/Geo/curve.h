@@ -5,6 +5,7 @@ class curve
 {
 private:
     /* data */
+    // int type;
 public:
     curve(/* args */);
     ~curve();

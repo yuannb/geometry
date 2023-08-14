@@ -20,7 +20,11 @@ std::shared_ptr<Vertex> getvertex(Solid *s, Id vno);
 
 std::shared_ptr<Solid> mvfs(Id s, Id f, Id v, double x, double y, double z);
 
+//顺时针旋转
 void lmev(std::shared_ptr<HalfEdge> he1, std::shared_ptr<HalfEdge> he2, Id v, double x, double y, double z);
+
+//逆时针旋转
+void lmevr(std::shared_ptr<HalfEdge> he1, std::shared_ptr<HalfEdge> he2, Id v, double x, double y, double z);
 
 std::shared_ptr<Face> lmef(std::shared_ptr<HalfEdge> he1, std::shared_ptr<HalfEdge> he2, Id f);
 
@@ -65,6 +69,8 @@ void lkev(std::shared_ptr<HalfEdge> h1, std::shared_ptr<HalfEdge> h2);
 int kev(Id s, Id f, Id v1, Id v2);
 
 void getmaxnames(Id sn);
+
+void updmaxnames(std::shared_ptr<Solid> s);
 
 void merge(std::shared_ptr<Solid> s1, std::shared_ptr<Solid> s2);
 

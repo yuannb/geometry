@@ -169,6 +169,37 @@ void lmev(std::shared_ptr<HalfEdge> he1, std::shared_ptr<HalfEdge> he2, Id v, do
     he2->vtx->vedge = he2;
 }
 
+void lmevr(std::shared_ptr<HalfEdge> he1, std::shared_ptr<HalfEdge> he2, Id v, double x, double y, double z)
+{
+    std::shared_ptr<Solid> s = he1->wloop.lock()->lface.lock()->fsolid.lock();
+    std::shared_ptr<HalfEdge> he = nullptr;
+    std::shared_ptr<HalfEdge> endhe = he2->prv.lock()->mate();
+    std::shared_ptr<Vertex> newvertex = std::make_shared<Vertex>();
+    s->addlist(newvertex);
+    std::shared_ptr<Edge> newedge = std::make_shared<Edge>();
+    s->addlist(newedge);
+
+    newvertex->vcoord[0] = x;
+    newvertex->vcoord[1] = y;
+    newvertex->vcoord[2] = z;
+    newvertex->vertexno = v;
+
+    he = he1->prv.lock()->mate();
+
+    while (he != endhe)
+    {
+        he->vtx = newvertex;
+        he = he->prv.lock()->mate();
+        // he = he->mate()->nxt;
+    }
+    
+    // the code of book may be wrong (P184)
+    addhe(newedge, he2->vtx, he1, MINUS);
+    addhe(newedge, newvertex, he2, PLUS);
+    newvertex->vedge = he2->prv;
+    he2->vtx->vedge = he2;
+}
+
 std::shared_ptr<Face> lmef(std::shared_ptr<HalfEdge> he1, std::shared_ptr<HalfEdge> he2, Id f)
 {
     std::shared_ptr<HalfEdge> he = nullptr, nhe1 = nullptr, nhe2 = nullptr, temp = nullptr;
@@ -809,6 +840,18 @@ void getmaxnames(Id sn)
         if (v->vertexno > maxv) maxv = v->vertexno;
     for (f = s->sfaces, maxf = 0; f != nullptr; f = f->nextf)
         if (f->faceno > maxf) maxf = f->faceno;
+}
+
+void updmaxnames(std::shared_ptr<Solid> s)
+{
+    for (auto v = s->svertes; v != nullptr; v = v->nextv)
+    {
+        v->vertexno = ++maxv;
+    }
+    for (auto f = s->sfaces; f != nullptr; f = f->nextf)
+    {
+        f->faceno = ++maxf;
+    }
 }
 
 void merge(std::shared_ptr<Solid> s1, std::shared_ptr<Solid> s2)

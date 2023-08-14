@@ -8,9 +8,12 @@
 #include "euler.h"
 #include "memory"
 
+extern std::shared_ptr<HalfEdge> hithe;
+extern std::shared_ptr<Vertex> hitvetex;
 
 bool three_plane_intersect(const Eigen::Vector4d &p1, const Eigen::Vector4d &p2, const Eigen::Vector4d &p3, Eigen::Vector3d &intVtx);
 
+double dist(const Eigen::Vector3d& v, const Eigen::Vector4d& vec);
 
 int faceeq(Loop *l, Eigen::Vector4d &eq);
 

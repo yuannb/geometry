@@ -1,4 +1,5 @@
 {
+    // "cmake.generator": "MinGW Makefiles",
     "files.associations": {
         "array": "cpp",
         "atomic": "cpp",
@@ -59,6 +60,22 @@
         "typeinfo": "cpp",
         "dense": "cpp",
         "*.inc": "cpp",
-        "core": "cpp"
-    }
+        "core": "cpp",
+        // "tensor": "cpp",
+        // "cholesky": "cpp",
+        // "lu": "cpp",
+        // "chrono": "cpp",
+        // "condition_variable": "cpp",
+        // "mutex": "cpp",
+        // "specialfunctions": "cpp",
+        // "geometry": "cpp",
+        // "eigenvalues": "cpp",
+        // "jacobi": "cpp",
+        // "qr": "cpp",
+        // "svd": "cpp"
+    },
+    "cmake.enabledOutputParsers": [],
+    "cmake.exportCompileCommandsFile": true,
+    // "cmake.sourceDirectory": "C:/Users/Administrator/Desktop/workbench/code",
+    // "cmake.configureOnOpen": false,
 }

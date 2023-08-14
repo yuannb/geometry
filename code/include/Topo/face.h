@@ -6,6 +6,7 @@
 #include <fstream>
 #include <algorithm>
 #include <iosfwd>
+#include "params.h"
 
 class surface;
 class face : public std::enable_shared_from_this<face>

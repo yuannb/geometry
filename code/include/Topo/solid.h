@@ -4,6 +4,7 @@
     #include <fstream>
 #include <algorithm>
 #include <iosfwd>
+#include "params.h"
 
 class solid : public std::enable_shared_from_this<solid>
 {

@@ -13,6 +13,8 @@ project(GWB VERSION 1.0)
 #         and the variable CMAKE_CXX_STANDARD_REQUIRED to True
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
+add_compile_options(-fPIC)
+
 
 SET(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -Wall -g -ggdb ")
 SET(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
@@ -32,6 +34,7 @@ list(APPEND EXTRA_LIBS tools)
 list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/include/Topo")
 list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/include/Geo")
 list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/include/tools")
+list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/include/NurbsTools")
 list(APPEND EXTRA_INCLUDES "C:/Users/Administrator/Desktop/workbench/3rd/include")
 
 

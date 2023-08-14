@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include "params.h"
 
 class curve;
 

@@ -1,4 +1,5 @@
 #include "delaunay.h"
+#include "nurbsCurve.h"
 
 triangel  delaunay(std::shared_ptr<Solid> s)
 {
@@ -58,3 +59,15 @@ triangel  discret(std::shared_ptr<Solid> s)
     }
     return tri;
 }
+
+// std::vector<Eigen::Vector3d> discret1(Bezier<3, 1, false> &curve)
+// {
+//     std::vector<Eigen::Vector3d> points;
+//     for (int index = 0; index < 1000; ++index)
+//     {
+//         // Eigen::Vector3d point;
+//         Eigen::Vector<double, 3> point;
+//         curve.PointOnBezierCurve(index * 0.001, point);
+//         points.push_back(point);
+//     }
+// }

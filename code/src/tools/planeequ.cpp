@@ -319,3 +319,45 @@ bool three_plane_intersect(const Eigen::Vector4d &p1, const Eigen::Vector4d &p2,
 	intVtx = matSvd.solve(vec);
 	return true;
 }
+
+double dist(const Eigen::Vector3d& v, const Eigen::Vector4d& vec)
+{
+	// select one point on vec
+	Eigen::Vector3d point;
+	Eigen::Vector3d normal(vec[0], vec[1], vec[2]);
+	double normalLen = normal.squaredNorm();
+	if (normalLen < EPS * EPS)
+	{
+		std::cerr << "SP is not valid" << std::endl;
+		return 0;
+	}
+
+	normal.normalize();
+	if ((vec[0] * vec[0]) > 0.4)
+	{
+		//let y = z = 0
+		double x = -vec[3] / vec[0];
+		point = Eigen::Vector3d(x, 0, 0);
+	}
+	else if ((vec[1] * vec[1]) > 0.4)
+	{
+		//let x = z = 0
+		double y = -vec[3] / vec[1];
+		point = Eigen::Vector3d(0, y, 0);
+	}
+	else if ((vec[2] * vec[2]) > 0.4)
+	{
+		// let x = y = 0
+		double z = -vec[3] / vec[2];
+		point = Eigen::Vector3d(0, 0, z);
+	}
+	else
+	{
+		// some unkown error occur
+		std::cerr << "some unkown error occur" << std::endl;
+		return 0;
+	}
+	Eigen::Vector3d dir = v - point;
+	double distance = dir.dot(normal);
+	return distance;
+};

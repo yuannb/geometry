@@ -5,6 +5,7 @@
 #include <fstream>
 #include <algorithm>
 #include <iosfwd>
+#include "params.h"
 
 class loop : public std::enable_shared_from_this<loop>
 {

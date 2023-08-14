@@ -3,6 +3,7 @@
 # include_directories(${gwb_global_dir}/include/Topo)
 # include_directories(${gwb_global_dir}/include/Geo)
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+add_compile_options(-fPIC)
 
 #windows系统动态库生成lib文件命令
 # set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)

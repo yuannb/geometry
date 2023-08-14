@@ -9,51 +9,48 @@
 #include "plane.h"
 #include "planeequ.h"
 
+#define ABOVE 1
+#define BELOW -1
+#define ON 0
+
 std::map<std::shared_ptr<Vertex>, std::vector<std::shared_ptr<Edge>>> nulledges;
 std::unordered_set<std::shared_ptr<HalfEdge>> hasconnect;
 
 std::vector<std::shared_ptr<Face>> sonf;
 
-double dist(const Eigen::Vector3d& v, const Eigen::Vector4d& vec)
+struct hefrel
 {
-	// select one point on vec
-	Eigen::Vector3d point;
-	Eigen::Vector3d normal(vec[0], vec[1], vec[2]);
-	double normalLen = normal.squaredNorm();
-	if (normalLen < EPS * EPS)
-	{
-		std::cerr << "SP is not valid" << std::endl;
-		return 0;
-	}
+    std::shared_ptr<HalfEdge> sector;
+	int cl;
+};
 
-	normal.normalize();
-	if ((vec[0] * vec[0]) > 0.4)
-	{
-		//let y = z = 0
-		double x = -vec[3] / vec[0];
-		point = Eigen::Vector3d(x, 0, 0);
-	}
-	else if ((vec[1] * vec[1]) > 0.4)
-	{
-		//let x = z = 0
-		double y = -vec[3] / vec[1];
-		point = Eigen::Vector3d(0, y, 0);
-	}
-	else if ((vec[2] * vec[2]) > 0.4)
-	{
-		// let x = y = 0
-		double z = -vec[3] / vec[2];
-		point = Eigen::Vector3d(0, 0, z);
-	}
-	else
-	{
-		// some unkown error occur
-		std::cerr << "some unkown error occur" << std::endl;
-		return 0;
-	}
-	Eigen::Vector3d dir = v - point;
-	double distance = dir.dot(normal);
-	return distance;
+typedef std::pair<Id, Id> faceSolidMap;
+
+typedef std::pair<faceSolidMap, faceSolidMap> edgeName;
+typedef std::tuple<faceSolidMap, faceSolidMap, faceSolidMap> vertexName;
+
+struct intVertex;
+
+struct intEdge
+{
+    edgeName intEdgeName;
+    std::vector<std::shared_ptr<intVertex>> stl;
+    std::vector<std::shared_ptr<intVertex>> edl;
+    intEdge() = default;
+    intEdge(edgeName en): intEdgeName(en) {}
+};
+
+struct intVertex
+{
+    vertexName intVtxName;
+    Eigen::Vector3d pos;
+    Id vertexno;
+    std::vector<std::shared_ptr<intEdge>> inEdge;
+    std::vector<std::shared_ptr<intEdge>> outEdge;
+    intVertex(vertexName xintVtxName, Eigen::Vector3d xpos, Id xvertexno): intVtxName(xintVtxName)
+                    ,pos(xpos), vertexno(xvertexno) {};
+    // int edgeNo;
+    // int faceNo;
 };
 
 int neighbor(std::shared_ptr<HalfEdge> h1, std::shared_ptr<HalfEdge> h2)
@@ -205,7 +202,6 @@ std::unordered_set<std::shared_ptr<Vertex>> splitgenerate(std::shared_ptr<Solid>
 		{
 			double t = d1 / (d1 - d2);
 			Eigen::Vector3d point = v1->vcoord + t * (v2->vcoord - v1->vcoord);
-			// HalfEdge* he = nullptr;
 			std::shared_ptr<HalfEdge> he = e->he2.lock()->nxt;
 			lmev(e->he1.lock(), he, ++maxv, point[0], point[1], point[2]);
 			soov.insert(he->prv.lock()->vtx);
@@ -222,6 +218,7 @@ std::unordered_set<std::shared_ptr<Vertex>> splitgenerate(std::shared_ptr<Solid>
 int checkwideness(std::shared_ptr<HalfEdge> he)
 {
 	Eigen::Vector3d nor = he->mate()->wloop.lock()->lface.lock()->surf->get_normal();
+	he = he->mate()->nxt;
 	std::shared_ptr<HalfEdge> nxthe = he->nxt;
 	Eigen::Vector3d v0 = he->vtx->vcoord;
 	Eigen::Vector3d v1 = nxthe->vtx->vcoord;
@@ -324,6 +321,48 @@ void reclassifyonedges(std::vector<hefrel> &nbr)
 		}
 	}
 }
+
+void setintVertexintEdgerelation(vertexName vtxName, edgeName edgName, bool inout, Eigen::Vector3d &point, Id vertexno,
+		std::map<vertexName, std::shared_ptr<intVertex>> &intVertexMap, std::map<edgeName, std::shared_ptr<intEdge>> &intEdgeMap)
+{
+    auto vtxIt = intVertexMap.find(vtxName);
+    auto edgIt = intEdgeMap.find(edgName);
+    std::shared_ptr<intVertex> intVtx = nullptr;
+    std::shared_ptr<intEdge> intEdg = nullptr;
+    if (vtxIt == intVertexMap.end())
+    {
+        intVtx = std::make_shared<intVertex> (vtxName, point, vertexno);
+        intVertexMap.emplace(vtxName, intVtx);
+    }
+    else
+    {
+        intVtx = vtxIt->second;
+    }
+
+    if (edgIt == intEdgeMap.end())
+    {
+        intEdg = std::make_shared<intEdge> (edgName);
+        intEdgeMap.emplace(edgName, intEdg);
+    }
+    else
+    {
+        intEdg = edgIt->second;
+    }
+
+    if (inout)
+    {
+        //edge是vertex的入边
+        intEdg->edl.push_back(intVtx);
+        intVtx->inEdge.push_back(intEdg);
+    }
+    else
+    {
+        //edge是vertex的出边
+        intEdg->stl.push_back(intVtx);
+        intVtx->outEdge.push_back(intEdg);
+    }
+}
+
 
 bool createintvertex(HalfEdge *he, std::map<vertexName, std::shared_ptr<intVertex>> &intVertexMap, 
 						std::map<edgeName, std::shared_ptr<intEdge>> &intEdgeMap, Eigen::Vector4d SP)
@@ -593,45 +632,3 @@ void split(std::shared_ptr<Solid> S, Eigen::Vector4d &SP, std::shared_ptr<Solid>
 	splitconnect(wire, S);
 	splitfinish(S, Above, Below);
 }
-
-void setintVertexintEdgerelation(vertexName vtxName, edgeName edgName, bool inout, Eigen::Vector3d &point, Id vertexno,
-		std::map<vertexName, std::shared_ptr<intVertex>> &intVertexMap, std::map<edgeName, std::shared_ptr<intEdge>> &intEdgeMap)
-{
-    auto vtxIt = intVertexMap.find(vtxName);
-    auto edgIt = intEdgeMap.find(edgName);
-    std::shared_ptr<intVertex> intVtx = nullptr;
-    std::shared_ptr<intEdge> intEdg = nullptr;
-    if (vtxIt == intVertexMap.end())
-    {
-        intVtx = std::make_shared<intVertex> (vtxName, point, vertexno);
-        intVertexMap.emplace(vtxName, intVtx);
-    }
-    else
-    {
-        intVtx = vtxIt->second;
-    }
-
-    if (edgIt == intEdgeMap.end())
-    {
-        intEdg = std::make_shared<intEdge> (edgName);
-        intEdgeMap.emplace(edgName, intEdg);
-    }
-    else
-    {
-        intEdg = edgIt->second;
-    }
-
-    if (inout)
-    {
-        //edge是vertex的入边
-        intEdg->edl.push_back(intVtx);
-        intVtx->inEdge.push_back(intEdg);
-    }
-    else
-    {
-        //edge是vertex的出边
-        intEdg->stl.push_back(intVtx);
-        intVtx->outEdge.push_back(intEdg);
-    }
-}
-
