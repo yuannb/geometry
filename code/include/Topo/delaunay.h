@@ -4,7 +4,7 @@
 #include <unordered_map>
 #include <algorithm>
 #include "memory"
-#include "nurbsCurve.h"
+// #include "nurbsCurve.h"
 
 struct triangel
 {

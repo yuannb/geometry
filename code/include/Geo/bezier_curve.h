@@ -65,7 +65,7 @@ public:
         if (u < 0.0 || u > 1.0)
             return NURBS_PARAM_IS_OUT_OF_DOMAIN;
         Eigen::Vector<T, row_size> vec;
-        DeCasteljaul<T, dim, is_rational>(m_control_points, m_control_points.rows(), u, vec);
+        DeCasteljaul<T, dim, is_rational>(m_control_points, m_control_points.cols(), u, vec);
         point = project_point<T, is_rational, row_size>::project_point_to_euclidean_space(vec);
         return NURBS_SUCCESS;
     }

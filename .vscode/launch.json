@@ -26,14 +26,14 @@
         "name": "(gdb) 启动",
         "type": "cppdbg",
         "request": "launch",
-        "program": "C:/Users/Administrator/Desktop/workbench/build/GWB.exe",
+        "program": "/home/yuanbk/Downloads/geometry/build/GWB",
         "args": [],
         "stopAtEntry": false,
         "cwd": "${fileDirname}",
         "environment": [],
         "externalConsole": false,
         "MIMode": "gdb",
-        "miDebuggerPath": "C:/msys64/mingw64/bin/gdb.exe",
+        "miDebuggerPath": "/usr/bin/gdb",
         "setupCommands": [
             {
                 "description": "为 gdb 启用整齐打印",

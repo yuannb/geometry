@@ -488,6 +488,102 @@ public:
             reverse_uv();
         return ENUM_NURBS::NURBS_SUCCESS;
     }
+    
+    /// @brief 升阶
+    /// @param t 提升的阶数
+    /// @param direction 提升的方向
+    /// @param surface 提升后的曲面
+    /// @return ENUM_NURBS错误码
+    ENUM_NURBS degree_elevate(int t, ENUM_DIRECTION direction, nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> &surface)
+    {
+        int degree = u_degree;
+        if (direction == ENUM_DIRECTION::V_DIRECTION)
+        {
+            degree = v_degree;
+            reverse_uv();
+        }
+
+        Eigen::VectorX<T> new_knots_vector;
+        int count = m_control_points.rows();
+        Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> new_control_points(count);
+        ENUM_NURBS flag;
+        for (int index = 0; index < count; ++index)
+        {
+            flag = degree_elevate_curve<T, point_size>(t, degree, m_u_knots_vector, m_control_points[index], new_knots_vector, new_control_points[index]);
+            if (flag != ENUM_NURBS::NURBS_SUCCESS)
+            {
+                if (direction == ENUM_DIRECTION::V_DIRECTION)
+                    reverse_uv();
+                return flag;
+            }
+        }
+
+        if (direction == ENUM_DIRECTION::V_DIRECTION)
+        {
+            surface.set_uv_degree(v_degree + t, u_degree);
+            surface.set_control_points(new_control_points);
+            surface.set_uv_knots(new_knots_vector, m_v_knots_vector);
+            surface.reverse_uv();
+            reverse_uv();
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+
+        //else
+        surface.set_uv_degree(u_degree + t, v_degree);
+        surface.set_control_points(new_control_points);
+        surface.set_uv_knots(new_knots_vector, m_v_knots_vector);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+
+    /// @brief 将nurbs surface的某个方向降低一阶
+    /// @param direction 降阶的方向
+    /// @param surface 降阶后的nurbs surface
+    /// @param error 误差
+    /// @return ENUM_NURBS错误码
+    ENUM_NURBS degree_reduce(ENUM_DIRECTION direction , nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> &surface, T error = DEFAULT_ERROR)
+    {
+
+        int degree = u_degree;
+        if (direction == ENUM_DIRECTION::V_DIRECTION)
+        {
+            degree = v_degree;
+            reverse_uv();
+        }
+
+        Eigen::VectorX<T> new_knots_vector;
+        int count = m_control_points.rows();
+        Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> new_control_points(count);
+        ENUM_NURBS flag;
+        for (int index = 0; index < count; ++index)
+        {
+            flag = degree_reduce_curve<T, point_size, is_rational>(degree, m_u_knots_vector, m_control_points[index], new_knots_vector, new_control_points[index], error);
+            if (flag != ENUM_NURBS::NURBS_SUCCESS)
+            {
+                if (direction == ENUM_DIRECTION::V_DIRECTION)
+                    reverse_uv();
+                return flag;
+            }
+        }
+
+        if (direction == ENUM_DIRECTION::V_DIRECTION)
+        {
+            surface.set_uv_degree(v_degree -1, u_degree);
+            surface.set_control_points(new_control_points);
+            surface.set_uv_knots(new_knots_vector, m_v_knots_vector);
+            surface.reverse_uv();
+            reverse_uv();
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+
+        //else
+        surface.set_uv_degree(u_degree - 1, v_degree);
+        surface.set_control_points(new_control_points);
+        surface.set_uv_knots(new_knots_vector, m_v_knots_vector);
+        return ENUM_NURBS::NURBS_SUCCESS;
+
+    }
+
 
 };
 
@@ -534,6 +630,42 @@ public:
         m_u_knots_vector.swap(m_v_knots_vector);
         std::swap(m_u_degree, m_v_degree);
         m_control_points = new_control_points;
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    Eigen::VectorX<T> get_u_knots() const { return m_u_knots_vector; }
+
+    Eigen::VectorX<T> get_v_knots() const { return m_v_knots_vector; }
+    
+    ENUM_NURBS set_u_degree(int degree)
+    {
+        m_u_degree = degree;
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    ENUM_NURBS set_v_degree(int degree)
+    {
+        m_v_degree = degree;
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+    
+    ENUM_NURBS set_uv_degree(int u_degree, int v_degree)
+    {
+        m_u_degree = u_degree;
+        m_v_degree = v_degree;
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    ENUM_NURBS set_uv_knots(const Eigen::VectorX<T> &u_knots, const Eigen::VectorX<T> &v_knots)
+    {
+        m_u_knots_vector = u_knots;
+        m_v_knots_vector = v_knots;
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    ENUM_NURBS set_control_points(Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> &points)
+    {
+        m_control_points = points;
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
@@ -599,6 +731,7 @@ public:
         Eigen::MatrixX<T> nu, nv;
         ders_basis_funs<T>(uspan, du, m_u_degree, u, m_u_knots_vector, nu);
         ders_basis_funs<T>(vspan, dv, m_v_degree, v, m_v_knots_vector, nv);
+        // std::cout << nv << std::endl;
         Eigen::Matrix<T, point_size,  Eigen::Dynamic> temps;
         temps.resize(point_size, m_v_degree + 1);
         for (int k = 0; k <= du; ++k)
@@ -706,7 +839,7 @@ public:
         if (uv == m_u_knots_vector[knots_size - 1])
             return ENUM_NURBS::NUBRS_CANNOT_INSERT_KNOTS;
         // if (std::abs(uv - m_u_knots_vector[0]) < KNOTS_VECTOR_EPS)
-        if (uv - m_u_knots_vector[0])
+        if (uv == m_u_knots_vector[0])
             return ENUM_NURBS::NUBRS_CANNOT_INSERT_KNOTS;
         Eigen::Matrix<T, point_size, Eigen::Dynamic> new_control_points;
         int span = -1;
@@ -922,6 +1055,273 @@ public:
         }
         if (direction == ENUM_DIRECTION::V_DIRECTION)
             reverse_uv();
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+
+    /// @brief 升阶
+    /// @param t 提升的阶数
+    /// @param direction 提升的方向
+    /// @return ENUM_NURBS错误码
+    ENUM_NURBS degree_elevate(int t, ENUM_DIRECTION direction)
+    {
+        if (direction == ENUM_DIRECTION::V_DIRECTION)
+            reverse_uv();
+        Eigen::VectorX<T> new_knots_vector;
+        int count = m_control_points.rows();
+        Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> new_control_points(count);
+        ENUM_NURBS flag;
+        for (int index = 0; index < count; ++index)
+        {
+            flag = degree_elevate_curve<T, point_size>(t, m_u_degree, m_u_knots_vector, m_control_points[index], new_knots_vector, new_control_points[index]);
+            if (flag != ENUM_NURBS::NURBS_SUCCESS)
+            {
+                if (direction == ENUM_DIRECTION::V_DIRECTION)
+                    reverse_uv();
+                return flag;
+            }
+        }
+
+        m_u_degree += t;
+        m_u_knots_vector = new_knots_vector;
+        m_control_points = new_control_points;
+
+        if (direction == ENUM_DIRECTION::V_DIRECTION)
+            reverse_uv();
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+
+    /// @brief 将nurbs surface的某个方向降低一阶
+    /// @param direction 降阶的方向
+    /// @param error 误差
+    /// @return ENUM_NURBS错误码
+    ENUM_NURBS degree_reduce(ENUM_DIRECTION direction , T error = DEFAULT_ERROR)
+    {
+        if (direction == ENUM_DIRECTION::V_DIRECTION)
+            reverse_uv();
+
+        int count = m_control_points.rows();
+        ENUM_NURBS flag;
+        Eigen::VectorX<T> new_knots_vector;
+        Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> new_control_points(count);
+        for (int index = 0; index < count; ++index)
+        {
+            flag = degree_reduce_curve<T, point_size, is_rational>(m_u_degree, m_u_knots_vector, m_control_points[index], new_knots_vector, new_control_points[index], error);
+            if (flag != ENUM_NURBS::NURBS_SUCCESS)
+            {
+                if (direction == ENUM_DIRECTION::V_DIRECTION)
+                    reverse_uv();
+                return flag;
+            }
+        }
+        m_control_points = new_control_points;
+        m_u_knots_vector = new_knots_vector;
+        m_u_degree -= 1;
+        if (direction == ENUM_DIRECTION::V_DIRECTION)
+            reverse_uv();
+
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+
+    bool is_u_closed()
+    {
+        int v_count = m_control_points.rows();
+        int u_count = m_control_points[0].cols();
+        for (int index = 0; index < v_count; ++index)
+        {
+            Eigen::Vector<T, dim> start_point = project_point<T, is_rational, point_size>::project_point_to_euclidean_space(m_control_points[index].col(0));
+            Eigen::Vector<T, dim> end_point = project_point<T, is_rational, point_size>::project_point_to_euclidean_space(m_control_points[index].col(u_count - 1));
+            if ((start_point - end_point).squaredNorm() > DEFAULT_ERROR * DEFAULT_ERROR)
+                return false;
+        }
+        return true;
+    }
+
+    bool is_v_closed()
+    {
+        int v_count = m_control_points.rows();
+        int u_count = m_control_points[0].cols();
+        for (int index = 0; index < u_count; ++index)
+        {
+            Eigen::Vector<T, dim> start_point = project_point<T, is_rational, point_size>::project_point_to_euclidean_space(m_control_points[0].col(index));
+            Eigen::Vector<T, dim> end_point = project_point<T, is_rational, point_size>::project_point_to_euclidean_space(m_control_points[v_count - 1].col(index));
+
+            if ((start_point - end_point).squaredNorm() > DEFAULT_ERROR * DEFAULT_ERROR)
+                return false;
+        }
+        return true;
+    }
+
+    //TODO: 写个多线程, 多线程每次结果可能都会不同
+    ENUM_NURBS find_nearst_point_on_surface(const Eigen::Vector<T, dim> &point, T &u, T &v, Eigen::Vector<T, dim> &nearst_point)
+    {
+        // TODO : 包围盒加速
+        T u_min = m_u_knots_vector[0];
+        int u_knots_size = m_u_knots_vector.size();
+        T u_max = m_u_knots_vector[u_knots_size - 1];
+
+        T v_min = m_v_knots_vector[0];
+        int v_knots_size = m_v_knots_vector.size();
+        T v_max = m_v_knots_vector[v_knots_size - 1];
+
+        //将节点分成(max - min + 1) * 100份；以后需要优化
+        // TODO: 曲率大的地方分的多一些，曲率小的地方分少一些
+        int u_step_count = (u_max - u_min + 1) * 10;
+        int v_step_count = (v_max - v_min + 1) * 10;
+
+
+        T u_step = (u_max - u_min) / u_step_count;
+        T v_step = (v_max - v_min) / v_step_count;
+        nearst_point = project_point<T, is_rational, point_size>::project_point_to_euclidean_space(m_control_points[0].col(0));
+        T min_length = (point - nearst_point).squaredNorm();
+        u = m_u_knots_vector[0];
+        v = m_v_knots_vector[0];
+        Eigen::Matrix<Eigen::Vector<T, dim>, 3, 3> ders_vec;
+        std::vector<T> u_param(u_step_count + 1);
+        std::vector<T> v_param(v_step_count + 1);
+        u_param[0] = m_u_knots_vector[0];
+        for (int u_index = 1; u_index < u_step_count; ++u_index)
+            u_param[u_index] = u_param[u_index - 1] + u_step;
+        u_param[u_step_count] = u_max;
+
+        v_param[0] = m_v_knots_vector[0];
+        for (int v_index = 1; v_index < v_step_count; ++v_index)
+            v_param[v_index] = v_param[v_index - 1] + v_step;
+        v_param[v_step_count] = v_max;
+        
+        bool is_u_closed_flag = is_u_closed();
+        bool is_v_closed_flag = is_v_closed();
+
+        for (int u_index = 0; u_index <= u_step_count; ++u_index)
+        {
+            for (int v_index = 0; v_index <= v_step_count; ++v_index)
+            {
+                T current_u = u_param[u_index];
+                T current_v = v_param[v_index];
+                T distance;
+                
+                for (int loop_index = 0; loop_index < MAX_SURFACE_ITERATE_DEEP; ++loop_index)
+                {
+                    derivative_on_surface<2>(current_u, current_v, ders_vec);
+                    Eigen::Vector<T, dim> dist_vec = ders_vec(0, 0) - point;
+                    distance = dist_vec.squaredNorm();
+                    if (distance < DEFAULT_ERROR * DEFAULT_ERROR)
+                    {
+                        u = current_u;
+                        v = current_v;
+                        nearst_point = ders_vec(0, 0);
+                        return ENUM_NURBS::NURBS_SUCCESS;
+                    }
+                    if (distance < min_length)
+                    {
+                        min_length = distance;
+                        u = current_u;
+                        v = current_v;
+                        nearst_point = ders_vec(0, 0);
+                    }
+
+                    T cos_angle_1 = ders_vec(1, 0).dot(dist_vec);
+                    T cos_angle_2 = ders_vec(0, 1).dot(dist_vec);
+                    T tanget_vec_square_len_1 = ders_vec(1, 0).squaredNorm();
+                    T tanget_vec_square_len_2 = ders_vec(0, 1).squaredNorm();
+                    bool flag1 = cos_angle_1 * cos_angle_1 < tanget_vec_square_len_1 * distance * ANGLE_ERROR * ANGLE_ERROR;
+                    bool flag2 = cos_angle_2 * cos_angle_2 < tanget_vec_square_len_2 * distance * ANGLE_ERROR * ANGLE_ERROR;
+                    if ((flag1 == true) && (flag2 == true))
+                    {
+                        break;
+                    }
+                    Eigen::Matrix<T, 2, 2> J;
+                    J(0, 0) = tanget_vec_square_len_1 + dist_vec.dot(ders_vec(2, 0));
+                    J(1, 0) = ders_vec(1, 0).dot(ders_vec(0, 1)) + dist_vec.dot(ders_vec(1, 1));
+                    J(0, 1) = J(1, 0);
+                    J(1, 1) = tanget_vec_square_len_2 + dist_vec.dot(ders_vec(0, 2));
+
+                    Eigen::Vector<T, 2> K;
+                    K[0] = -1 * dist_vec.dot(ders_vec(1, 0));
+                    K[1] = -1 * dist_vec.dot(ders_vec(0, 1));
+
+                    double det = J.determinant();
+                    if (std::abs(det) < DEFAULT_ERROR)
+                    {
+                        //退化矩阵, break
+                        break;
+                    }
+                    Eigen::JacobiSVD<Eigen::Matrix<T, 2, 2>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(J);
+                    Eigen::Vector<T, 2> delta_param = matSvd.solve(K);
+                    
+                    // TODO ：根据曲线弧长和区间长度放缩delta_param
+                    T next_u = current_u + delta_param[0];
+                    T next_v = current_v + delta_param[1];
+                    
+                    if (is_u_closed_flag)
+                    {
+                        if (next_u < u_min)
+                            next_u = u_max - (u_min - next_u);
+                        else if (next_u > u_max)
+                            next_u = u_min + (next_u - u_max);
+                    }
+                    else
+                    {
+                        if (next_u < u_min)
+                            next_u = u_min;
+                        else if (next_u > u_max)
+                            next_u = u_max;
+                    }
+
+                    if (is_v_closed_flag)
+                    {
+                        if (next_v < v_min)
+                            next_v = v_max - (v_min - next_v);
+                        else if (next_v > v_max)
+                            next_v = v_min + (next_v - v_max);
+                    }
+                    else
+                    {
+                        if (next_v < v_min)
+                            next_v = v_min;
+                        else if (next_v > v_max)
+                            next_v = v_max;
+                    }
+                    if (((next_u - current_u) * ders_vec(1, 0) + (next_v - next_u) * ders_vec(0, 1)).squaredNorm() < DEFAULT_ERROR * DEFAULT_ERROR)
+                    {
+                        break;
+                    }
+                    current_u = next_u;
+                    current_v = next_v;
+                }
+            }
+            
+        }
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+
+    //反求参数空间的切向量,没有测试
+    ENUM_NURBS surface_tangent_vector_inversion(const Eigen::Vector<T, dim> &tangent_on_surface, 
+        const Eigen::Vector<T, dim> &point ,Eigen::Vector<T, 2> &tangent_on_param_space)
+    {
+        T u, v;
+        Eigen::Vector<T, dim> nearst_point;
+        find_nearst_point_on_surface(point, u, v, nearst_point);
+        if ((nearst_point - point).squaredNorm() < DEFAULT_ERROR * DEFAULT_ERROR)
+        {
+            return NURBS_POINT_IS_NOT_ON_CURVE;
+        }
+        Eigen::Matrix<Eigen::Vector<T, dim>, 2, 2> ders_vec;
+        derivative_on_surface<1>(u, v, ders_vec);
+
+        Eigen::Matrix<T, 2, 2> M;
+        Eigen::Vector<T, 2> vec;
+        M(0, 0) = ders_vec(1, 0).squaredNorm();
+        M(0, 1) = ders_vec(1, 0).dot(ders_vec(0, 1));
+        M(1, 0) = M(0, 1);
+        M(1, 1) = ders_vec(0, 1).squaredNorm();
+        vec[0] = ders_vec(1, 0).dot(point);
+        vec[1] = ders_vec(0, 1).dot(point);
+        Eigen::JacobiSVD<Eigen::Matrix<T, 2, 2>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(M);
+        tangent_on_param_space = matSvd.solve(vec);
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 

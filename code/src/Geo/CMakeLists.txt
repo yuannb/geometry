@@ -9,6 +9,8 @@ file(GLOB SRC_FILES *.cpp)
 # aux_source_directory(. SOURCES)
 
 add_library(geo ${INC_FILES} ${SRC_FILES})
+
+# target_include_directories(geo PUBLIC /home/yuanbk/workbench/geometry-master/3rd/thread-pool/include)
 target_include_directories(geo PUBLIC ${gwb_global_dir}/include/Geo)
 target_include_directories(geo PUBLIC ${gwb_global_dir}/include/NurbsTools)
 target_link_libraries(geo Eigen3::Eigen)

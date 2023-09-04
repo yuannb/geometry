@@ -1,5 +1,5 @@
 #include "delaunay.h"
-#include "nurbsCurve.h"
+// #include "nurbsCurve.h"
 
 triangel  delaunay(std::shared_ptr<Solid> s)
 {
