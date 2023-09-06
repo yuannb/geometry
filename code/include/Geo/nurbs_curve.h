@@ -114,14 +114,27 @@ public:
     /// @return ENUM_NURBS错误码
     ENUM_NURBS derivative_on_curve(T u, int n, Eigen::Vector<Eigen::Vector<T, dim>, Eigen::Dynamic> &result) const
     {
+        result.resize(n + 1);
         int index = -1;
         find_span<T, points_count, degree>(u, m_knots_vector, index);
-        Eigen::Matrix<T, degree + 1, Eigen::Dynamic, Eigen::ColMajor, degree + 1, degree + 1> ders(degree + 1, n + 1);
+        Eigen::Matrix<T, degree + 1, Eigen::Dynamic> ders(degree + 1, n + 1);
         ders_basis_funs<T, degree, points_count>(index, n, u, m_knots_vector, ders);
+        int new_n = std::min(degree, n);
+        Eigen::Vector<T, dim> zero;
+        zero.setConstant(0.0);
+        Eigen::VectorX<Eigen::Vector<T, rows>> temp(new_n + 1);
         for (int idx = 0; idx <= n; ++idx)
         {
             Eigen::Vector<T, rows> vec = m_control_points.block(0, index - degree, rows, degree + 1) * ders.col(idx);
-            result[idx] = project_point<T, is_rational, rows>::project_point_to_euclidean_space(vec);
+            temp[idx] = vec;
+            // result[idx] = project_point<T, is_rational, rows>::project_point_to_euclidean_space(vec);
+        }
+        Eigen::VectorX<Eigen::Vector<T, dim>> project_point = rat_curve_derivs_project<T, is_rational, rows>::project_point_to_euclidean_space(temp);
+        for (int idx = 0; idx <= new_n; ++idx)
+            result[idx] = project_point[idx];
+        for (int idx = new_n + 1; idx <= n; ++idx)
+        {
+            result[idx] = zero;
         }
         return ENUM_NURBS::NURBS_SUCCESS;
     }
@@ -139,10 +152,22 @@ public:
         find_span<T, points_count, degree>(u, m_knots_vector, index);
         Eigen::Matrix<T, degree + 1, n + 1> ders(degree + 1, n + 1);
         ders_basis_funs<T, degree, points_count, n>(index, u, m_knots_vector, ders);
+        constexpr int new_n = std::min(n, degree);
+        Eigen::Vector<T, dim> zero;
+        zero.setConstant(0.0);
+        Eigen::VectorX<Eigen::Vector<T, rows>> temp(new_n + 1);
         for (int idx = 0; idx <= n; ++idx)
         {
             Eigen::Vector<T, rows> vec = m_control_points.block(0, index - degree, rows, degree + 1) * ders.col(idx);
-            result[idx] = project_point<T, is_rational, rows>::project_point_to_euclidean_space(vec);
+            temp[idx] = vec;
+            // result[idx] = project_point<T, is_rational, rows>::project_point_to_euclidean_space(vec);
+        }
+        Eigen::VectorX<Eigen::Vector<T, dim>> project_point = rat_curve_derivs_project<T, is_rational, rows>::project_point_to_euclidean_space(temp);
+        for (int idx = 0; idx <= new_n; ++idx)
+            result[idx] = project_point[idx];
+        for (int idx = new_n + 1; idx <= n; ++idx)
+        {
+            result[idx] = zero;
         }
         return ENUM_NURBS::NURBS_SUCCESS;
     }
@@ -550,14 +575,27 @@ public:
     /// @return ENUM_NURBS错误码
     ENUM_NURBS derivative_on_curve(T u, int n, Eigen::Vector<Eigen::Vector<T, dim>, Eigen::Dynamic> &result) const
     {
+        result.resize(n + 1);
         int index = -1;
         find_span<T, degree>(u, m_knots_vector, index);
-        Eigen::Matrix<T, degree + 1, Eigen::Dynamic, Eigen::ColMajor, degree + 1, degree + 1> ders(degree + 1, n + 1);
+        Eigen::Matrix<T, degree + 1, Eigen::Dynamic> ders(degree + 1, n + 1);
         ders_basis_funs<T, degree>(index, n, u, m_knots_vector, ders);
-        for (int idx = 0; idx <= n; ++idx)
+        Eigen::Vector<T, dim> zero;
+        zero.setConstant(0.0);
+        int new_n = std::min(n, degree);
+        Eigen::VectorX<Eigen::Vector<T, rows>> temp(new_n + 1);
+        for (int idx = 0; idx <= new_n; ++idx)
         {
             Eigen::Vector<T, rows> vec = m_control_points.block(0, index - degree, rows, degree + 1) * ders.col(idx);
-            result[idx] = project_point<T, is_rational, rows>::project_point_to_euclidean_space(vec);
+            temp[idx] = vec;
+            // result[idx] = project_point<T, is_rational, rows>::project_point_to_euclidean_space(vec);
+        }
+        Eigen::VectorX<Eigen::Vector<T, dim>> project_point = rat_curve_derivs_project<T, is_rational, rows>::project_point_to_euclidean_space(temp);
+        for (int idx = 0; idx <= new_n; ++idx)
+            result[idx] = project_point[idx];
+        for (int idx = new_n + 1; idx <= n; ++idx)
+        {
+            result[idx] = zero;
         }
         return ENUM_NURBS::NURBS_SUCCESS;
     }
@@ -569,17 +607,30 @@ public:
     /// @param result out_put_pram, result[i]为nurbs曲线的第n次导数
     /// @return ENUM_NURBS错误码
     template<int n>
-    ENUM_NURBS derivative_on_curve(T u, Eigen::Vector<Eigen::Vector<T, dim>, Eigen::Dynamic> &result) const
+    ENUM_NURBS derivative_on_curve(T u, Eigen::Vector<Eigen::Vector<T, dim>, n + 1> &result) const
     {
         int index = -1;
         find_span<T, degree>(u, m_knots_vector, index);
         Eigen::Matrix<T, degree + 1, n + 1> ders(degree + 1, n + 1);
         ders_basis_funs<T, degree, n>(index, u, m_knots_vector, ders);
-        for (int idx = 0; idx <= n; ++idx)
+        constexpr int new_n = std::min(degree, n);
+        Eigen::Vector<T, dim> zero;
+        zero.setConstant(0.0);
+        Eigen::VectorX<Eigen::Vector<T, rows>> temp(new_n + 1);
+        for (int idx = 0; idx <= new_n; ++idx)
         {
             Eigen::Vector<T, rows> vec = m_control_points.block(0, index - degree, rows, degree + 1) * ders.col(idx);
-            result[idx] = project_point<T, is_rational, rows>::project_point_to_euclidean_space(vec);
+            temp[idx] = vec;
+            // result[idx] = project_point<T, is_rational, rows>::project_point_to_euclidean_space(vec);
         }
+        Eigen::VectorX<Eigen::Vector<T, dim>> project_point = rat_curve_derivs_project<T, is_rational, rows>::project_point_to_euclidean_space(temp);
+        for (int idx = 0; idx <= new_n; ++idx)
+            result[idx] = project_point[idx];
+        for (int idx = new_n + 1; idx <= n; ++idx)
+        {
+            result[idx] = zero;
+        }
+        
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
@@ -909,6 +960,7 @@ public:
         m_control_points = nurbs_curve_to_copy.get_control_points();
     }
 
+
     ENUM_NURBS get_ends_point(std::array<Eigen::Vector<T, dim>, 2> &points) const
     {
         points[0] = project_point<T, is_rational, rows>::project_point_to_euclidean_space(m_control_points.col(0));
@@ -986,6 +1038,18 @@ public:
     }
     ENUM_NURBS set_degree(int degree) { m_degree = degree; return ENUM_NURBS::NURBS_SUCCESS; }
 
+
+    ENUM_NURBS to_rational_nurbs(nurbs_curve<T, dim, true, -1, -1> &new_nurbs)
+    {
+        Eigen::Matrix<T, dim + 1, Eigen::Dynamic> new_control_points;
+        to_ratioanl_contrl_points<T, is_rational, rows>::convert(m_control_points, new_control_points);
+        new_nurbs.set_control_points(new_control_points);
+        new_nurbs.set_knots_vector(m_knots_vector);
+        new_nurbs.set_degree(m_degree);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+
     ENUM_NURBS set_control_points(const Eigen::Matrix<T, rows, Eigen::Dynamic> &points) { m_control_points = points; return ENUM_NURBS::NURBS_SUCCESS; }
 
     ENUM_NURBS set_knots_vector(const Eigen::VectorX<T> &knots_vector) { m_knots_vector = knots_vector; return ENUM_NURBS::NURBS_SUCCESS; }
@@ -1059,21 +1123,31 @@ public:
     /// @param result out_put_pram, result[i]为nurbs曲线的第n次导数
     /// @return ENUM_NURBS错误码
     template<int n>
-    ENUM_NURBS derivative_on_curve(T u, Eigen::Vector<Eigen::Vector<T, dim>, Eigen::Dynamic> &result) const
+    ENUM_NURBS derivative_on_curve(T u, Eigen::Vector<Eigen::Vector<T, dim>, n + 1> &result) const
     {
+        int new_n = std::min(m_degree, n);
         int index = -1;
         find_span<T>(u, m_degree, m_knots_vector, index);
         Eigen::Matrix<T, Eigen::Dynamic, n + 1> ders(m_degree + 1, n + 1);
         ders_basis_funs<T, n>(index, m_degree, u, m_knots_vector, ders);
-        Eigen::Vector<Eigen::Vector<T, rows>, Eigen::Dynamic> temp(n + 1);
+        Eigen::Vector<Eigen::Vector<T, rows>, Eigen::Dynamic> temp(new_n + 1);
+        Eigen::Vector<T, dim> zero;
+        zero.setConstant(0.0);
         // result.resize(n + 1);
-        for (int idx = 0; idx <= n; ++idx)
+        for (int idx = 0; idx <= new_n; ++idx)
         {
             Eigen::Vector<T, rows> vec = m_control_points.block(0, index - m_degree, rows, m_degree + 1) * ders.col(idx);
             temp[idx] = vec;
             // result[idx] = project_point<T, is_rational, rows>::project_point_to_euclidean_space(vec);
         }
-        result = rat_curve_derivs_project<T, is_rational, rows>::project_point_to_euclidean_space(temp);
+        Eigen::VectorX<Eigen::Vector<T, dim>> project_point = rat_curve_derivs_project<T, is_rational, rows>::project_point_to_euclidean_space(temp);
+        for (int idx = 0; idx <= new_n; ++idx)
+            result[idx] = project_point[idx];
+        for (int idx = new_n + 1; idx <= n; ++idx)
+        {
+            result[idx] = zero;
+        }
+        
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
@@ -1553,7 +1627,7 @@ public:
     //     new_n = std::min(mr, m_degree);
     //     ders_basis_funs<T>(m_degree, new_n, m_degree, m_knots_vector[m_degree + 1], m_knots_vector, ders_temp);
     //     ders.resize(mr + 1);
-    //     int knots_index = m_knots_vector.size() - m_degree * 2 - 2;
+    //     int knots_index = m_knotsnurbs_curve<T, dim, >_vector.size() - m_degree * 2 - 2;
     //     for (int idx = 0; idx <= new_n; ++idx)
     //     {
     //         Eigen::Vector<T, rows> vec = m_control_points.block(0, knots_index, rows, m_degree + 1) * ders_temp.col(idx);
@@ -1563,7 +1637,7 @@ public:
     //     {
     //         ders[idx] = zero;
     //     }
-
+// nurbs_curve<T, dim, >
     //     ders_s.resize(mr + 1);
     //     ders_s[0] = ders[0];
     //     for (int index = 1; index <= mr; ++index)
@@ -1671,6 +1745,50 @@ public:
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
+    ENUM_NURBS bezier_curve_reparameter(const nurbs_curve<T, 1, true, -1, -1> &reparameter_function,
+        nurbs_curve<T, dim, true, -1, -1> &new_nurbs)
+    {
+        Eigen::Matrix<T, dim + 1, Eigen::Dynamic> rational_control_points;
+        to_ratioanl_contrl_points<T, is_rational, rows>::convert(m_control_points, rational_control_points);
+
+        std::array<Eigen::Vector<T, 1>, 2> ends_points;
+        int knots_vector_size = m_knots_vector.size();
+        reparameter_function.get_ends_point(ends_points);
+
+        if (std::abs(ends_points[0][0] - m_knots_vector[0]) > DEFAULT_ERROR)
+            return ENUM_NURBS::NURBS_ERROR;
+        if (std::abs(ends_points[1][0] - m_knots_vector[knots_vector_size - 1]) > DEFAULT_ERROR)
+           return ENUM_NURBS::NURBS_ERROR;
+
+        Eigen::VectorX<T> function_knots_vector = reparameter_function.get_knots_vector();
+        Eigen::Matrix<T, 2, Eigen::Dynamic> function_control_points = reparameter_function.get_control_points();
+        int function_degree = reparameter_function.get_degree();
+
+        Eigen::Matrix<T, dim + 1, Eigen::Dynamic> new_control_points;
+        int new_degree = m_degree * function_degree;
+        new_control_points.resize(dim + 1, new_degree + 1);
+        new_control_points.col(0) = rational_control_points.col(0);
+        new_control_points.col(new_degree) = rational_control_points.col(function_degree);
+        T low = function_knots_vector[0];
+        T high = function_knots_vector[function_degree + 1];
+        reparameter_bezier_curve<T, dim + 1>(m_degree, m_knots_vector, rational_control_points, function_degree, function_knots_vector,
+            function_control_points, function_knots_vector[function_degree + 1] - function_knots_vector[0], new_control_points);
+
+        new_nurbs.set_control_points(new_control_points);
+        Eigen::VectorX<T> new_knots_vector(2 * new_degree + 2);
+        for (int index = 0; index <= new_degree; ++index)
+        {
+            new_knots_vector[index] = low;
+            new_knots_vector[index + new_degree + 1] = high;
+        }
+        new_nurbs.set_knots_vector(new_knots_vector);
+        new_nurbs.set_degree(new_degree);
+        std::cout <<  new_control_points << std::endl;
+        std::cout <<  new_knots_vector << std::endl;
+        std::cout <<  new_degree << std::endl;
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
 
     ENUM_NURBS curve_reparameter_with_polynomial(const nurbs_curve<T, 1, false, -1, -1> &reparameter_function,
         nurbs_curve<T, dim, is_rational, -1, -1> &new_nurbs)
@@ -1695,6 +1813,7 @@ public:
 
         
         T current_knot = function_knots_vector[0];
+        std::vector<T> refine_knots;
         std::vector<T> insert_knots;
         std::vector<int> insert_knots_degree;
         std::vector<int> equal_knots;
@@ -1715,9 +1834,10 @@ public:
             int knots_index = is_include_konts(image_knot[0], DEFAULT_ERROR);
             if (knots_index == INDEX_IS_OUTSIDE_OF_KNOTS_VECTOR)
             {
-                insert_knots.push_back(image_knot[0]);
+                insert_knots.push_back(current_knot);
+                refine_knots.push_back(image_knot[0]);
                 int repeat = reparameter_function.get_knots_multiplicity(index);
-                insert_knots_degree.push_back(reparameter_function_degree - repeat - 1);
+                insert_knots_degree.push_back(reparameter_function_degree - repeat);
             }
             else
             {
@@ -1725,17 +1845,17 @@ public:
 
                 int repeat1 = reparameter_function.get_knots_multiplicity(index);
                 int repeat2 = get_knots_multiplicity(knots_index);
-                int repeat = std::min(reparameter_function_degree - repeat1 - 1, m_degree - repeat2 - 1);
+                int repeat = std::min(reparameter_function_degree - repeat1, m_degree - repeat2);
                 equal_knots_degree.push_back(repeat);
             }
         }
 
         nurbs_curve<T, dim, is_rational, -1, -1> *insert_knots_nurbs = new nurbs_curve<T, dim, is_rational, -1, -1>(*this);
         std::vector<nurbs_curve<T, dim, is_rational, -1, -1> *> bezier_curves;
-        int insert_knots_size = insert_knots.size();
+        int insert_knots_size = refine_knots.size();
         Eigen::VectorX<T> temp_insert_knots(insert_knots_size);
         for (int index = 0; index < insert_knots_size; ++index)
-            temp_insert_knots[index] = insert_knots[index];
+            temp_insert_knots[index] = refine_knots[index];
         
         insert_knots_nurbs->refine_knots_vector(temp_insert_knots);
         insert_knots_nurbs->decompose_to_bezier(bezier_curves);
@@ -1779,7 +1899,7 @@ public:
             }
             reparameter_function_insert_knots.push_back(u);
             int repeat = get_knots_multiplicity(index);
-            reparameter_function_insert_knots_degree.push_back(m_degree - repeat - 1);
+            reparameter_function_insert_knots_degree.push_back(m_degree - repeat);
         }
 
         nurbs_curve<T, 1, false, -1, -1> *insert_knots_function_nurbs = new nurbs_curve<T, 1, false, -1, -1>(reparameter_function);
@@ -1851,6 +1971,7 @@ public:
         for (int index = 0; index < remove_count; ++index)
         {
             int time;
+            // std::cout << new_knots_vector << std::endl;
             new_nurbs.remove_knots(insert_knots[index], insert_knots_degree[index], time);
             if (time != insert_knots_degree[index])
                 return ENUM_NURBS::NURBS_ERROR;
@@ -1877,6 +1998,190 @@ public:
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
+    // ENUM_NURBS curve_reparameter_with_polynomial(const nurbs_curve<T, 1, true, -1, -1> &reparameter_function,
+    //     nurbs_curve<T, dim, true, -1, -1> &new_nurbs)
+    // {
+    //     std::array<Eigen::Vector<T, 1>, 2> ends_points;
+    //     int knots_vector_size = m_knots_vector.size();
+    //     reparameter_function.get_ends_point(ends_points);
+
+    //     if (std::abs(ends_points[0][0] - m_knots_vector[0]) > DEFAULT_ERROR)
+    //         return ENUM_NURBS::NURBS_ERROR;
+    //     if (std::abs(ends_points[1][0] - m_knots_vector[knots_vector_size - 1]) > DEFAULT_ERROR)
+    //        return ENUM_NURBS::NURBS_ERROR;
+
+    //     int this_nurbs_interval_count;
+    //     find_interval_segment_count(m_degree, m_knots_vector, this_nurbs_interval_count);
+    //     Eigen::VectorX<T> function_knots_vector = reparameter_function.get_knots_vector();
+    //     int reparameter_function_interval_count;
+    //     int reparameter_function_degree = reparameter_function.get_degree();
+    //     find_interval_segment_count(reparameter_function_degree, function_knots_vector, reparameter_function_interval_count);
+    //     if (this_nurbs_interval_count == 1 && reparameter_function_interval_count == 1)
+    //         return bezier_curve_reparameter(reparameter_function, new_nurbs);
+
+        
+    //     T current_knot = function_knots_vector[0];
+    //     std::vector<T> refine_knots;
+    //     std::vector<T> insert_knots;
+    //     std::vector<int> insert_knots_degree;
+    //     std::vector<int> equal_knots;
+    //     std::vector<int> equal_knots_degree;
+        
+
+    //     int new_degree = reparameter_function_degree * m_degree;
+    //     int function_knots_vector_size = function_knots_vector.size();
+        
+    //     int reparameter_function_control_points_count = function_knots_vector_size - reparameter_function_degree - 1;
+    //     for (int index = reparameter_function_degree + 1; index < reparameter_function_control_points_count; ++index)
+    //     {
+    //         if (current_knot == function_knots_vector[index])
+    //             continue;
+    //         current_knot = function_knots_vector[index];
+    //         Eigen::Vector<T, 1> image_knot;
+    //         reparameter_function.point_on_curve(current_knot, image_knot);
+    //         int knots_index = is_include_konts(image_knot[0], DEFAULT_ERROR);
+    //         if (knots_index == INDEX_IS_OUTSIDE_OF_KNOTS_VECTOR)
+    //         {
+    //             insert_knots.push_back(current_knot);
+    //             refine_knots.push_back(image_knot[0]);
+    //             int repeat = reparameter_function.get_knots_multiplicity(index);
+    //             insert_knots_degree.push_back(reparameter_function_degree - repeat);
+    //         }
+    //         else
+    //         {
+    //             equal_knots.push_back(index);
+
+    //             int repeat1 = reparameter_function.get_knots_multiplicity(index);
+    //             int repeat2 = get_knots_multiplicity(knots_index);
+    //             int repeat = std::min(reparameter_function_degree - repeat1, m_degree - repeat2);
+    //             equal_knots_degree.push_back(repeat);
+    //         }
+    //     }
+
+    //     nurbs_curve<T, dim, is_rational, -1, -1> *insert_knots_nurbs = new nurbs_curve<T, dim, is_rational, -1, -1>(*this);
+    //     std::vector<nurbs_curve<T, dim, is_rational, -1, -1> *> bezier_curves;
+    //     int insert_knots_size = refine_knots.size();
+    //     Eigen::VectorX<T> temp_insert_knots(insert_knots_size);
+    //     for (int index = 0; index < insert_knots_size; ++index)
+    //         temp_insert_knots[index] = refine_knots[index];
+        
+    //     insert_knots_nurbs->refine_knots_vector(temp_insert_knots);
+    //     insert_knots_nurbs->decompose_to_bezier(bezier_curves);
+            
+    //     delete insert_knots_nurbs;
+
+
+    //     std::vector<T> reparameter_function_insert_knots;
+    //     std::vector<int> reparameter_function_insert_knots_degree;
+
+    //     current_knot = m_knots_vector[0];
+    //     auto next_equal_knots = equal_knots.begin();
+    //     auto eqaul_knots_end = equal_knots.end();
+    //     int control_points_count = knots_vector_size - m_degree - 1;
+    //     for (int index = m_degree + 1; index < control_points_count; ++index)
+    //     {
+    //         if (next_equal_knots != eqaul_knots_end)
+    //         {
+    //             if (index == *next_equal_knots)
+    //             {
+    //                 ++next_equal_knots;
+    //                 current_knot = m_knots_vector[index];
+    //                 continue;
+    //             }
+    //         }
+
+    //         if (current_knot == m_knots_vector[index])
+    //             continue;
+    //         current_knot = m_knots_vector[index];
+
+    //         Eigen::Vector<T, 1> point{current_knot}, nearst_point;
+    //         T u;
+    //         reparameter_function.find_nearst_point_on_curve(point, u, nearst_point, KNOTS_VECTOR_ERROR);
+    //         T distacne = (point - nearst_point).squaredNorm();
+    //         if (distacne > KNOTS_VECTOR_ERROR * KNOTS_VECTOR_ERROR)
+    //         {
+    //             int curve_count = bezier_curves.size();
+    //             for (int curve_index = 0; curve_index < curve_count; ++curve_index)
+    //                 delete bezier_curves[index];
+    //             return ENUM_NURBS::NURBS_ERROR;
+    //         }
+    //         reparameter_function_insert_knots.push_back(u);
+    //         int repeat = get_knots_multiplicity(index);
+    //         reparameter_function_insert_knots_degree.push_back(m_degree - repeat);
+    //     }
+
+    //     nurbs_curve<T, 1, false, -1, -1> *insert_knots_function_nurbs = new nurbs_curve<T, 1, false, -1, -1>(reparameter_function);
+    //     std::vector<nurbs_curve<T, 1, false, -1, -1> *> function_bezier_curves;
+    //     int reparameter_function_insert_knots_size = reparameter_function_insert_knots.size();
+    //     Eigen::VectorX<T> temp_insert_knots_vector(reparameter_function_insert_knots_size);
+    //     for (int index = 0; index < reparameter_function_insert_knots_size; ++index)
+    //         temp_insert_knots_vector[index] = reparameter_function_insert_knots[index];
+    //     insert_knots_function_nurbs->refine_knots_vector(temp_insert_knots_vector);
+    //     insert_knots_function_nurbs->decompose_to_bezier(function_bezier_curves);
+    //     delete insert_knots_function_nurbs;
+
+    //     int curves_count = function_bezier_curves.size();
+    //     std::vector<nurbs_curve<T, dim, is_rational, -1, -1>*> new_bezier_curves(curves_count, nullptr);
+    //     for (int index = 0; index < curves_count; ++index)
+    //     {
+    //         new_bezier_curves[index] = new nurbs_curve<T, dim, is_rational, -1, -1>();
+    //         bezier_curves[index]->bezier_curve_reparameter(*function_bezier_curves[index], *(new_bezier_curves[index]));
+
+    //         delete bezier_curves[index];
+    //         delete function_bezier_curves[index];
+    //     }
+
+    //     Eigen::Matrix<T, rows, Eigen::Dynamic> new_control_points;
+    //     Eigen::VectorX<T> new_knots_vector;
+
+    //     merge_two_curve(new_degree, new_degree, new_bezier_curves[0]->get_knots_vector(), new_bezier_curves[1]->get_knots_vector(),
+    //        new_bezier_curves[0]->get_control_points(), new_bezier_curves[1]->get_control_points(),
+    //        new_knots_vector, new_control_points);
+        
+    //     for (int index = 2; index < curves_count; ++index)
+    //     {
+    //         Eigen::Matrix<T, rows, Eigen::Dynamic> nnew_control_points;
+    //         Eigen::VectorX<T> nnew_knots_vector;
+    //         merge_two_curve(new_degree, new_degree, new_knots_vector, new_bezier_curves[index]->get_knots_vector(),
+    //             new_control_points, new_bezier_curves[index]->get_control_points(),
+    //             nnew_knots_vector, nnew_control_points);
+    //         new_knots_vector = nnew_knots_vector;
+    //         new_control_points = nnew_control_points;
+    //     }
+    //     new_nurbs.set_control_points(new_control_points);
+    //     new_nurbs.set_degree(new_degree);
+    //     new_nurbs.set_knots_vector(new_knots_vector);
+
+    //     int remove_count = insert_knots.size();
+    //     for (int index = 0; index < remove_count; ++index)
+    //     {
+    //         int time;
+    //         // std::cout << new_knots_vector << std::endl;
+    //         new_nurbs.remove_knots(insert_knots[index], insert_knots_degree[index], time);
+    //         if (time != insert_knots_degree[index])
+    //             return ENUM_NURBS::NURBS_ERROR;
+    //     }
+
+    //     remove_count = equal_knots.size();
+    //     for (int index = 0; index < remove_count; ++index)
+    //     {
+    //         int time;
+    //         new_nurbs.remove_knots(function_knots_vector[equal_knots[index]], equal_knots_degree[index], time);
+    //         if (time != equal_knots_degree[index])
+    //             return ENUM_NURBS::NURBS_ERROR;
+    //     }
+
+    //     remove_count = reparameter_function_insert_knots.size();
+    //     for (int index = 0; index < remove_count; ++index)
+    //     {
+    //         int time;
+    //         new_nurbs.remove_knots(reparameter_function_insert_knots[index], reparameter_function_insert_knots_degree[index], time);
+    //         if (time != reparameter_function_insert_knots_degree[index])
+    //             return ENUM_NURBS::NURBS_ERROR;
+    //     }
+
+    //     return ENUM_NURBS::NURBS_SUCCESS;
+    // }
 
 
 };

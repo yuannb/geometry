@@ -168,8 +168,8 @@ public:
         int vspan = -1;
         find_span<T, u_degree>(u, m_u_knots_vector, uspan);
         find_span<T, v_degree>(v, m_v_knots_vector, vspan);
-        Eigen::Matrix<T, u_degree + 1, Eigen::Dynamic, Eigen::ColMajor, u_degree + 1, u_degree + 1> nu;
-        Eigen::Matrix<T, v_degree + 1, Eigen::Dynamic, Eigen::ColMajor, v_degree + 1, v_degree + 1> nv;
+        Eigen::Matrix<T, u_degree + 1, Eigen::Dynamic> nu;
+        Eigen::Matrix<T, v_degree + 1, Eigen::Dynamic> nv;
         ders_basis_funs<T, u_degree>(uspan, du, u, m_u_knots_vector, nu);
         ders_basis_funs<T, v_degree>(vspan, dv, v, m_v_knots_vector, nv);
         Eigen::Matrix<T, point_size,  v_degree + 1> temps;

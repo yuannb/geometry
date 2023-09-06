@@ -216,11 +216,12 @@ struct rat_curve_derivs_project
         Eigen::VectorX<Eigen::Vector<T, point_size - 1>>  result(count);
         for (int k = 0; k < count; ++k)
         {
-            Eigen::Vector<T, point_size - 1> v = points.block(0, k, point_size - 1, 1);
+            Eigen::Vector<T, point_size - 1> v = points[k].block(0, 0, point_size - 1, 1);
             for (int i = 1; i <= k; ++i)
-                v = v - Bin(k, i) * points(point_size - 1, i) * result[k - i];
-            result[k] = v / points(point_size - 1, 0);
+                v = v - Bin(k, i) * points[i][point_size - 1] * result[k - i];
+            result[k] = v / points[0][point_size - 1];
         }
+        return result;
     }
 };
 
@@ -856,6 +857,7 @@ template<typename T, int degree, int points_count, int n>
 ENUM_NURBS ders_basis_funs(int i, T u, const Eigen::Vector<T, degree + 1 + points_count> &knots_vector,
                 Eigen::Matrix<T, degree + 1, n + 1> &result)
 {
+    constexpr int new_n = std::min(degree, n);
     result.setConstant(0.0);
     // 可以将下面left和right的计算改成多线程, 不过节点向量应该不大, 该不该影响应该不大
     //将u-u_j(j = i - p + 1, ... , i, 理论上应该算到u-u_(i - p), 但是其对应的基函数为0, 因此可以设置为0)
@@ -911,7 +913,7 @@ ENUM_NURBS ders_basis_funs(int i, T u, const Eigen::Vector<T, degree + 1 + point
 
         arrays[0].setConstant(0.0);
         arrays[0][0] = 1.0;
-        for (int k = 1; k <= n; ++k)
+        for (int k = 1; k <= new_n; ++k)
         {
             Eigen::Vector<T, degree + 1> &current_array = arrays[current_array];
             Eigen::Vector<T, degree + 1> &next_array = arrays[next_index];
@@ -970,8 +972,9 @@ ENUM_NURBS ders_basis_funs(int i, T u, const Eigen::Vector<T, degree + 1 + point
 /// @return ENUM_NURBS错误码
 template<typename T, int degree, int points_count>
 ENUM_NURBS ders_basis_funs(int i, int n, T u, const Eigen::Vector<T, degree + 1 + points_count> &knots_vector,
-                Eigen::Matrix<T, degree + 1, Eigen::Dynamic, Eigen::ColMajor, degree + 1, degree + 1> &result)
+                Eigen::Matrix<T, degree + 1, Eigen::Dynamic> &result)
 {
+    int new_n = std::min(n, degree);
     result.resize(degree + 1, n + 1);
     result.setConstant(0.0);
     // 可以将下面left和right的计算改成多线程, 不过节点向量应该不大, 该不该影响应该不大
@@ -1026,7 +1029,7 @@ ENUM_NURBS ders_basis_funs(int i, int n, T u, const Eigen::Vector<T, degree + 1 
 
         arrays[0].setConstant(0.0);
         arrays[0][0] = 1.0;
-        for (int k = 1; k <= n; ++k)
+        for (int k = 1; k <= new_n; ++k)
         {
             Eigen::Vector<T, degree + 1> &current_array = arrays[current_index];
             Eigen::Vector<T, degree + 1> &next_array = arrays[next_index];
@@ -1084,8 +1087,9 @@ ENUM_NURBS ders_basis_funs(int i, int n, T u, const Eigen::Vector<T, degree + 1 
 /// @return ENUM_NURBS错误码
 template<typename T, int degree>
 ENUM_NURBS ders_basis_funs(int i, int n, T u, const Eigen::Vector<T, Eigen::Dynamic> &knots_vector,
-                Eigen::Matrix<T, degree + 1, Eigen::Dynamic, Eigen::ColMajor, degree + 1, degree + 1> &result)
+                Eigen::Matrix<T, degree + 1, Eigen::Dynamic> &result)
 {
+    int new_n = std::min(degree, n);
     result.resize(degree + 1, n + 1);
     result.setConstant(0.0);
     // 可以将下面left和right的计算改成多线程, 不过节点向量应该不大, 该不该影响应该不大
@@ -1141,7 +1145,7 @@ ENUM_NURBS ders_basis_funs(int i, int n, T u, const Eigen::Vector<T, Eigen::Dyna
 
         arrays[0].setConstant(0.0);
         arrays[0][0] = 1.0;
-        for (int k = 1; k <= n; ++k)
+        for (int k = 1; k <= new_n; ++k)
         {
             Eigen::Vector<T, degree + 1> &current_array = arrays[current_index];
             Eigen::Vector<T, degree + 1> &next_array = arrays[next_index];
@@ -1202,6 +1206,7 @@ template<typename T, int degree, int n>
 ENUM_NURBS ders_basis_funs(int i, T u, const Eigen::Vector<T, Eigen::Dynamic> &knots_vector,
                 Eigen::Matrix<T, degree + 1, n + 1> &result)
 {
+    constexpr int new_n = std::min(n, degree);
     result.setConstant(0.0);
     // 可以将下面left和right的计算改成多线程, 不过节点向量应该不大, 该不该影响应该不大
     //将u-u_j(j = i - p + 1, ... , i, 理论上应该算到u-u_(i - p), 但是其对应的基函数为0, 因此可以设置为0)
@@ -1256,7 +1261,7 @@ ENUM_NURBS ders_basis_funs(int i, T u, const Eigen::Vector<T, Eigen::Dynamic> &k
 
         arrays[0].setConstant(0.0);
         arrays[0][0] = 1.0;
-        for (int k = 1; k <= n; ++k)
+        for (int k = 1; k <= new_n; ++k)
         {
             Eigen::Vector<T, degree + 1> &current_array = arrays[current_index];
             Eigen::Vector<T, degree + 1> &next_array = arrays[next_index];
@@ -1435,6 +1440,7 @@ template<typename T, int n>
 ENUM_NURBS ders_basis_funs(int i, int degree, T u, const Eigen::Vector<T, Eigen::Dynamic> &knots_vector,
                 Eigen::Matrix<T, Eigen::Dynamic, n + 1> &result)
 {
+    int new_n = std::min(n, degree);
     result.resize(degree + 1, n + 1);
     result.setConstant(0.0);
     // 可以将下面left和right的计算改成多线程, 不过节点向量应该不大, 该不该影响应该不大
@@ -1491,7 +1497,7 @@ ENUM_NURBS ders_basis_funs(int i, int degree, T u, const Eigen::Vector<T, Eigen:
 
         arrays[0].setConstant(0.0);
         arrays[0][0] = 1.0;
-        for (int k = 1; k <= n; ++k)
+        for (int k = 1; k <= new_n; ++k)
         {
             Eigen::Vector<T, Eigen::Dynamic> &current_array = arrays[current_index];
             Eigen::Vector<T, Eigen::Dynamic> &next_array = arrays[next_index];
@@ -3324,7 +3330,7 @@ ENUM_NURBS reparameter_bezier_curve(int old_degree, const Eigen::VectorX<T> &old
     // mr <= ml
 
     Eigen::VectorX<Eigen::Vector<T, point_size>> ders_s_low(ml + 1);
-    for (int index = 0; index <= ml; ++index)
+    for (int index = 1; index <= ml; ++index)
     {
         ders_s_low[index].setConstant(0.0);
     }
@@ -3418,6 +3424,292 @@ ENUM_NURBS reparameter_bezier_curve(int old_degree, const Eigen::VectorX<T> &old
 
     return ENUM_NURBS::NURBS_SUCCESS; 
 }
+
+template<typename T, int point_size>
+ENUM_NURBS reparameter_bezier_curve(int old_degree, const Eigen::VectorX<T> &old_knots_vector, const Eigen::Matrix<T, point_size, Eigen::Dynamic> &old_control_points,
+    int function_degree, const Eigen::VectorX<T> &function_knots_vector, const Eigen::Matrix<T, 2, Eigen::Dynamic> &function_control_points , T delta_s,
+    Eigen::Matrix<T, point_size, Eigen::Dynamic> &new_control_points)
+{
+
+    int new_degree = function_degree * old_degree;
+    int function_knots_vector_size = function_knots_vector.size();
+    int function_control_points_size = function_knots_vector_size - function_degree - 1;
+    int pqf =  std::tgamma<int>(new_degree + 1);
+    int ml = (new_degree + 1) / 2;
+    int mr = new_degree - new_degree / 2 - 1;
+    Eigen::MatrixX<T> function_low_basis_ders; 
+    Eigen::MatrixX<T> function_high_basis_ders;
+    ders_basis_funs<T>(function_degree, ml, function_degree, function_knots_vector[0], function_knots_vector, function_low_basis_ders);
+    ders_basis_funs<T>(function_degree, mr, function_degree, function_knots_vector[new_degree + 1], function_knots_vector, function_high_basis_ders);
+
+    Eigen::Matrix<T, 1, Eigen::Dynamic> function_low_w = function_control_points.block(1, 0, 1, function_degree + 1);
+    Eigen::Matrix<T, 1, Eigen::Dynamic> function_high_w = function_control_points.block(1, function_control_points_size - function_degree - 1, 1, function_degree + 1);
+
+    std::cout << function_low_w << std::endl;
+    std::cout << function_low_basis_ders << std::endl;
+    Eigen::VectorX<T> hs_low = function_low_w * function_low_basis_ders;
+    std::cout << hs_low << std::endl;
+    std::cout << function_high_w << std::endl;
+    std::cout << function_high_basis_ders << std::endl;
+    Eigen::VectorX<T> hs_high = function_high_w * function_high_basis_ders;
+    std::vector<Eigen::VectorX<T> > hs_low_vector(2);
+    int current_index = 0;
+    int next_index = 1;
+    hs_low_vector[0] = hs_low;
+    hs_low_vector[1].resize(ml + 1);
+
+    Eigen::MatrixX<int> Bin = binary_coeff(ml + 1);
+
+    for (int index = 1; index <= function_degree; ++index)
+    {
+        Eigen::VectorX<T>  &current_array = hs_low_vector[current_index];
+        Eigen::VectorX<T>  &next_array = hs_low_vector[next_index];
+        next_array.setConstant(0.0);
+        // next_array.assign(next_array.size(), 0);
+        for (int col = 0; col <= ml; ++col)
+        {
+            for (int i = 0; i <= col; ++i)
+            {
+                next_array[col] += Bin(col, i) * current_array[i] * hs_low[col - i];
+            }
+        }
+        std::cout << hs_low_vector[0] << std::endl;
+        std::cout << hs_low_vector[1] << std::endl;
+        std::swap(current_index, next_index);
+    }
+
+    Eigen::VectorX<T> hs_low_p = hs_low_vector[current_index];
+
+
+    std::vector<Eigen::VectorX<T> > hs_high_vector(2);
+    current_index = 0;
+    next_index = 1;
+    hs_high_vector[0] = hs_high;
+    hs_high_vector[1].resize(mr + 1);
+    for (int index = 1; index <= function_degree; ++index)
+    {
+        Eigen::VectorX<T>  &current_array = hs_high_vector[current_index];
+        Eigen::VectorX<T>  &next_array = hs_high_vector[next_index];
+        next_array.setConstant(0.0);
+        // next_array.assign(next_array.size(), 0);
+        for (int col = 0; col <= mr; ++col)
+        {
+            for (int i = 0; i <= col; ++i)
+            {
+                next_array[col] += Bin(col, i) * current_array[i] * hs_high[col - i];
+            }
+        }
+        std::swap(current_index, next_index);
+    }
+    Eigen::VectorX<T> hs_high_p = hs_high_vector[current_index];
+
+    int new_n = std::min(ml, function_degree);
+    Eigen::VectorX<Eigen::Vector<T, 2>> temp_low(new_n + 1);
+
+    Eigen::VectorX<Eigen::Vector<T, 1>> function_low_ders(ml + 1);
+    Eigen::VectorX<Eigen::Vector<T, 1>> function_high_ders(mr + 1);
+
+    for (int idx = 0; idx <= new_n; ++idx)
+    {
+        Eigen::Vector<T, 2> vec = function_control_points.block(0, 0, 2, function_degree + 1) * function_low_basis_ders.col(idx);
+        temp_low[idx] = vec;
+    }
+    Eigen::VectorX<Eigen::Vector<T, 1>> project_point = rat_curve_derivs_project<T, true, 2>::project_point_to_euclidean_space(temp_low);
+    for (int idx = 0; idx <= new_n; ++idx)
+        function_low_ders[idx] = project_point[idx];
+    for (int idx = new_n + 1; idx <= ml; ++idx)
+    {
+        function_low_ders[idx][0] = 0;
+    }
+
+    new_n = std::min(mr, function_degree);
+    Eigen::VectorX<Eigen::Vector<T, 2>> temp_high(new_n + 1);
+    for (int idx = 0; idx <= new_n; ++idx)
+    {
+        Eigen::Vector<T, 2> vec = function_control_points.block(0, 0, 2, function_degree + 1) * function_low_basis_ders.col(idx);
+        temp_high[idx] = vec;
+    }
+    project_point = rat_curve_derivs_project<T, true, 2>::project_point_to_euclidean_space(temp_high);
+    for (int idx = 0; idx <= new_n; ++idx)
+        function_high_ders[idx] = project_point[idx];
+    for (int idx = new_n + 1; idx <= mr; ++idx)
+    {
+        function_high_ders[idx][0] = 0;
+    }
+    
+    Eigen::VectorX<Eigen::Vector<T, point_size>> ders_low(ml + 1);
+    Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> ders_temp;
+    ders_basis_funs<T>(old_degree, ml, old_degree, old_knots_vector[0], old_knots_vector, ders_temp);
+    for (int idx = 0; idx <= ml; ++idx)
+    {
+        std::cout << ders_temp << std::endl;
+        std::cout << old_control_points << std::endl;
+        Eigen::Vector<T, point_size> vec = old_control_points.block(0, 0, point_size, old_degree + 1) * ders_temp.col(idx);
+        ders_low[idx] = vec;
+    } 
+
+    ders_basis_funs<T>(old_degree, mr, old_degree, old_knots_vector[old_degree + 1], old_knots_vector, ders_temp);
+    Eigen::VectorX<Eigen::Vector<T, point_size>> ders_high(mr + 1);
+    int knots_index = old_knots_vector.size() - old_degree * 2 - 2;
+    for (int idx = 0; idx <= mr; ++idx)
+    {
+        Eigen::Vector<T, point_size> vec = old_control_points.block(0, knots_index, point_size, old_degree + 1) * ders_temp.col(idx);
+        ders_high[idx] = vec;
+    }
+
+    // mr <= ml
+
+    Eigen::VectorX<Eigen::Vector<T, point_size>> ders_s_low(ml + 1);
+    for (int index = 1; index <= ml; ++index)
+    {
+        ders_s_low[index].setConstant(0.0);
+    }
+    ders_s_low[0] = ders_low[0];
+
+    Eigen::VectorX<Eigen::Vector<T, point_size>> ders_s_high(mr + 1);
+    ders_s_high[0] = ders_high[0];
+    for (int index = 1; index <= mr; ++index)
+        ders_s_high[index].setConstant(0.0);
+
+    for (int n = 1; n <= mr; ++n)
+    {
+        for (int j = 0; j <= n; ++j)
+        {
+            std::vector<std::vector<int>> temp = find_sum_n(n, j, 0, false);
+            for (auto vec : temp)
+            {
+                int vec_sum = 0;
+                for (int index = 0; index < n; ++index)
+                    vec_sum += (index + 1) * vec[index];
+                if (vec_sum == n)
+                {
+                    T coeff1 = std::tgamma<int>(n + 1) * std::pow(function_low_ders[1][0], vec[0]);
+                    T coeff2 = std::tgamma<int>(n + 1) * std::pow(function_high_ders[1][0], vec[0]);
+                    int denominator = std::tgamma<int>(vec[0] + 1);
+                    for (int index = 1; index < n; ++index)
+                    {
+                        denominator *= std::tgamma<int>(vec[index] + 1) * std::pow(std::tgamma<int>(index + 2), vec[index]);
+                        coeff1 *= std::pow(function_low_ders[index + 1][0], vec[index]);
+                        coeff2 *= std::pow(function_high_ders[index + 1][0], vec[index]);
+                    }
+                    ders_s_low[n] += ders_low[j] * (coeff1 / denominator);
+                    ders_s_high[n] += ders_high[j] * (coeff2 / denominator);
+                }
+            }   
+        }
+    }
+
+    if (new_degree % 2 == 0)
+    {
+        for (int j = 0; j <= ml; ++j)
+        {
+            std::vector<std::vector<int>> temp = find_sum_n(ml, j, 0, false);
+            for (auto vec : temp)
+            {
+                int vec_sum = 0;
+                for (int index = 0; index < ml; ++index)
+                    vec_sum += (index + 1) * vec[index];
+                if (vec_sum == ml)
+                {
+                    T coeff1 = std::tgamma<int>(ml + 1) * std::pow(function_low_ders[1][0], vec[0]);
+                    int denominator = std::tgamma<int>(vec[0] + 1);
+                    for (int index = 1; index < ml; ++index)
+                    {
+                        denominator *= std::tgamma<int>(vec[index] + 1) * std::pow(std::tgamma<int>(index + 2), vec[index]);
+                        coeff1 *= std::pow(function_low_ders[index + 1][0], vec[index]);
+                    }
+                    ders_s_low[ml] += ders_low[j] * (coeff1 / denominator);
+                }
+            }   
+        }
+    }
+
+    Eigen::VectorX<Eigen::Vector<T, point_size>> hs_ders_s_low(ml + 1);
+    for (int index = 0; index <= ml; ++index)
+    {
+        hs_ders_s_low[index].setConstant(0.0);
+        for (int col = 0; col <= index; ++col)
+        {
+            std::cout << ders_s_low[col] << std::endl;
+            std::cout << hs_low_p << std::endl;
+            hs_ders_s_low[index] += (Bin(index, col) * hs_low_p[index - col]) * ders_s_low[col];
+        }
+        std::cout << hs_ders_s_low[index] << std::endl;
+        std::cout << ders_s_low[index] << std::endl;
+    }
+
+    Eigen::VectorX<Eigen::Vector<T, point_size>> hs_ders_s_high(mr + 1);
+    for (int index = 0; index <= mr; ++index)
+    {
+        hs_ders_s_high[index].setConstant(0.0);
+        for (int col = 0; col <= index; ++col)
+        {
+            hs_ders_s_high[index] += (Bin(index, col) * hs_low_p[index - col]) * ders_s_high[col];
+        }
+        std::cout << hs_ders_s_high[index] << std::endl;
+        std::cout << "*********" << std::endl;
+        std::cout << ders_s_high[index] << std::endl;
+    }
+
+
+
+
+    for (int index = 1; index <= mr; ++index)
+    {
+        int num = std::tgamma<int>(new_degree + 1 - index);
+        T s = std::pow(delta_s, index);
+        int coeff = index % 2 == 0 ? 1 : -1;
+        new_control_points.col(index) = ((num * s) / pqf) * hs_ders_s_low[index];
+        new_control_points.col(new_degree - index) = ((coeff * num * s) / pqf) * hs_ders_s_high[index];
+        for (int j = 0; j < index; ++j)
+        {
+            int coeff1 = (index + j - 1) % 2 == 0 ? 1 : -1;
+            new_control_points.col(index) = new_control_points.col(index) + coeff1 * Bin(index, j) * new_control_points.col(j);
+            new_control_points.col(new_degree - index) = new_control_points.col(new_degree - index) + coeff1 * Bin(index, j) * new_control_points.col(new_degree - j);
+        }
+    }
+
+    if (new_degree % 2 == 0)
+    {
+        int num = std::tgamma<int>(new_degree + 1 - ml);
+        T s = std::pow(delta_s, ml);
+        new_control_points.col(ml) = ((num * s) / pqf) * hs_ders_s_low[ml];
+        for (int j = 0; j < ml; ++j)
+        {
+            int coeff1 = (ml + j - 1) % 2 == 0 ? 1 : -1;
+            new_control_points.col(ml) = new_control_points.col(ml) + coeff1 * Bin(ml, j) * new_control_points.col(j);
+        }
+    }
+
+    return ENUM_NURBS::NURBS_SUCCESS; 
+}
+
+// is_rational = true
+template<typename T, bool is_rational, int point_size>
+struct to_ratioanl_contrl_points
+{
+    static ENUM_NURBS convert(const Eigen::Matrix<T, point_size, Eigen::Dynamic> &old_control_points, Eigen::Matrix<T, point_size, Eigen::Dynamic> &new_control_points)
+    {
+        new_control_points = old_control_points;
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+};
+
+// is_rational = false
+template<typename T, int point_size>
+struct to_ratioanl_contrl_points<T, false, point_size>
+{
+    static ENUM_NURBS convert(const Eigen::Matrix<T, point_size, Eigen::Dynamic> &old_control_points, Eigen::Matrix<T, point_size + 1, Eigen::Dynamic> &new_control_points)
+    {
+        int old_control_points_count = old_control_points.cols();
+        new_control_points.resize(point_size + 1, old_control_points_count);
+        new_control_points.block(0, 0, point_size, old_control_points_count) = old_control_points;
+        new_control_points.block(point_size, 0, 1, old_control_points_count).setConstant(1.0);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+};
+
+
 
 //误差可以为0
 template<typename T, int point_size>

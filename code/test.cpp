@@ -3170,9 +3170,67 @@ void test_reparameter_3()
     }
 }
 
+
+void test_reparameter_4()
+{
+    Eigen::Vector<double, 2> v1{0, 0};
+    Eigen::Vector<double, 2> v2{1.0 / 2.0, 1};
+    Eigen::Vector<double, 2> v3{1, 0};
+    Eigen::Matrix<double, 2, Eigen::Dynamic> mat(2, 3);
+    mat.col(0) = v1;
+    mat.col(1) = v2;
+    mat.col(2) = v3;
+
+    Eigen::Vector<double, 2> v12{0, 1};
+    Eigen::Vector<double, 2> v23{7.0 / 24.0, 1};
+    Eigen::Vector<double, 2> v33{1, 1};
+    Eigen::Matrix<double, 2, Eigen::Dynamic> mat1(2, 3);
+    mat1.col(0) = v12;
+    mat1.col(1) = v23;
+    mat1.col(2) = v33;
+
+    Eigen::VectorX<double> knots_vector(6);
+    knots_vector << 0, 0, 0, 1, 1, 1;
+
+    nurbs_curve<double, 2, false, -1, -1> curve1(knots_vector, mat);
+    std::vector<Eigen::Vector2d> pointss;
+    std::vector<Eigen::Vector2d> points2;
+    nurbs_curve<double, 1, true, -1, -1> parameter_function(knots_vector, mat1);
+    nurbs_curve<double, 2, true, -1, -1> new_curve;
+    curve1.bezier_curve_reparameter(parameter_function, new_curve);
+    for (int i = 0; i < 100; ++i)
+    {
+        Eigen::Vector2d point;
+        curve1.point_on_curve((double)0.01 * i, point);
+        Eigen::Vector2d project_point;
+        new_curve.point_on_curve(0.01 * i, project_point);
+        pointss.push_back(point);
+        points2.push_back(project_point);
+    }
+    //     // // write doc
+    std::string dir("view2.obj");
+    std::ofstream outfile(dir);
+
+    for (auto point : pointss)
+    {
+        outfile << "v " << point[0] << " " <<
+           point[1] << " " << 0 << std::endl;
+    }
+
+    std::string dir2("view.obj");
+    std::ofstream outfile2(dir2);
+
+    for (auto point : points2)
+    {
+        outfile2 << "v " << point[0] << " " <<
+           point[1] << " " << 0 << std::endl;
+    }
+}
+
+
 int main()
 {
-    test_reparameter_3();
+    test_reparameter_4();
     return 0;
 }
 
