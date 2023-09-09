@@ -190,6 +190,84 @@ public:
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
+
+    /// @brief 计算nurbs surface在参数(u, v)处直到n阶偏导数
+    /// @param n1 u向求导最高阶数
+    /// @param n2 v向求导最高阶数
+    /// @param u 参数u
+    /// @param v 参数v
+    /// @param result out_put_param result(i, j)表示S(u, v)处的u向i次偏导数, 
+    /// remark : v向j次偏导数;当(i + j) > m_v_degree + m_u_degree || i > m_u_degree ||j > m_v_degree 时, 原则上来说是非法的, 此处赋值为零向量
+    /// @return ENUM_NURBS错误码
+    ENUM_NURBS derivative_on_surface(int n1, int n2, T u, T v, Eigen::MatrixX<Eigen::Vector<T, dim>> &result) const
+    {
+        Eigen::MatrixX<Eigen::Vector<T, point_size>> ration_result(n1 + 1, n2 + 1);
+
+        int uspan = -1;
+        int vspan = -1;
+        find_span<T>(u, u_degree, m_u_knots_vector, uspan);
+        find_span<T>(v, v_degree, m_v_knots_vector, vspan);
+        Eigen::MatrixX<T> nu, nv;
+        ders_basis_funs<T>(uspan, n1, u_degree, u, m_u_knots_vector, nu);
+        ders_basis_funs<T>(vspan, n2, v_degree, v, m_v_knots_vector, nv);
+        Eigen::Matrix<T, point_size,  Eigen::Dynamic> temps;
+        temps.resize(point_size, v_degree + 1);
+        for (int k = 0; k <= n1; ++k)
+        {
+            temps.setConstant(0.0);
+            for (int s = 0; s <= v_degree; ++s)
+            {
+                temps.col(s) = m_control_points[vspan - v_degree + s].block(0, uspan - u_degree, point_size, u_degree + 1) * nu.col(k);
+            }
+            for (int l = 0; l <= n2; ++l)
+            {
+                ration_result(k, l) = temps * nv.col(l);
+            }
+        }
+        result = project_derivs_point<T, is_rational, point_size, -1>::project_point_to_euclidean_space(ration_result);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    /// @brief 计算nurbs surface在参数(u, v)处直到n阶偏导数
+    /// @tparam n1 u向求导最高阶数
+    /// @tparam n2 v向求导最高阶数
+    /// @param u 参数u
+    /// @param v 参数v
+    /// @param result out_put_param result(i, j)表示S(u, v)处的u向i次偏导数, 
+    /// remark : v向j次偏导数;当(i + j) > m_v_degree + m_u_degree || i > m_u_degree ||j > m_v_degree 时, 原则上来说是非法的, 此处赋值为零向量
+    /// @return ENUM_NURBS错误码
+    template<int n1, int n2>
+    ENUM_NURBS derivative_on_surface(T u, T v, Eigen::Matrix<Eigen::Vector<T, dim>, n1 + 1, n2 + 1> &result) const
+    {
+        Eigen::Matrix<Eigen::Vector<T, point_size>, n1 + 1, n2 + 1> ration_result;
+
+        int uspan = -1;
+        int vspan = -1;
+        find_span<T, u_degree>(u, m_u_knots_vector, uspan);
+        find_span<T, v_degree>(v, m_v_knots_vector, vspan);
+        Eigen::Matrix<T, Eigen::Dynamic, n1 + 1> nu;
+        Eigen::Matrix<T, Eigen::Dynamic, n2 + 1> nv;
+        ders_basis_funs<T, u_degree, n1>(uspan, u, m_u_knots_vector, nu);
+        ders_basis_funs<T, v_degree, n2>(vspan, v, m_v_knots_vector, nv);
+        Eigen::Matrix<T, point_size,  Eigen::Dynamic> temps;
+        temps.resize(point_size, v_degree + 1);
+        for (int k = 0; k <= n1; ++k)
+        {
+            temps.setConstant(0.0);
+            for (int s = 0; s <= v_degree; ++s)
+            {
+                temps.col(s) = m_control_points[vspan - v_degree + s].block(0, uspan - u_degree, point_size, u_degree + 1) * nu.col(k);
+            }
+            for (int l = 0; l <= n2; ++l)
+            {
+                ration_result(k, l) = temps * nv.col(l);
+            }
+        }
+        result = project_derivs_point<T, is_rational, point_size, -1>::project_point_to_euclidean_space(ration_result);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+
     // template<int r1, int r2, int s1, int s2, int d>
     // ENUM_NURBS surface_derivs_alg2(T u, T v, Eigen::Matrix<Eigen::Vector<T, dim>, d + 1, d + 1> &SKL)
     // {
@@ -805,6 +883,85 @@ public:
         result = project_derivs_point<T, is_rational, point_size, -1>::project_point_to_euclidean_space(ration_result);
         return ENUM_NURBS::NURBS_SUCCESS;
     }
+
+
+    /// @brief 计算nurbs surface在参数(u, v)处直到n阶偏导数
+    /// @param n1 u向求导最高阶数
+    /// @param n2 v向求导最高阶数
+    /// @param u 参数u
+    /// @param v 参数v
+    /// @param result out_put_param result(i, j)表示S(u, v)处的u向i次偏导数, 
+    /// remark : v向j次偏导数;当(i + j) > m_v_degree + m_u_degree || i > m_u_degree ||j > m_v_degree 时, 原则上来说是非法的, 此处赋值为零向量
+    /// @return ENUM_NURBS错误码
+    ENUM_NURBS derivative_on_surface(int n1, int n2, T u, T v, Eigen::MatrixX<Eigen::Vector<T, dim>> &result) const
+    {
+        Eigen::MatrixX<Eigen::Vector<T, point_size>> ration_result(n1 + 1, n2 + 1);
+
+        int uspan = -1;
+        int vspan = -1;
+        find_span<T>(u, m_u_degree, m_u_knots_vector, uspan);
+        find_span<T>(v, m_v_degree, m_v_knots_vector, vspan);
+        Eigen::MatrixX<T> nu, nv;
+        ders_basis_funs<T>(uspan, n1, m_u_degree, u, m_u_knots_vector, nu);
+        ders_basis_funs<T>(vspan, n2, m_v_degree, v, m_v_knots_vector, nv);
+        Eigen::Matrix<T, point_size,  Eigen::Dynamic> temps;
+        temps.resize(point_size, m_v_degree + 1);
+        for (int k = 0; k <= n1; ++k)
+        {
+            temps.setConstant(0.0);
+            for (int s = 0; s <= m_v_degree; ++s)
+            {
+                temps.col(s) = m_control_points[vspan - m_v_degree + s].block(0, uspan - m_u_degree, point_size, m_u_degree + 1) * nu.col(k);
+            }
+            for (int l = 0; l <= n2; ++l)
+            {
+                ration_result(k, l) = temps * nv.col(l);
+            }
+        }
+        result = project_derivs_point<T, is_rational, point_size, -1>::project_point_to_euclidean_space(ration_result);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    /// @brief 计算nurbs surface在参数(u, v)处直到n阶偏导数
+    /// @tparam n1 u向求导最高阶数
+    /// @tparam n2 v向求导最高阶数
+    /// @param u 参数u
+    /// @param v 参数v
+    /// @param result out_put_param result(i, j)表示S(u, v)处的u向i次偏导数, 
+    /// remark : v向j次偏导数;当(i + j) > m_v_degree + m_u_degree || i > m_u_degree ||j > m_v_degree 时, 原则上来说是非法的, 此处赋值为零向量
+    /// @return ENUM_NURBS错误码
+    template<int n1, int n2>
+    ENUM_NURBS derivative_on_surface(T u, T v, Eigen::Matrix<Eigen::Vector<T, dim>, n1 + 1, n2 + 1> &result) const
+    {
+        Eigen::Matrix<Eigen::Vector<T, point_size>, n1 + 1, n2 + 1> ration_result;
+
+        int uspan = -1;
+        int vspan = -1;
+        find_span<T>(u, m_u_degree, m_u_knots_vector, uspan);
+        find_span<T>(v, m_v_degree, m_v_knots_vector, vspan);
+        Eigen::Matrix<T, Eigen::Dynamic, n1 + 1> nu;
+        Eigen::Matrix<T, Eigen::Dynamic, n2 + 1> nv;
+        ders_basis_funs<T, n1>(uspan, m_u_degree, u, m_u_knots_vector, nu);
+        ders_basis_funs<T, n2>(vspan, m_v_degree, v, m_v_knots_vector, nv);
+        Eigen::Matrix<T, point_size,  Eigen::Dynamic> temps;
+        temps.resize(point_size, m_v_degree + 1);
+        for (int k = 0; k <= n1; ++k)
+        {
+            temps.setConstant(0.0);
+            for (int s = 0; s <= m_v_degree; ++s)
+            {
+                temps.col(s) = m_control_points[vspan - m_v_degree + s].block(0, uspan - m_u_degree, point_size, m_u_degree + 1) * nu.col(k);
+            }
+            for (int l = 0; l <= n2; ++l)
+            {
+                ration_result(k, l) = temps * nv.col(l);
+            }
+        }
+        result = project_derivs_point<T, is_rational, point_size, -1>::project_point_to_euclidean_space(ration_result);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+
 
     ENUM_NURBS tangent_vector_u(double u, double v,  Eigen::Vector<T, dim> &tangent_vector) const
     {

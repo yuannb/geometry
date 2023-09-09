@@ -3008,7 +3008,7 @@ void test_reparameter_1()
     std::vector<Eigen::Vector2d> points2;
     nurbs_curve<double, 1, false, -1, -1> parameter_function(knots_vector, mat1);
     nurbs_curve<double, 2, false, -1, -1> new_curve;
-    curve1.bezier_curve_reparameter(parameter_function, new_curve);
+    curve1.curve_reparameter_with_polynomial(parameter_function, new_curve);
     for (int i = 0; i < 100; ++i)
     {
         Eigen::Vector2d point;
@@ -3197,7 +3197,77 @@ void test_reparameter_4()
     std::vector<Eigen::Vector2d> points2;
     nurbs_curve<double, 1, true, -1, -1> parameter_function(knots_vector, mat1);
     nurbs_curve<double, 2, true, -1, -1> new_curve;
-    curve1.bezier_curve_reparameter(parameter_function, new_curve);
+    curve1.curve_reparameter_with_rational_polynomial(parameter_function, new_curve);
+    for (int i = 0; i < 100; ++i)
+    {
+        Eigen::Vector2d point;
+        curve1.point_on_curve((double)0.01 * i, point);
+        Eigen::Vector2d project_point;
+        new_curve.point_on_curve(0.01 * i, project_point);
+        pointss.push_back(point);
+        points2.push_back(project_point);
+    }
+    //     // // write doc
+    std::string dir("view2.obj");
+    std::ofstream outfile(dir);
+
+    for (auto point : pointss)
+    {
+        outfile << "v " << point[0] << " " <<
+           point[1] << " " << 0 << std::endl;
+    }
+
+    std::string dir2("view.obj");
+    std::ofstream outfile2(dir2);
+
+    for (auto point : points2)
+    {
+        outfile2 << "v " << point[0] << " " <<
+           point[1] << " " << 0 << std::endl;
+    }
+}
+
+void test_reparameter_5()
+{
+    Eigen::Vector<double, 2> v1{0, 0};
+    Eigen::Vector<double, 2> v2{0.3, 0.2};
+    Eigen::Vector<double, 2> v3{1.0 / 2.0, 1};
+    Eigen::Vector<double, 2> v4{0.7, 0.5};
+    Eigen::Vector<double, 2> v5{1, 0};
+    Eigen::Matrix<double, 2, Eigen::Dynamic> mat(2, 5);
+    // Eigen::Matrix<double, 2, Eigen::Dynamic> mat(2, 4);
+    mat.col(0) = v1;
+    mat.col(1) = v2;
+    mat.col(2) = v3;
+    mat.col(3) = v4;
+    mat.col(4) = v5;
+
+    Eigen::Vector<double, 2> v12{0, 1};
+    Eigen::Vector<double, 2> v23{0.4, 2};
+    Eigen::Vector<double, 2> v33{0.8, 2};
+    Eigen::Vector<double, 2> v34{1, 1};
+    Eigen::Matrix<double, 2, Eigen::Dynamic> mat1(2, 3);
+    mat1.col(0) = v12;
+    mat1.col(1) = v23;
+    // mat1.col(2) = v33;
+    mat1.col(2) = v34;
+
+    Eigen::VectorX<double> knots_vector(9);
+    knots_vector << 0, 0, 0, 0, 0.5, 1, 1, 1, 1;
+
+    Eigen::VectorX<double> new_knots_vector(6);
+    new_knots_vector << 0, 0, 0, 1, 1, 1;
+
+    // Eigen::VectorX<double> knots_vector_1(6);
+    // knots_vector_1 << 1, 1, 1, 4, 4, 4;
+    nurbs_curve<double, 2, false, -1, -1> curve1(knots_vector, mat);
+    std::vector<Eigen::Vector2d> pointss;
+    std::vector<Eigen::Vector2d> points2;
+    nurbs_curve<double, 1, true, -1, -1> parameter_function(new_knots_vector, mat1);
+    nurbs_curve<double, 2, true, -1, -1> new_curve;
+    Eigen::VectorX<Eigen::Vector2d> dersss;
+    // curve1.derivative_on_curve(1, 3, dersss);
+    curve1.curve_reparameter_with_rational_polynomial(parameter_function, new_curve);
     for (int i = 0; i < 100; ++i)
     {
         Eigen::Vector2d point;
@@ -3230,7 +3300,7 @@ void test_reparameter_4()
 
 int main()
 {
-    test_reparameter_4();
+    test_reparameter_5();
     return 0;
 }
 

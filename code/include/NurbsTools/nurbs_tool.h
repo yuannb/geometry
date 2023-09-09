@@ -1321,6 +1321,7 @@ template<typename T>
 ENUM_NURBS ders_basis_funs(int i, int n, int degree, T u, const Eigen::Vector<T, Eigen::Dynamic> &knots_vector,
                 Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> &result)
 {
+    int new_n = std::min(n, degree);
     result.resize(degree + 1, n + 1);
     result.setConstant(0.0);
     // 可以将下面left和right的计算改成多线程, 不过节点向量应该不大, 该不该影响应该不大
@@ -1379,7 +1380,7 @@ ENUM_NURBS ders_basis_funs(int i, int n, int degree, T u, const Eigen::Vector<T,
         
         arrays[0].setConstant(0.0);
         arrays[0][0] = 1.0;
-        for (int k = 1; k <= n; ++k)
+        for (int k = 1; k <= new_n; ++k)
         {
             Eigen::Vector<T, Eigen::Dynamic> &current_array = arrays[current_index];
             Eigen::Vector<T, Eigen::Dynamic> &next_array = arrays[next_index];
@@ -2355,12 +2356,10 @@ ENUM_NURBS decompose_curve_to_bezier(int degree, int interval_segment, const Eig
                 {
                     T alpha = alphas[k - s];
                     new_control_points[nb].col(k) = alpha * new_control_points[nb].col(k) + (1.0 - alpha) * new_control_points[nb].col(k - 1);
-                    // std::cout << new_control_points[nb].col(k) << std::endl;
                 }
                 if (b < konts_end_index)
                 {
                     new_control_points[nb + 1].col(r - j) = new_control_points[nb].col(degree);
-                    // std::cout << new_control_points[nb + 1].col(r - j) << std::endl;
                 }
             }
         }
@@ -2369,7 +2368,6 @@ ENUM_NURBS decompose_curve_to_bezier(int degree, int interval_segment, const Eig
         if (b < konts_end_index)
         {
             new_control_points[nb].block(0, degree - mult, point_size, mult + 1) = control_points.block(0, b - mult, point_size, mult + 1);
-            // std::cout << new_control_points[nb].block(0, degree - mult, point_size, mult + 1) << std::endl;
             a = b;
             b += 1;
         }
@@ -2567,17 +2565,17 @@ ENUM_NURBS remove_curve_knots(int index, int count, int degree, int repeat, Eige
     }
     else
     {
-        T w_min = control_points(3, 0);
+        T w_min = control_points(point_size - 1, 0);
         if (w_min <= 0)
             return ENUM_NURBS::NUBRS_WIEGHT_IS_NONPOSITIVE;
-        T p_max = (control_points.block(0, 0, 3, 1) / control_points(3, 0)).norm();
+        T p_max = (control_points.block(0, 0, point_size - 1, 1) / control_points(point_size - 1, 0)).norm();
         for (int col = 1; col < cols; ++col)
         {
-            if (w_min > control_points(3, col))
-                w_min = control_points(3, col);
+            if (w_min > control_points(point_size - 1, col))
+                w_min = control_points(point_size - 1, col);
             if (w_min <= 0)
                 return ENUM_NURBS::NUBRS_WIEGHT_IS_NONPOSITIVE;
-            T temp = (control_points.block(0, col, 3, 1) / control_points(3, col)).norm();
+            T temp = (control_points.block(0, col, point_size - 1, 1) / control_points(point_size - 1, col)).norm();
             if (p_max < temp)
                 p_max = temp;
         }
@@ -2695,17 +2693,17 @@ ENUM_NURBS remove_curve_knots(int index, int count, int repeat, const Eigen::Vec
     }
     else
     {
-        T w_min = control_points(3, 0);
+        T w_min = control_points(point_size - 1, 0);
         if (w_min <= 0)
             return ENUM_NURBS::NUBRS_WIEGHT_IS_NONPOSITIVE;
-        T p_max = (control_points.block(0, 0, 3, 1) / control_points(3, 0)).norm();
+        T p_max = (control_points.block(0, 0, point_size - 1, 1) / control_points(point_size - 1, 0)).norm();
         for (int col = 1; col < cols; ++col)
         {
-            if (w_min > control_points(3, col))
-                w_min = control_points(3, col);
+            if (w_min > control_points(point_size - 1, col))
+                w_min = control_points(point_size - 1, col);
             if (w_min <= 0)
                 return ENUM_NURBS::NUBRS_WIEGHT_IS_NONPOSITIVE;
-            T temp = (control_points.block(0, col, 3, 1) / control_points(3, col)).norm();
+            T temp = (control_points.block(0, col, point_size - 1, 1) / control_points(point_size - 1, col)).norm();
             if (p_max < temp)
                 p_max = temp;
         }
@@ -3440,17 +3438,12 @@ ENUM_NURBS reparameter_bezier_curve(int old_degree, const Eigen::VectorX<T> &old
     Eigen::MatrixX<T> function_low_basis_ders; 
     Eigen::MatrixX<T> function_high_basis_ders;
     ders_basis_funs<T>(function_degree, ml, function_degree, function_knots_vector[0], function_knots_vector, function_low_basis_ders);
-    ders_basis_funs<T>(function_degree, mr, function_degree, function_knots_vector[new_degree + 1], function_knots_vector, function_high_basis_ders);
+    ders_basis_funs<T>(function_degree, mr, function_degree, function_knots_vector[function_degree + 1], function_knots_vector, function_high_basis_ders);
 
     Eigen::Matrix<T, 1, Eigen::Dynamic> function_low_w = function_control_points.block(1, 0, 1, function_degree + 1);
     Eigen::Matrix<T, 1, Eigen::Dynamic> function_high_w = function_control_points.block(1, function_control_points_size - function_degree - 1, 1, function_degree + 1);
 
-    std::cout << function_low_w << std::endl;
-    std::cout << function_low_basis_ders << std::endl;
     Eigen::VectorX<T> hs_low = function_low_w * function_low_basis_ders;
-    std::cout << hs_low << std::endl;
-    std::cout << function_high_w << std::endl;
-    std::cout << function_high_basis_ders << std::endl;
     Eigen::VectorX<T> hs_high = function_high_w * function_high_basis_ders;
     std::vector<Eigen::VectorX<T> > hs_low_vector(2);
     int current_index = 0;
@@ -3460,7 +3453,7 @@ ENUM_NURBS reparameter_bezier_curve(int old_degree, const Eigen::VectorX<T> &old
 
     Eigen::MatrixX<int> Bin = binary_coeff(ml + 1);
 
-    for (int index = 1; index <= function_degree; ++index)
+    for (int index = 2; index <= old_degree; ++index)
     {
         Eigen::VectorX<T>  &current_array = hs_low_vector[current_index];
         Eigen::VectorX<T>  &next_array = hs_low_vector[next_index];
@@ -3473,20 +3466,17 @@ ENUM_NURBS reparameter_bezier_curve(int old_degree, const Eigen::VectorX<T> &old
                 next_array[col] += Bin(col, i) * current_array[i] * hs_low[col - i];
             }
         }
-        std::cout << hs_low_vector[0] << std::endl;
-        std::cout << hs_low_vector[1] << std::endl;
         std::swap(current_index, next_index);
     }
 
     Eigen::VectorX<T> hs_low_p = hs_low_vector[current_index];
-
 
     std::vector<Eigen::VectorX<T> > hs_high_vector(2);
     current_index = 0;
     next_index = 1;
     hs_high_vector[0] = hs_high;
     hs_high_vector[1].resize(mr + 1);
-    for (int index = 1; index <= function_degree; ++index)
+    for (int index = 2; index <= old_degree; ++index)
     {
         Eigen::VectorX<T>  &current_array = hs_high_vector[current_index];
         Eigen::VectorX<T>  &next_array = hs_high_vector[next_index];
@@ -3503,47 +3493,37 @@ ENUM_NURBS reparameter_bezier_curve(int old_degree, const Eigen::VectorX<T> &old
     }
     Eigen::VectorX<T> hs_high_p = hs_high_vector[current_index];
 
-    int new_n = std::min(ml, function_degree);
-    Eigen::VectorX<Eigen::Vector<T, 2>> temp_low(new_n + 1);
+    // int new_n = std::min(ml, function_degree);
+    Eigen::VectorX<Eigen::Vector<T, 2>> temp_low(ml + 1);
 
     Eigen::VectorX<Eigen::Vector<T, 1>> function_low_ders(ml + 1);
     Eigen::VectorX<Eigen::Vector<T, 1>> function_high_ders(mr + 1);
 
-    for (int idx = 0; idx <= new_n; ++idx)
+    for (int idx = 0; idx <= ml; ++idx)
     {
         Eigen::Vector<T, 2> vec = function_control_points.block(0, 0, 2, function_degree + 1) * function_low_basis_ders.col(idx);
         temp_low[idx] = vec;
     }
     Eigen::VectorX<Eigen::Vector<T, 1>> project_point = rat_curve_derivs_project<T, true, 2>::project_point_to_euclidean_space(temp_low);
-    for (int idx = 0; idx <= new_n; ++idx)
+    for (int idx = 0; idx <= ml; ++idx)
         function_low_ders[idx] = project_point[idx];
-    for (int idx = new_n + 1; idx <= ml; ++idx)
-    {
-        function_low_ders[idx][0] = 0;
-    }
 
-    new_n = std::min(mr, function_degree);
-    Eigen::VectorX<Eigen::Vector<T, 2>> temp_high(new_n + 1);
-    for (int idx = 0; idx <= new_n; ++idx)
+    // new_n = std::min(mr, function_degree);
+    Eigen::VectorX<Eigen::Vector<T, 2>> temp_high(mr + 1);
+    for (int idx = 0; idx <= mr; ++idx)
     {
-        Eigen::Vector<T, 2> vec = function_control_points.block(0, 0, 2, function_degree + 1) * function_low_basis_ders.col(idx);
+        Eigen::Vector<T, 2> vec = function_control_points.block(0, function_control_points_size - function_degree - 1, 2, function_degree + 1) * function_high_basis_ders.col(idx);
         temp_high[idx] = vec;
     }
     project_point = rat_curve_derivs_project<T, true, 2>::project_point_to_euclidean_space(temp_high);
-    for (int idx = 0; idx <= new_n; ++idx)
+    for (int idx = 0; idx <= mr; ++idx)
         function_high_ders[idx] = project_point[idx];
-    for (int idx = new_n + 1; idx <= mr; ++idx)
-    {
-        function_high_ders[idx][0] = 0;
-    }
-    
+
     Eigen::VectorX<Eigen::Vector<T, point_size>> ders_low(ml + 1);
     Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> ders_temp;
     ders_basis_funs<T>(old_degree, ml, old_degree, old_knots_vector[0], old_knots_vector, ders_temp);
     for (int idx = 0; idx <= ml; ++idx)
     {
-        std::cout << ders_temp << std::endl;
-        std::cout << old_control_points << std::endl;
         Eigen::Vector<T, point_size> vec = old_control_points.block(0, 0, point_size, old_degree + 1) * ders_temp.col(idx);
         ders_low[idx] = vec;
     } 
@@ -3592,8 +3572,8 @@ ENUM_NURBS reparameter_bezier_curve(int old_degree, const Eigen::VectorX<T> &old
                         coeff1 *= std::pow(function_low_ders[index + 1][0], vec[index]);
                         coeff2 *= std::pow(function_high_ders[index + 1][0], vec[index]);
                     }
-                    ders_s_low[n] += ders_low[j] * (coeff1 / denominator);
-                    ders_s_high[n] += ders_high[j] * (coeff2 / denominator);
+                    ders_s_low[n] += ders_low[j] * (coeff1 / (T)denominator);
+                    ders_s_high[n] += ders_high[j] * (coeff2 / (T)denominator);
                 }
             }   
         }
@@ -3618,7 +3598,7 @@ ENUM_NURBS reparameter_bezier_curve(int old_degree, const Eigen::VectorX<T> &old
                         denominator *= std::tgamma<int>(vec[index] + 1) * std::pow(std::tgamma<int>(index + 2), vec[index]);
                         coeff1 *= std::pow(function_low_ders[index + 1][0], vec[index]);
                     }
-                    ders_s_low[ml] += ders_low[j] * (coeff1 / denominator);
+                    ders_s_low[ml] += ders_low[j] * (coeff1 / (T)denominator);
                 }
             }   
         }
@@ -3630,29 +3610,24 @@ ENUM_NURBS reparameter_bezier_curve(int old_degree, const Eigen::VectorX<T> &old
         hs_ders_s_low[index].setConstant(0.0);
         for (int col = 0; col <= index; ++col)
         {
-            std::cout << ders_s_low[col] << std::endl;
-            std::cout << hs_low_p << std::endl;
             hs_ders_s_low[index] += (Bin(index, col) * hs_low_p[index - col]) * ders_s_low[col];
         }
-        std::cout << hs_ders_s_low[index] << std::endl;
-        std::cout << ders_s_low[index] << std::endl;
     }
 
     Eigen::VectorX<Eigen::Vector<T, point_size>> hs_ders_s_high(mr + 1);
     for (int index = 0; index <= mr; ++index)
     {
         hs_ders_s_high[index].setConstant(0.0);
+
         for (int col = 0; col <= index; ++col)
         {
-            hs_ders_s_high[index] += (Bin(index, col) * hs_low_p[index - col]) * ders_s_high[col];
+            hs_ders_s_high[index] += (Bin(index, col) * hs_high_p[index - col]) * ders_s_high[col];
         }
-        std::cout << hs_ders_s_high[index] << std::endl;
-        std::cout << "*********" << std::endl;
-        std::cout << ders_s_high[index] << std::endl;
     }
 
 
-
+    new_control_points.col(0) = new_control_points.col(0) * hs_low_p[0];
+    new_control_points.col(new_degree) = new_control_points.col(new_degree) * hs_high_p[0];
 
     for (int index = 1; index <= mr; ++index)
     {
@@ -3664,8 +3639,8 @@ ENUM_NURBS reparameter_bezier_curve(int old_degree, const Eigen::VectorX<T> &old
         for (int j = 0; j < index; ++j)
         {
             int coeff1 = (index + j - 1) % 2 == 0 ? 1 : -1;
-            new_control_points.col(index) = new_control_points.col(index) + coeff1 * Bin(index, j) * new_control_points.col(j);
-            new_control_points.col(new_degree - index) = new_control_points.col(new_degree - index) + coeff1 * Bin(index, j) * new_control_points.col(new_degree - j);
+            new_control_points.col(index) = new_control_points.col(index) + (T)coeff1 * Bin(index, j) * new_control_points.col(j);
+            new_control_points.col(new_degree - index) = new_control_points.col(new_degree - index) + (T)coeff1 * Bin(index, j) * new_control_points.col(new_degree - j);
         }
     }
 
@@ -3723,7 +3698,10 @@ ENUM_NURBS merge_two_curve(int left_degree, int right_degree, const Eigen::Vecto
     int left_knots_count = left_knots.size();
     if (std::abs(left_knots[left_knots_count - 1] - right_knots[0]) > eps)
         return ENUM_NURBS::NURBS_ERROR;
-    Eigen::Vector<T, point_size> vec = left_control_points.col(left_knots_count - left_degree - 2) - right_control_points.col(0);
+    Eigen::Vector<T, point_size - 1> v1 = project_point<T, true, point_size>::project_point_to_euclidean_space(left_control_points.col(left_knots_count - left_degree - 2));
+    Eigen::Vector<T, point_size - 1> v2 = project_point<T, true, point_size>::project_point_to_euclidean_space(right_control_points.col(0));
+    // Eigen::Vector<T, point_size> vec = left_control_points.col(left_knots_count - left_degree - 2) - right_control_points.col(0);
+    Eigen::Vector<T, point_size - 1> vec = v1 - v2;
     if (vec.squaredNorm() > eps * eps)
         return ENUM_NURBS::NURBS_ERROR;
     
@@ -3742,8 +3720,8 @@ ENUM_NURBS merge_two_curve(int left_degree, int right_degree, const Eigen::Vecto
     int left_control_points_count = left_knots_count - left_degree - 1;
     int right_control_points_count = right_knots_count - right_degree - 1;
     new_control_points.resize(point_size, right_control_points_count + left_control_points_count - 1);
-    new_control_points.block(0, 0, point_size, left_control_points_count) = left_control_points;
-    new_control_points.block(0, left_control_points_count - 1, point_size, right_control_points_count) = right_control_points;
+    new_control_points.block(0, 0, point_size, left_control_points_count) = left_control_points * right_control_points(point_size - 1, 0);
+    new_control_points.block(0, left_control_points_count - 1, point_size, right_control_points_count) = right_control_points * left_control_points(point_size - 1, left_knots_count - left_degree - 2);
     return ENUM_NURBS::NURBS_SUCCESS;
 
 }
