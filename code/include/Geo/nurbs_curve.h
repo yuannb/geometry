@@ -1469,7 +1469,7 @@ public:
     }
 
 
-    ENUM_NURBS curve_reparameter_with_polynomial(const nurbs_curve<T, 1, false, -1, -1> &reparameter_function,
+    ENUM_NURBS curve_reparameter(const nurbs_curve<T, 1, false, -1, -1> &reparameter_function,
         nurbs_curve<T, dim, is_rational, -1, -1> &new_nurbs)
     {
         std::array<Eigen::Vector<T, 1>, 2> ends_points;
@@ -1653,7 +1653,7 @@ public:
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
-    ENUM_NURBS curve_reparameter_with_rational_polynomial(const nurbs_curve<T, 1, true, -1, -1> &reparameter_function,
+    ENUM_NURBS curve_reparameter(const nurbs_curve<T, 1, true, -1, -1> &reparameter_function,
         nurbs_curve<T, dim, true, -1, -1> &new_nurbs)
     {
         std::array<Eigen::Vector<T, 1>, 2> ends_points;
@@ -1836,6 +1836,69 @@ public:
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
+    // u = f(s) = alpha * s + beta
+    ENUM_NURBS curve_reparameter_with_linear_function(T alpha, T beta,
+        nurbs_curve<T, dim, is_rational, -1, -1> &new_nurbs)
+    {
+        if (alpha == 0)
+            return ENUM_NURBS::NURBS_ERROR;
+        new_nurbs.set_control_points(m_control_points);
+        int knots_vector_size = m_knots_vector.size();
+        Eigen::VectorX<T> new_knots_vector(knots_vector_size);
+        for (int index = 0; index < knots_vector_size; ++index)
+        {
+            new_knots_vector[index] = (m_knots_vector[index] - beta) / alpha;
+        }
+        new_nurbs.set_knots_vector(new_knots_vector);
+        new_nurbs.set_degree(m_degree);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+
+    // s = g(u) = (alpha * u + beta) / (gamma * u + delta)
+    // alpha = a11, beta = a12, gamma = a21, dalta = a22
+    ENUM_NURBS curve_reparameter_with_linear_function(Eigen::Matrix<T, 2, 2> reparameter_function,
+        nurbs_curve<T, dim, is_rational, -1, -1> &new_nurbs)
+    {
+        if (reparameter_function.determinant() < DEFAULT_ERROR)
+            return ENUM_NURBS::NURBS_ERROR;
+
+
+        Eigen::Matrix<T, dim + 1, Eigen::Dynamic> new_control_points;
+        to_ratioanl_contrl_points<T, is_rational, rows>::convert(m_control_points, new_control_points);
+        int knots_vector_size = m_knots_vector.size();
+        Eigen::VectorX<T> new_knots_vector(knots_vector_size);
+
+        new_knots_vector[0] = reparameter_function(0, 0) * m_knots_vector[0] + reparameter_function(0, 1);
+        new_knots_vector[0] /= (reparameter_function(1, 0) * m_knots_vector[0] + reparameter_function(1, 1));
+        int current_index = 0;
+        for (int index = 1; index <  knots_vector_size; ++index)
+        {
+            if (m_knots_vector[index] == m_knots_vector[current_index])
+                new_knots_vector[index] = new_knots_vector[current_index];
+            else
+            {
+                new_knots_vector[index] = reparameter_function(0, 0) * m_knots_vector[index] + reparameter_function(0, 1);
+                new_knots_vector[index] /= (reparameter_function(1, 0) * m_knots_vector[index] + reparameter_function(1, 1));
+                current_index = index;
+            }    
+        }
+        int control_points_size = knots_vector_size - m_degree - 1;
+        for (int index = 0; index < control_points_size; ++index)
+        {
+            T lamda_s = 1.0;
+            for (int j = 1; j <= m_degree; ++j)
+                lamda_s *= (reparameter_function(1, 0) * m_knots_vector[index + j] + reparameter_function(1, 1));
+            new_control_points(dim, index) /= lamda_s;
+            new_control_points.block(0, index, dim, 1) /= lamda_s;
+        }
+        if (new_control_points(dim, 0) < 0)
+            new_control_points.block(dim, 0, 1, control_points_size) = -1.0 * new_control_points.block(dim, 0, 1, control_points_size);
+        new_nurbs.set_control_points(new_control_points);
+        new_nurbs.set_knots_vector(new_knots_vector);
+        new_nurbs.set_degree(m_degree);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
 
 private:
 

@@ -1,7 +1,8 @@
 #pragma once
 #include "nurbs_tool.h"
 #include "bezier_surface.h"
-
+#include "nurbs_curve.h"
+#include <concepts>
 //TODO: U向控制点或者V向控制点个数不固定, 另一个方向固定
 
 /*
@@ -1479,6 +1480,78 @@ public:
         vec[1] = ders_vec(0, 1).dot(point);
         Eigen::JacobiSVD<Eigen::Matrix<T, 2, 2>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(M);
         tangent_on_param_space = matSvd.solve(vec);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    ENUM_NURBS surface_reparameter(const nurbs_curve<T, 1, true, -1, -1> &reparameter_function, ENUM_DIRECTION direction,
+        nurbs_surface<T, dim, -1, -1, -1, -1, true> &new_nurbs_surface)
+    {
+        if (direction == ENUM_DIRECTION::V_DIRECTION)
+            reverse_uv();
+
+        int v_control_points_count = m_control_points.rows();
+        Eigen::VectorX<Eigen::Matrix<T, dim + 1, Eigen::Dynamic>> new_control_points(v_control_points_count);
+        int new_u_degree = m_u_degree * reparameter_function.get_degree();
+        Eigen::VectorX<T> new_u_knots_vector;
+        for (int v_index = 0; v_index < v_control_points_count; ++v_index)
+        {
+            Eigen::Matrix<T, dim + 1, Eigen::Dynamic> rational_control_points;
+            to_ratioanl_contrl_points<T, is_rational, point_size>::convert(m_control_points[v_index], rational_control_points);
+            nurbs_curve<T, dim, true, -1, -1> *rational_nurbs = new nurbs_curve<T, dim, true, -1, -1>(m_u_knots_vector, rational_control_points);
+            nurbs_curve<T, dim, true, -1, -1> *reparamter_nurbs = new nurbs_curve<T, dim, true, -1, -1>();
+            rational_nurbs->curve_reparameter(reparameter_function, *reparamter_nurbs);
+            new_control_points[v_index] = reparamter_nurbs->get_control_points();
+            if (v_index == 0)
+                new_u_knots_vector = reparamter_nurbs->get_knots_vector();
+            delete rational_nurbs;
+            delete reparamter_nurbs;
+        }
+        new_nurbs_surface.set_u_degree(new_u_degree);
+        new_nurbs_surface.set_control_points(new_control_points);
+        new_nurbs_surface.set_v_degree(m_v_degree);
+        new_nurbs_surface.set_uv_knots(new_u_knots_vector, m_v_knots_vector);
+
+        if (direction == ENUM_DIRECTION::V_DIRECTION)
+        {
+            reverse_uv();
+            new_nurbs_surface.reverse_uv();
+        }
+
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    ENUM_NURBS surface_reparameter(const nurbs_curve<T, 1, false, -1, -1> &u_reparameter_function, ENUM_DIRECTION direction,
+        nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> &new_nurbs_surface)
+    {
+        if (direction == ENUM_DIRECTION::V_DIRECTION)
+            reverse_uv();
+
+        int v_control_points_count = m_control_points.rows();
+        Eigen::VectorX<Eigen::Matrix<T, dim + 1, Eigen::Dynamic>> new_control_points(v_control_points_count);
+        int new_u_degree = m_u_degree * reparameter_function.get_degree();
+        Eigen::VectorX<T> new_u_knots_vector;
+        for (int v_index = 0; v_index < v_control_points_count; ++v_index)
+        {
+            nurbs_curve<T, dim, is_rational, -1, -1> *rational_nurbs = new nurbs_curve<T, dim, true, -1, -1>(m_u_knots_vector, m_control_points[v_index]);
+            nurbs_curve<T, dim, is_rational, -1, -1> *reparamter_nurbs = new nurbs_curve<T, dim, true, -1, -1>();
+            rational_nurbs->curve_reparameter(reparameter_function, *reparamter_nurbs);
+            new_control_points[v_index] = reparamter_nurbs->get_control_points();
+            if (v_index == 0)
+                new_u_knots_vector = reparamter_nurbs->get_knots_vector();
+            delete rational_nurbs;
+            delete reparamter_nurbs;
+        }
+        new_nurbs_surface.set_u_degree(new_u_degree);
+        new_nurbs_surface.set_control_points(new_control_points);
+        new_nurbs_surface.set_v_degree(m_v_degree);
+        new_nurbs_surface.set_uv_knots(new_u_knots_vector, m_v_knots_vector);
+
+        if (direction == ENUM_DIRECTION::V_DIRECTION)
+        {
+            reverse_uv();
+            new_nurbs_surface.reverse_uv();
+        }
+
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
