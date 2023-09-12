@@ -1063,57 +1063,73 @@
 //     }
 // }
 
-// void nurbs_surface_point()
-// {
-//     Eigen::VectorX<double> u_knots_vector(6);
-//     u_knots_vector<< 0, 0, 0, 5, 5, 5;
-//     Eigen::VectorX<double> v_knots_vector(6);
-//     v_knots_vector << 0, 0, 0, 3, 3, 3;
-//     Eigen::Matrix<double, 4, Eigen::Dynamic> points1(4, 3);
-//     points1 << 0, 0, 0,
-//                2, 6, 2,
-//                5, 4, 0,
-//                1, 2, 1;
+void nurbs_surface_point()
+{
+    Eigen::VectorX<double> u_knots_vector(10);
+    u_knots_vector<< 0, 0, 0, 1, 2, 3, 4, 5, 5, 5;
+    Eigen::VectorX<double> v_knots_vector(8);
+    v_knots_vector << 0, 0, 0, 1, 2, 3, 3, 3;
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points1(4, 7);
+    points1 <<0, 0, 0, 4, 4, 0, 0,
+              0, 0, 2, 6, 2, 0, 0,
+              0, 0, 4, 8, 4, 0, 0,
+              1, 1, 1, 2, 1, 1, 1;
 
-//     Eigen::Matrix<double, 4, Eigen::Dynamic> points2(4, 3);
-//     points2 << 4, 12, 4,
-//                6, 24, 6,
-//                8, 12, 0,
-//                2, 6,  2;
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points2(4, 7);
+    points2 << 0, 0, 0, 12, 8, 0, 0,
+               0, 0, 6, 24, 6, 0, 0,
+               0, 0, 4, 12, 4, 0, 0,
+               1, 1, 2, 6,  2, 1, 1;
 
-//     Eigen::Matrix<double, 4, Eigen::Dynamic> points3(4, 3);
-//     points3 << 4, 8, 4,
-//                2, 6, 2,
-//                4, 4, 0,
-//                1, 2, 1;
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points3(4, 7);
+    points3 <<0, 0, 0, 4, 4, 0, 0,
+              0, 0, 2, 6, 2, 0, 0,
+              0, 0, 0, 0, 0, 0, 0,
+              1, 1, 1, 2, 1, 1, 1;
 
-//     Eigen::VectorX<Eigen::Matrix<double, 4, Eigen::Dynamic>> control_points(3);
-//     control_points(0) = points1;
-//     control_points(1) = points2;
-//     control_points(2) = points3;
-//     nurbs_surface<double, 3, -1, -1, 2, 2, true> test_surface(u_knots_vector, v_knots_vector, control_points);
-//     std::vector<Eigen::Vector<double, 3>> pointss;
-//     for (int i = 0; i < 100; ++i)
-//     {
-//         for (int j = 0; j < 100; ++j)
-//         {
-//             Eigen::Vector<double, 3> reuslt;
-//             test_surface.point_on_surface(i * 0.05, j * 0.03, reuslt);
-//             pointss.push_back(reuslt);
-//         }
-//     }
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points4(4, 7);
+    points4 <<0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0,
+              1, 1, 1, 1, 1, 1, 1;
 
-//     //     // // write doc
-//     std::string dir1("view.obj");
-//     std::ofstream outfile1(dir1);
-//     int pointsCount = pointss.size();
-//     for (int index = 0; index < pointsCount; ++index)
-//     {
-//         auto point = pointss[index];
-//         outfile1 << "v " << point[0] << " " <<
-//            point[1] << " " << point[2] << std::endl;
-//     }
-// }
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points5(4, 7);
+    points5 <<0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0, 0, 0,
+              1, 1, 1, 1, 1, 1, 1;
+
+    Eigen::VectorX<Eigen::Matrix<double, 4, Eigen::Dynamic>> control_points(5);
+    control_points(0) = points4;
+    control_points(4) = points5;
+    control_points(1) = points1;
+    control_points(2) = points2;
+    control_points(3) = points3;
+    nurbs_surface<double, 3, -1, -1, -1, -1, true> test_surface(u_knots_vector, v_knots_vector, control_points);
+    Eigen::Vector3d vec;
+    test_surface.point_on_surface(5.0 / 2.0, 1, vec);
+    std::vector<Eigen::Vector<double, 3>> pointss;
+    for (int i = 0; i < 100; ++i)
+    {
+        for (int j = 0; j < 100; ++j)
+        {
+            Eigen::Vector<double, 3> reuslt;
+            test_surface.point_on_surface(i * 0.05, j * 0.03, reuslt);
+            pointss.push_back(reuslt);
+        }
+    }
+
+    //     // // write doc
+    std::string dir1("view.obj");
+    std::ofstream outfile1(dir1);
+    int pointsCount = pointss.size();
+    for (int index = 0; index < pointsCount; ++index)
+    {
+        auto point = pointss[index];
+        outfile1 << "v " << point[0] << " " <<
+           point[1] << " " << point[2] << std::endl;
+    }
+}
 
 // void nurbs_surface_point_1()
 // {
@@ -3229,12 +3245,12 @@ void test_reparameter_4()
 
 void test_reparameter_5()
 {
-    Eigen::Vector<double, 2> v1{0, 0};
-    Eigen::Vector<double, 2> v2{0.3, 0.2};
-    Eigen::Vector<double, 2> v3{1.0 / 2.0, 1};
-    Eigen::Vector<double, 2> v4{0.7, 0.5};
-    Eigen::Vector<double, 2> v5{1, 0};
-    Eigen::Matrix<double, 2, Eigen::Dynamic> mat(2, 5);
+    Eigen::Vector<double, 4> v1{0, 0, 0, 1};
+    Eigen::Vector<double, 4> v2{0.3, 0.2, 0.2, 2};
+    Eigen::Vector<double, 4> v3{1.0 / 2.0, 1, 0.5, 3};
+    Eigen::Vector<double, 4> v4{0.7, 0.5,0.7, 2};
+    Eigen::Vector<double, 4> v5{1, 0, 1, 1};
+    Eigen::Matrix<double, 4, Eigen::Dynamic> mat(4, 5);
     mat.col(0) = v1;
     mat.col(1) = v2;
     mat.col(2) = v3;
@@ -3256,17 +3272,17 @@ void test_reparameter_5()
 
     Eigen::VectorX<double> new_knots_vector(6);
     new_knots_vector << 0, 0, 0, 1, 1, 1;
-    nurbs_curve<double, 2, false, -1, -1> curve1(knots_vector, mat);
-    std::vector<Eigen::Vector2d> pointss;
-    std::vector<Eigen::Vector2d> points2;
+    nurbs_curve<double, 3, true, -1, -1> curve1(knots_vector, mat);
+    std::vector<Eigen::Vector3d> pointss;
+    std::vector<Eigen::Vector3d> points2;
     nurbs_curve<double, 1, true, -1, -1> parameter_function(new_knots_vector, mat1);
-    nurbs_curve<double, 2, true, -1, -1> new_curve;
+    nurbs_curve<double, 3, true, -1, -1> new_curve;
     curve1.curve_reparameter(parameter_function, new_curve);
     for (int i = 0; i < 100; ++i)
     {
-        Eigen::Vector2d point;
+        Eigen::Vector3d point;
         curve1.point_on_curve((double)0.01 * i, point);
-        Eigen::Vector2d project_point;
+        Eigen::Vector3d project_point;
         new_curve.point_on_curve(0.01 * i, project_point);
         pointss.push_back(point);
         points2.push_back(project_point);
@@ -3278,7 +3294,7 @@ void test_reparameter_5()
     for (auto point : pointss)
     {
         outfile << "v " << point[0] << " " <<
-           point[1] << " " << 0 << std::endl;
+           point[1] << " " << point[2] << std::endl;
     }
 
     std::string dir2("view.obj");
@@ -3287,7 +3303,7 @@ void test_reparameter_5()
     for (auto point : points2)
     {
         outfile2 << "v " << point[0] << " " <<
-           point[1] << " " << 0 << std::endl;
+           point[1] << " " << point[2] << std::endl;
     }
 }
 
@@ -3386,20 +3402,19 @@ void nurbs_surface_reparameter_1()
     nurbs_surface<double, 3, -1, -1, -1, -1, true> test_surface(u_knots_vector, v_knots_vector, control_points);
     
     Eigen::Vector<double, 2> v12{0, 1};
-    Eigen::Vector<double, 2> v23{1.2, 2};
-    Eigen::Vector<double, 2> v34{3, 1};
-    Eigen::Matrix<double, 2, Eigen::Dynamic> mat1(2, 3);
+    // Eigen::Vector<double, 2> v23{1.2, 2};
+    Eigen::Vector<double, 2> v34{10, 2};
+    Eigen::Matrix<double, 2, Eigen::Dynamic> mat1(2, 2);
     mat1.col(0) = v12;
-    mat1.col(1) = v23;
-    mat1.col(2) = v34;
+    // mat1.col(1) = v23;
+    mat1.col(1) = v34;
 
-    Eigen::VectorX<double> new_knots_vector(6);
-    new_knots_vector << 0, 0, 0, 1, 1, 1;
+    Eigen::VectorX<double> new_knots_vector(4);
+    new_knots_vector << 0,  0, 1, 1;
     nurbs_curve<double, 1, true, -1, -1> parameter_function(new_knots_vector, mat1);
 
     nurbs_surface<double, 3, -1, -1, -1, -1, true> new_nurbs_surface;
-    test_surface.surface_reparameter(parameter_function, ENUM_DIRECTION::V_DIRECTION, new_nurbs_surface);
-
+    test_surface.surface_reparameter(parameter_function, ENUM_DIRECTION::U_DIRECTION, new_nurbs_surface);
 
     std::vector<Eigen::Vector<double, 3>> pointss;
     for (int i = 0; i < 100; ++i)
@@ -3407,7 +3422,7 @@ void nurbs_surface_reparameter_1()
         for (int j = 0; j < 100; ++j)
         {
             Eigen::Vector<double, 3> reuslt;
-            new_nurbs_surface.point_on_surface(i * 0.05, j * 0.01, reuslt);
+            new_nurbs_surface.point_on_surface(i * 0.01, j * 0.03, reuslt);
             pointss.push_back(reuslt);
         }
     }
@@ -3445,6 +3460,97 @@ void nurbs_surface_reparameter_1()
            point[1] << " " << point[2] << std::endl;
     }
 }
+
+
+
+void nurbs_surface_reparameter_2()
+{
+    Eigen::VectorX<double> u_knots_vector(7);
+    u_knots_vector<< 0, 0, 0, 2.3, 5, 5, 5;
+    Eigen::VectorX<double> v_knots_vector(7);
+    v_knots_vector << 0, 0, 0, 1.333, 3, 3, 3;
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points1(4, 4);
+    points1 << 0, 0, 0, 0,
+               2, 6, 2, 8,
+               5, 4, 0, 2,
+               1, 2, 1, 2;
+
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points2(4, 4);
+    points2 << 4, 12, 4, 8,
+               6, 24, 10, 28,
+               8, 12, 0, 0,
+               2, 6,  2, 4;
+
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points3(4, 4);
+    points3 << 4, 8, 4, 12,
+               2, 6, 4, 12,
+               4, 4, 0, -3,
+               1, 2, 1, 3;
+
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points4(4, 4);
+    points4 << 4, 8, 4, 12,
+               2, 6, 4, 12,
+               4, 8, 4, 12,
+               1, 2, 1, 3;
+
+    Eigen::VectorX<Eigen::Matrix<double, 4, Eigen::Dynamic>> control_points(4);
+    control_points(0) = points1;
+    control_points(1) = points2;
+    control_points(2) = points3;
+    control_points(3) = points4;
+    nurbs_surface<double, 3, -1, -1, -1, -1, true> test_surface(u_knots_vector, v_knots_vector, control_points);
+    
+    nurbs_surface<double, 3, -1, -1, -1, -1, true> new_nurbs_surface;
+    Eigen::Matrix<double, 2, 2> parameter_function;
+    parameter_function << 2, 1, 3, 2;
+    test_surface.surface_reparameter_with_linear_function(parameter_function, ENUM_DIRECTION::V_DIRECTION, new_nurbs_surface);
+
+
+    std::vector<Eigen::Vector<double, 3>> pointss;
+    for (int i = 0; i < 100; ++i)
+    {
+        for (int j = 0; j < 100; ++j)
+        {
+            Eigen::Vector<double, 3> reuslt;
+            new_nurbs_surface.point_on_surface(i * 0.05, 0.5 + j * 0.00147, reuslt);
+            pointss.push_back(reuslt);
+        }
+    }
+
+    std::vector<Eigen::Vector<double, 3>> pointss2;
+    for (int i = 0; i < 100; ++i)
+    {
+        for (int j = 0; j < 100; ++j)
+        {
+            Eigen::Vector<double, 3> reuslt;
+            test_surface.point_on_surface(i * 0.05, j * 0.03, reuslt);
+            pointss2.push_back(reuslt);
+        }
+    }
+
+
+    //     // // write doc
+    std::string dir1("view.obj");
+    std::ofstream outfile1(dir1);
+    int pointsCount = pointss.size();
+    for (int index = 0; index < pointsCount; ++index)
+    {
+        auto point = pointss[index];
+        outfile1 << "v " << point[0] << " " <<
+           point[1] << " " << point[2] << std::endl;
+    }
+
+    std::string dir2("view1.obj");
+    std::ofstream outfile2(dir2);
+    pointsCount = pointss2.size();
+    for (int index = 0; index < pointsCount; ++index)
+    {
+        auto point = pointss2[index];
+        outfile2 << "v " << point[0] << " " <<
+           point[1] << " " << point[2] << std::endl;
+    }
+}
+
 
 int main()
 {

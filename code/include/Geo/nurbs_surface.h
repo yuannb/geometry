@@ -691,6 +691,24 @@ public:
         m_v_degree = m_v_knots_vector.size() - m_control_points.rows() - 1;
         m_u_degree = m_u_knots_vector.size() - m_control_points[0].cols() - 1;
     }
+    nurbs_surface(const nurbs_surface &surf)
+    {
+        m_u_degree = surf.get_u_degree();
+        m_v_degree = surf.get_v_degree();
+        m_control_points = surf.get_control_points();
+        m_u_knots_vector = surf.get_u_knots();
+        m_v_knots_vector = surf.get_v_knots();
+    }
+
+    int get_u_degree() const 
+    {
+        return m_u_degree;
+    }
+
+    int get_v_degree() const
+    {
+        return m_v_degree;
+    }
 
     ENUM_NURBS reverse_uv()
     {
@@ -746,6 +764,11 @@ public:
     {
         m_control_points = points;
         return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> get_control_points() const
+    {
+        return m_control_points;
     }
 
     /// @brief 计算曲面上的点
@@ -810,7 +833,6 @@ public:
         Eigen::MatrixX<T> nu, nv;
         ders_basis_funs<T>(uspan, du, m_u_degree, u, m_u_knots_vector, nu);
         ders_basis_funs<T>(vspan, dv, m_v_degree, v, m_v_knots_vector, nv);
-        // std::cout << nv << std::endl;
         Eigen::Matrix<T, point_size,  Eigen::Dynamic> temps;
         temps.resize(point_size, m_v_degree + 1);
         for (int k = 0; k <= du; ++k)
@@ -1486,20 +1508,21 @@ public:
     ENUM_NURBS surface_reparameter(const nurbs_curve<T, 1, true, -1, -1> &reparameter_function, ENUM_DIRECTION direction,
         nurbs_surface<T, dim, -1, -1, -1, -1, true> &new_nurbs_surface)
     {
+        nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> *copy_surface = new nurbs_surface<T, dim, -1, -1, -1, -1, is_rational>(*this);
         if (direction == ENUM_DIRECTION::V_DIRECTION)
-            reverse_uv();
-
-        int v_control_points_count = m_control_points.rows();
+            copy_surface->reverse_uv();
+        Eigen::VectorX<Eigen::Matrix<T, point_size, -1>> copy_nurbs_surface_control_points = copy_surface->get_control_points();
+        int v_control_points_count = copy_nurbs_surface_control_points.rows();
         Eigen::VectorX<Eigen::Matrix<T, dim + 1, Eigen::Dynamic>> new_control_points(v_control_points_count);
-        int new_u_degree = m_u_degree * reparameter_function.get_degree();
+        int new_u_degree = copy_surface->get_u_degree() * reparameter_function.get_degree();
         Eigen::VectorX<T> new_u_knots_vector;
         for (int v_index = 0; v_index < v_control_points_count; ++v_index)
         {
             Eigen::Matrix<T, dim + 1, Eigen::Dynamic> rational_control_points;
-            to_ratioanl_contrl_points<T, is_rational, point_size>::convert(m_control_points[v_index], rational_control_points);
-            nurbs_curve<T, dim, true, -1, -1> *rational_nurbs = new nurbs_curve<T, dim, true, -1, -1>(m_u_knots_vector, rational_control_points);
+            to_ratioanl_contrl_points<T, is_rational, point_size>::convert(copy_nurbs_surface_control_points[v_index], rational_control_points);
+            nurbs_curve<T, dim, true, -1, -1> *rational_nurbs = new nurbs_curve<T, dim, true, -1, -1>(copy_surface->get_u_knots(), rational_control_points);
             nurbs_curve<T, dim, true, -1, -1> *reparamter_nurbs = new nurbs_curve<T, dim, true, -1, -1>();
-            rational_nurbs->curve_reparameter(reparameter_function, *reparamter_nurbs);
+            ENUM_NURBS flag = rational_nurbs->curve_reparameter(reparameter_function, *reparamter_nurbs);
             new_control_points[v_index] = reparamter_nurbs->get_control_points();
             if (v_index == 0)
                 new_u_knots_vector = reparamter_nurbs->get_knots_vector();
@@ -1508,31 +1531,34 @@ public:
         }
         new_nurbs_surface.set_u_degree(new_u_degree);
         new_nurbs_surface.set_control_points(new_control_points);
-        new_nurbs_surface.set_v_degree(m_v_degree);
-        new_nurbs_surface.set_uv_knots(new_u_knots_vector, m_v_knots_vector);
+        new_nurbs_surface.set_v_degree(copy_surface->get_v_degree());
+        new_nurbs_surface.set_uv_knots(new_u_knots_vector, copy_surface->get_v_knots());
 
+        delete copy_surface;
         if (direction == ENUM_DIRECTION::V_DIRECTION)
         {
-            reverse_uv();
             new_nurbs_surface.reverse_uv();
         }
 
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
-    ENUM_NURBS surface_reparameter(const nurbs_curve<T, 1, false, -1, -1> &u_reparameter_function, ENUM_DIRECTION direction,
-        nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> &new_nurbs_surface)
+    ENUM_NURBS surface_reparameter(const nurbs_curve<T, 1, false, -1, -1> &reparameter_function, ENUM_DIRECTION direction,
+        nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> &new_nurbs_surface) const
     {
+        nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> *copy_surface = new nurbs_surface<T, dim, -1, -1, -1, -1, is_rational>(*this);
         if (direction == ENUM_DIRECTION::V_DIRECTION)
-            reverse_uv();
+            copy_surface.reverse_uv();
 
-        int v_control_points_count = m_control_points.rows();
+        Eigen::VectorX<Eigen::Matrix<T, point_size, -1>> copy_nurbs_surface_control_points = copy_surface->get_control_points();
+        int v_control_points_count = copy_nurbs_surface_control_points.rows();
         Eigen::VectorX<Eigen::Matrix<T, dim + 1, Eigen::Dynamic>> new_control_points(v_control_points_count);
-        int new_u_degree = m_u_degree * reparameter_function.get_degree();
+        int new_u_degree = copy_surface->get_u_degree() * reparameter_function.get_degree();
         Eigen::VectorX<T> new_u_knots_vector;
+        Eigen::VectorX<T> copy_surface_u_knots = copy_surface->get_u_knots();
         for (int v_index = 0; v_index < v_control_points_count; ++v_index)
         {
-            nurbs_curve<T, dim, is_rational, -1, -1> *rational_nurbs = new nurbs_curve<T, dim, true, -1, -1>(m_u_knots_vector, m_control_points[v_index]);
+            nurbs_curve<T, dim, is_rational, -1, -1> *rational_nurbs = new nurbs_curve<T, dim, true, -1, -1>(copy_surface_u_knots, copy_nurbs_surface_control_points[v_index]);
             nurbs_curve<T, dim, is_rational, -1, -1> *reparamter_nurbs = new nurbs_curve<T, dim, true, -1, -1>();
             rational_nurbs->curve_reparameter(reparameter_function, *reparamter_nurbs);
             new_control_points[v_index] = reparamter_nurbs->get_control_points();
@@ -1543,15 +1569,92 @@ public:
         }
         new_nurbs_surface.set_u_degree(new_u_degree);
         new_nurbs_surface.set_control_points(new_control_points);
-        new_nurbs_surface.set_v_degree(m_v_degree);
-        new_nurbs_surface.set_uv_knots(new_u_knots_vector, m_v_knots_vector);
+        new_nurbs_surface.set_v_degree(copy_surface->get_v_degree());
+        new_nurbs_surface.set_uv_knots(new_u_knots_vector, copy_surface->get_v_knots());
+        delete copy_surface;
 
         if (direction == ENUM_DIRECTION::V_DIRECTION)
         {
-            reverse_uv();
             new_nurbs_surface.reverse_uv();
         }
 
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+
+    // u = f(s) = alpha * s + beta
+    ENUM_NURBS surface_reparameter_with_linear_function(T alpha, T beta, ENUM_DIRECTION direction, 
+        nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> &new_nurbs_surface) const
+    {
+        new_nurbs_surface.set_control_points(m_control_points);
+        Eigen::VectorX<T> old_knots_vector = direction == ENUM_DIRECTION::U_DIRECTION ? m_u_knots_vector : m_v_knots_vector;
+        int old_knots_vector_size = old_knots_vector.size();
+        Eigen::VectorX<T> new_knots_vector(old_knots_vector_size);
+        new_knots_vector[0] = (old_knots_vector[0] - beta) / alpha;
+        int current_index = 0;
+        for (int index = 1; index < old_knots_vector_size; ++index)
+        {
+            if (old_knots_vector[index] != old_knots_vector[current_index])
+            {
+                new_knots_vector[index] = (old_knots_vector[index] - beta) / alpha;
+                current_index = index;
+            }
+            else
+            {
+                new_knots_vector[index] = new_knots_vector[current_index];
+            }
+        }
+        new_nurbs_surface.set_uv_degree(m_u_degree, m_v_degree);
+        if (direction == ENUM_DIRECTION::U_DIRECTION)
+        {
+            new_nurbs_surface.set_uv_knots(new_knots_vector, m_v_knots_vector);
+        }
+        else
+        {
+            new_nurbs_surface.set_uv_knots(m_u_knots_vector, m_v_knots_vector);
+        }
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    // s = g(u) = (alpha * u + beta) / (gamma * u + delta)
+    // alpha = a11, beta = a12, gamma = a21, dalta = a22
+    ENUM_NURBS surface_reparameter_with_linear_function(Eigen::Matrix<T, 2, 2> reparameter_function, ENUM_DIRECTION direction,
+        nurbs_surface<T, dim, -1, -1, -1, -1, true> &new_nurbs_surface) const
+    {
+        if (reparameter_function.determinant() < DEFAULT_ERROR)
+            return ENUM_NURBS::NURBS_ERROR;
+
+        nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> *copy_surface = new nurbs_surface<T, dim, -1, -1, -1, -1, is_rational>(*this);
+
+        if (direction == ENUM_DIRECTION::V_DIRECTION)
+            copy_surface->reverse_uv();
+
+        int v_control_points_count = copy_surface->m_control_points.rows();
+        Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> copy_surface_control_points = copy_surface->get_control_points();
+        Eigen::VectorX<Eigen::Matrix<T, dim + 1, Eigen::Dynamic>> new_control_points(v_control_points_count);
+        Eigen::VectorX<T> new_u_knots_vector;
+        for (int v_index = 0; v_index < v_control_points_count; ++v_index)
+        {
+            Eigen::Matrix<T, dim + 1, Eigen::Dynamic> rational_control_points;
+            to_ratioanl_contrl_points<T, is_rational, point_size>::convert(copy_surface_control_points[v_index], rational_control_points);
+            nurbs_curve<T, dim, true, -1, -1> *rational_nurbs = new nurbs_curve<T, dim, true, -1, -1>(m_u_knots_vector, rational_control_points);
+            nurbs_curve<T, dim, true, -1, -1> *reparamter_nurbs = new nurbs_curve<T, dim, true, -1, -1>();
+            rational_nurbs->curve_reparameter_with_linear_function(reparameter_function, *reparamter_nurbs);
+            new_control_points[v_index] = reparamter_nurbs->get_control_points();
+            if (v_index == 0)
+                new_u_knots_vector = reparamter_nurbs->get_knots_vector();
+            delete rational_nurbs;
+            delete reparamter_nurbs;
+        }
+        new_nurbs_surface.set_u_degree(copy_surface->get_u_degree());
+        new_nurbs_surface.set_control_points(new_control_points);
+        new_nurbs_surface.set_v_degree(copy_surface->get_v_degree());
+        new_nurbs_surface.set_uv_knots(new_u_knots_vector, copy_surface->get_v_knots());
+        delete copy_surface;
+        if (direction == ENUM_DIRECTION::V_DIRECTION)
+        {
+            new_nurbs_surface.reverse_uv();
+        }
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 

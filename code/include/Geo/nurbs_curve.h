@@ -980,7 +980,7 @@ public:
 
 
 
-    int is_include_konts(T u, T eps = 0.0)
+    int is_include_konts(T u, T eps = 0.0) const
     {
         int knots_size = m_knots_vector.size();
         for (int index = 0; index < knots_size; ++index)
@@ -1470,7 +1470,7 @@ public:
 
 
     ENUM_NURBS curve_reparameter(const nurbs_curve<T, 1, false, -1, -1> &reparameter_function,
-        nurbs_curve<T, dim, is_rational, -1, -1> &new_nurbs)
+        nurbs_curve<T, dim, is_rational, -1, -1> &new_nurbs) const
     {
         std::array<Eigen::Vector<T, 1>, 2> ends_points;
         int knots_vector_size = m_knots_vector.size();
@@ -1654,7 +1654,7 @@ public:
     }
 
     ENUM_NURBS curve_reparameter(const nurbs_curve<T, 1, true, -1, -1> &reparameter_function,
-        nurbs_curve<T, dim, true, -1, -1> &new_nurbs)
+        nurbs_curve<T, dim, true, -1, -1> &new_nurbs) const
     {
         std::array<Eigen::Vector<T, 1>, 2> ends_points;
         int knots_vector_size = m_knots_vector.size();
@@ -1838,7 +1838,7 @@ public:
 
     // u = f(s) = alpha * s + beta
     ENUM_NURBS curve_reparameter_with_linear_function(T alpha, T beta,
-        nurbs_curve<T, dim, is_rational, -1, -1> &new_nurbs)
+        nurbs_curve<T, dim, is_rational, -1, -1> &new_nurbs) const
     {
         if (alpha == 0)
             return ENUM_NURBS::NURBS_ERROR;
@@ -1858,7 +1858,7 @@ public:
     // s = g(u) = (alpha * u + beta) / (gamma * u + delta)
     // alpha = a11, beta = a12, gamma = a21, dalta = a22
     ENUM_NURBS curve_reparameter_with_linear_function(Eigen::Matrix<T, 2, 2> reparameter_function,
-        nurbs_curve<T, dim, is_rational, -1, -1> &new_nurbs)
+        nurbs_curve<T, dim, true, -1, -1> &new_nurbs) const
     {
         if (reparameter_function.determinant() < DEFAULT_ERROR)
             return ENUM_NURBS::NURBS_ERROR;
@@ -1903,7 +1903,7 @@ public:
 private:
 
     ENUM_NURBS bezier_curve_reparameter(const nurbs_curve<T, 1, false, -1, -1> &reparameter_function,
-        nurbs_curve<T, dim, is_rational, -1, -1> &new_nurbs)
+        nurbs_curve<T, dim, is_rational, -1, -1> &new_nurbs) const
     {
         std::array<Eigen::Vector<T, 1>, 2> ends_points;
         int knots_vector_size = m_knots_vector.size();
@@ -1951,7 +1951,7 @@ private:
     }
 
     ENUM_NURBS bezier_curve_reparameter(const nurbs_curve<T, 1, true, -1, -1> &reparameter_function,
-        nurbs_curve<T, dim, true, -1, -1> &new_nurbs)
+        nurbs_curve<T, dim, true, -1, -1> &new_nurbs) const 
     {
         Eigen::Matrix<T, dim + 1, Eigen::Dynamic> rational_control_points;
         to_ratioanl_contrl_points<T, is_rational, rows>::convert(m_control_points, rational_control_points);

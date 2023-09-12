@@ -3698,10 +3698,7 @@ ENUM_NURBS merge_two_curve(int left_degree, int right_degree, const Eigen::Vecto
     int left_knots_count = left_knots.size();
     if (std::abs(left_knots[left_knots_count - 1] - right_knots[0]) > eps)
         return ENUM_NURBS::NURBS_ERROR;
-    Eigen::Vector<T, point_size - 1> v1 = project_point<T, true, point_size>::project_point_to_euclidean_space(left_control_points.col(left_knots_count - left_degree - 2));
-    Eigen::Vector<T, point_size - 1> v2 = project_point<T, true, point_size>::project_point_to_euclidean_space(right_control_points.col(0));
-    // Eigen::Vector<T, point_size> vec = left_control_points.col(left_knots_count - left_degree - 2) - right_control_points.col(0);
-    Eigen::Vector<T, point_size - 1> vec = v1 - v2;
+    Eigen::Vector<T, point_size> vec = left_control_points.col(left_knots_count - left_degree - 2) - right_control_points.col(0);
     if (vec.squaredNorm() > eps * eps)
         return ENUM_NURBS::NURBS_ERROR;
     
@@ -3720,8 +3717,10 @@ ENUM_NURBS merge_two_curve(int left_degree, int right_degree, const Eigen::Vecto
     int left_control_points_count = left_knots_count - left_degree - 1;
     int right_control_points_count = right_knots_count - right_degree - 1;
     new_control_points.resize(point_size, right_control_points_count + left_control_points_count - 1);
-    new_control_points.block(0, 0, point_size, left_control_points_count) = left_control_points * right_control_points(point_size - 1, 0);
-    new_control_points.block(0, left_control_points_count - 1, point_size, right_control_points_count) = right_control_points * left_control_points(point_size - 1, left_knots_count - left_degree - 2);
+    //对于曲线来说, 控制点乘不成系数都是可以的，但是对于曲面来说就不可以了，因为对于曲面来说，固定u或者v, 对任意的j, 需要算出来的N_ip * P_ij和原本需要
+    //的值相差相同的倍数。这个bug简直是太有教训的意义了
+    new_control_points.block(0, 0, point_size, left_control_points_count) = left_control_points;// * right_control_points(point_size - 1, 0);
+    new_control_points.block(0, left_control_points_count - 1, point_size, right_control_points_count) = right_control_points;// * left_control_points(point_size - 1, left_knots_count - left_degree - 2);
     return ENUM_NURBS::NURBS_SUCCESS;
 
 }
