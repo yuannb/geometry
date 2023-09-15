@@ -2,7 +2,9 @@
 #include "nurbs_tool.h"
 #include "bezier_curve.h"
 #include <array>
+#include "curve.h"
 // #include "ThreadPool.h"
+
 
 /// @brief nurbs curve class
 /// @tparam T : double float int ...
@@ -11,7 +13,7 @@
 /// @tparam points_count : 控制点个数
 /// @tparam degree : nurbs的阶数
 template<typename T, int dim, bool is_rational, int points_count, int degree>
-class nurbs_curve
+class nurbs_curve : public curve<nurbs_curve<T, dim, is_rational, points_count, degree>>
 {
     static int constexpr order = degree + 1;
     static int constexpr rows = is_rational ? dim + 1 : dim;
@@ -448,7 +450,7 @@ public:
 };
 
 template<typename T, int dim, bool is_rational, int degree>
-class nurbs_curve<T, dim, is_rational, -1, degree>
+class nurbs_curve<T, dim, is_rational, -1, degree> : public curve<nurbs_curve<T, dim, is_rational, -1, degree>>
 {
     static int constexpr order = degree + 1;
     static int constexpr rows = is_rational ? dim + 1 : dim;
@@ -897,12 +899,16 @@ public:
 /// @tparam dim 
 /// @tparam is_rational 
 template<typename T, int dim, bool is_rational>
-class nurbs_curve<T, dim, is_rational, -1, -1>
+class nurbs_curve<T, dim, is_rational, -1, -1> : public curve<nurbs_curve<T, dim, is_rational, -1, -1>>
 {
+
+private:
     static int constexpr rows = is_rational ? dim + 1 : dim;
     int m_degree;
     Eigen::Vector<T, Eigen::Dynamic> m_knots_vector; //degree + 1 + points_count
     Eigen::Matrix<T, rows, Eigen::Dynamic> m_control_points; //(rows, points_count)
+
+
 public:
     nurbs_curve() = default;
     nurbs_curve(const Eigen::Vector<T, Eigen::Dynamic> &knots_vector,
@@ -919,6 +925,7 @@ public:
         m_degree = nurbs_curve_to_copy.get_degree();
         m_control_points = nurbs_curve_to_copy.get_control_points();
     }
+
 
 
     ENUM_NURBS get_ends_point(std::array<Eigen::Vector<T, dim>, 2> &points) const
@@ -1900,6 +1907,29 @@ public:
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
+
+    ENUM_NURBS curve_reverse()
+    {
+        int knots_vector_size = m_knots_vector.size();
+        Eigen::VectorX<T> new_knots_vector(knots_vector_size);
+        int control_points_count = knots_vector_size - m_degree - 1;
+        Eigen::Matrix<T, rows, Eigen::Dynamic> new_control_points;
+        new_control_points.resize(rows, control_points_count);
+        T interval_begin = m_knots_vector[0];
+        T interval_end = m_knots_vector[knots_vector_size - 1];
+        for (int index = 0; index < knots_vector_size; ++index)
+        {
+            new_knots_vector[index] = interval_end + interval_begin - m_knots_vector[knots_vector_size - index - 1];
+        }
+        for (int index = 0; index < control_points_count; ++index)
+        {
+            new_control_points.col(index) = m_control_points.col(control_points_count - index - 1);
+        }
+        m_knots_vector = new_knots_vector;
+        m_control_points = new_control_points;
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
 private:
 
     ENUM_NURBS bezier_curve_reparameter(const nurbs_curve<T, 1, false, -1, -1> &reparameter_function,
@@ -1993,4 +2023,13 @@ private:
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
+};
+
+template<typename T, int dim, bool is_rational, int points_count, int degree>
+struct geo_traits<nurbs_curve<T, dim, is_rational, points_count, degree> >
+{
+    static constexpr int point_size = is_rational ? dim + 1 : dim;
+    using type = nurbs_curve<T, dim, is_rational, points_count, degree>;
+    using point_number_type = T;
+    using point_type = typename  Eigen::Vector<T, dim> ;
 };

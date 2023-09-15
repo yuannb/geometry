@@ -16,6 +16,17 @@
 #define MAX_ITERATE_STEP    1e-3
 #define INDEX_IS_OUTSIDE_OF_KNOTS_VECTOR    -1
 
+template<typename T>
+struct Interval
+{
+    Eigen::Vector2<T> m_interval;
+    Interval() = default;
+    T get_low() const { return m_interval[0]; }
+    T get_high() const { return m_interval[1]; }
+};
+
+
+
 enum ENUM_DIRECTION
 {
     U_DIRECTION = 0,
@@ -3724,3 +3735,60 @@ ENUM_NURBS merge_two_curve(int left_degree, int right_degree, const Eigen::Vecto
     return ENUM_NURBS::NURBS_SUCCESS;
 
 }
+
+//变换矩阵的元素类型本应为int, 但是Eigen库不支持不同模板之间的乘法, 因此改成T
+template<typename T>
+ENUM_NURBS bezier_to_power_matrix(int degree, Eigen::MatrixX<T> &mat)
+{
+    mat.resize(degree + 1, degree + 1);
+    mat.setConstant(0.0);
+    mat(0, 0) = 1.0;
+    mat(degree, degree) = 1.0;
+
+    Eigen::MatrixX<int> Bin = binary_coeff(degree + 1);
+
+    if (degree % 2 == 0)
+        mat(0, degree) = 1.0;
+    else
+        mat(0, degree) = -1.0;
+
+    T sign = -1.0;
+    for (int i = 1; i < degree; ++i)
+    {
+        mat(i, i) = Bin(i, degree);
+        mat(0, i) = mat(degree - i, degree) = sign * mat(i, i);
+        sign = -sign;
+    }
+
+    int k1 = (degree + 1) / 2;
+    int pk = degree - 1;
+    for (int k = 1; k < k1; ++k)
+    {
+        sign = -1.0;
+        for (int j = k + 1; j <= pk; ++j)
+        {
+            mat(k, j) = mat(degree - j, pk) = sign * Bin(degree, k) * Bin(degree - k, j - k);
+            sign = -sign;
+        }
+        pk -= 1;
+    }
+
+    return ENUM_NURBS::NURBS_SUCCESS;
+}
+
+template<typename T>
+ENUM_NURBS reparameter_matrix_of_p_degree(int p, T c, T d, Eigen::MatrixX<T> &mat)
+{
+    mat.resize(p + 1, p + 1);
+    mat.setConstant(0.0);
+    Eigen::MatrixX<int> Bin = binary_coeff(p + 1);
+    for (int i = 0; i <= p; ++i)
+    {
+        for (int j = i; j <= p; ++j)
+        {
+            mat(j, i) = Bin(j, i) * std::pow(c, i) * std::pow(d, j - i);
+        }
+    }
+    return ENUM_NURBS::NURBS_SUCCESS;
+}
+

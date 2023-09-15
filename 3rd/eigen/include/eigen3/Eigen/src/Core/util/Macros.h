@@ -1178,8 +1178,8 @@ namespace Eigen {
 #define EIGEN_CWISE_BINARY_RETURN_TYPE(LHS,RHS,OPNAME) \
     CwiseBinaryOp< \
       EIGEN_CAT(EIGEN_CAT(internal::scalar_,OPNAME),_op)< \
-          typename internal::traits<LHS>::Scalar, \
-          typename internal::traits<RHS>::Scalar \
+          typename internal::geo_traits<LHS>::Scalar, \
+          typename internal::geo_traits<RHS>::Scalar \
       >, \
       const LHS, \
       const RHS \
@@ -1197,11 +1197,11 @@ namespace Eigen {
   (Eigen::internal::has_ReturnType<Eigen::ScalarBinaryOpTraits<TYPEA,TYPEB,EIGEN_CAT(EIGEN_CAT(Eigen::internal::scalar_,OPNAME),_op)<TYPEA,TYPEB>  > >::value)
 
 #define EIGEN_EXPR_BINARYOP_SCALAR_RETURN_TYPE(EXPR,SCALAR,OPNAME) \
-  CwiseBinaryOp<EIGEN_CAT(EIGEN_CAT(internal::scalar_,OPNAME),_op)<typename internal::traits<EXPR>::Scalar,SCALAR>, const EXPR, \
+  CwiseBinaryOp<EIGEN_CAT(EIGEN_CAT(internal::scalar_,OPNAME),_op)<typename internal::geo_traits<EXPR>::Scalar,SCALAR>, const EXPR, \
                 const typename internal::plain_constant_type<EXPR,SCALAR>::type>
 
 #define EIGEN_SCALAR_BINARYOP_EXPR_RETURN_TYPE(SCALAR,EXPR,OPNAME) \
-  CwiseBinaryOp<EIGEN_CAT(EIGEN_CAT(internal::scalar_,OPNAME),_op)<SCALAR,typename internal::traits<EXPR>::Scalar>, \
+  CwiseBinaryOp<EIGEN_CAT(EIGEN_CAT(internal::scalar_,OPNAME),_op)<SCALAR,typename internal::geo_traits<EXPR>::Scalar>, \
                 const typename internal::plain_constant_type<EXPR,SCALAR>::type, const EXPR>
 
 #define EIGEN_MAKE_SCALAR_BINARY_OP_ONTHERIGHT(METHOD,OPNAME) \

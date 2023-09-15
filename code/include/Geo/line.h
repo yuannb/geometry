@@ -1,7 +1,7 @@
 #pragma once
 #include "curve.h"
 
-class line : curve
+class line : old_curve
 {
 private:
     Eigen::Vector3d startPoint;

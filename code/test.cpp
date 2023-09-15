@@ -3461,8 +3461,6 @@ void nurbs_surface_reparameter_1()
     }
 }
 
-
-
 void nurbs_surface_reparameter_2()
 {
     Eigen::VectorX<double> u_knots_vector(7);
@@ -3551,10 +3549,67 @@ void nurbs_surface_reparameter_2()
     }
 }
 
+void test_curve_reverse_1()
+{
+    Eigen::Vector<double, 3> v1{0, 0, 1};
+    Eigen::Vector<double, 3> v2{0.3, 0.2, 0.5};
+    Eigen::Vector<double, 3> v3{1.0 / 2.0, 1, 2};
+    Eigen::Vector<double, 3> v4{0.7, 0.5, 3};
+    Eigen::Vector<double, 3> v5{1, 0, 0.5};
+    Eigen::Vector<double, 3> v6{1.2, -0.3, 1};
+    Eigen::Matrix<double, 3, Eigen::Dynamic> mat(3, 6);
+    mat.col(0) = v1;
+    mat.col(1) = v2;
+    mat.col(2) = v3;
+    mat.col(3) = v4;
+    mat.col(4) = v5;
+    mat.col(5) = v6;
+
+
+    Eigen::VectorX<double> knots_vector(10);
+    knots_vector << 0, 0, 0, 0, 0.3, 0.7, 1, 1, 1, 1;
+
+
+    nurbs_curve<double, 2, true, -1, -1> *curve1 = new nurbs_curve<double, 2, true, -1, -1>(knots_vector, mat);
+    std::vector<Eigen::Vector2d> pointss;
+    std::vector<Eigen::Vector2d> points2;
+    nurbs_curve<double, 2, true, -1, -1> new_curve(*curve1);
+    new_curve.curve_reverse();
+    for (int i = 0; i < 70; ++i)
+    {
+        Eigen::Vector2d point;
+        (static_cast<curve<nurbs_curve<double, 2, true, -1, -1>> *>(curve1))->point_on_curve(0.01 * i, point);
+        Eigen::Vector2d project_point;
+        new_curve.point_on_curve(0.01 * i, project_point);
+        pointss.push_back(point);
+        points2.push_back(project_point);
+    }
+    delete curve1;
+    //     // // write doc
+    std::string dir("view2.obj");
+    std::ofstream outfile(dir);
+
+    for (auto point : pointss)
+    {
+        outfile << "v " << point[0] << " " <<
+           point[1] << " " << 0 << std::endl;
+    }
+
+    std::string dir2("view.obj");
+    std::ofstream outfile2(dir2);
+
+    for (auto point : points2)
+    {
+        outfile2 << "v " << point[0] << " " <<
+           point[1] << " " << 0 << std::endl;
+    }
+}
+
 
 int main()
 {
-    nurbs_surface_reparameter_1();
+
+    test_curve_reverse_1();
     return 0;
 }
 

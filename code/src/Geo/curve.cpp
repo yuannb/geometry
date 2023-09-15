@@ -1,9 +1,9 @@
 #include "curve.h"
 
-curve::curve(/* args */)
+old_curve::old_curve(/* args */)
 {
 }
 
-curve::~curve()
+old_curve::~old_curve()
 {
 }

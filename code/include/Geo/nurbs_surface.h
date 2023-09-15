@@ -1522,7 +1522,7 @@ public:
             to_ratioanl_contrl_points<T, is_rational, point_size>::convert(copy_nurbs_surface_control_points[v_index], rational_control_points);
             nurbs_curve<T, dim, true, -1, -1> *rational_nurbs = new nurbs_curve<T, dim, true, -1, -1>(copy_surface->get_u_knots(), rational_control_points);
             nurbs_curve<T, dim, true, -1, -1> *reparamter_nurbs = new nurbs_curve<T, dim, true, -1, -1>();
-            ENUM_NURBS flag = rational_nurbs->curve_reparameter(reparameter_function, *reparamter_nurbs);
+            rational_nurbs->curve_reparameter(reparameter_function, *reparamter_nurbs);
             new_control_points[v_index] = reparamter_nurbs->get_control_points();
             if (v_index == 0)
                 new_u_knots_vector = reparamter_nurbs->get_knots_vector();
@@ -1657,6 +1657,39 @@ public:
         }
         return ENUM_NURBS::NURBS_SUCCESS;
     }
+
+    ENUM_NURBS surface_reverse(ENUM_DIRECTION direction)
+    {
+        if (direction == ENUM_DIRECTION::V_DIRECTION)
+            reverse_uv();
+        
+        int v_control_point_count = m_control_points.rows();
+        int u_control_point_count = m_control_points[0].cols();
+        int u_knots_vector_count = m_u_knots_vector.size();
+        Eigen::VectorX<T> new_knots_vector(u_knots_vector_count);
+        T interval_begin = m_u_knots_vector[0];
+        T interval_end = m_u_knots_vector[u_knots_vector_count - 1];
+        Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> new_control_points(v_control_point_count);
+        for (int index = 0; index < u_knots_vector_count; ++index)
+        {
+            new_knots_vector[index] = interval_end + interval_begin - m_u_knots_vector[u_knots_vector_count - index - 1];
+        }
+        for (int v_index = 0; v_index < v_control_point_count; ++v_index)
+        {
+            for (int index = 0; index < u_control_point_count; ++index)
+            {
+                new_control_points[index].col(index) = m_control_points[index].col(u_control_point_count - index - 1);
+            }
+        }
+        m_control_points = new_control_points;
+        m_u_knots_vector = new_knots_vector;
+
+        if (direction == ENUM_DIRECTION::V_DIRECTION)
+            reverse_uv();
+
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
 
 };
 

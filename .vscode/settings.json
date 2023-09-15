@@ -66,6 +66,7 @@
     },
     "cmake.enabledOutputParsers": [],
     "cmake.exportCompileCommandsFile": true,
+    "C_Cpp.errorSquiggles": "disabled",
     // "cmake.sourceDirectory": "C:/Users/Administrator/Desktop/workbench/code",
     // "cmake.configureOnOpen": false,
 }
