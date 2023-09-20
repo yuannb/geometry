@@ -2325,7 +2325,7 @@ ENUM_NURBS refine_knots_vector_curve(const Eigen::Vector<T, knots_vector_size> &
 /// @param interval_segment nurbs节点矢量区间的个数(不算0长度区间)
 /// @param knots_vector 节点矢量
 /// @param control_points 控制点
-/// @param new_knots_vector out_put_param 新的节点矢量, 要确保new_control_points的行数是正确的
+/// @param new_knots_vector out_put_param 新的节点矢量, 要确保new_control_points的行数是正确的(此参数待删除)
 /// @param new_control_points out_put_param 新的控制点
 /// @return ENUM_NURBS错误码
 template<typename T, int point_size>
@@ -2514,6 +2514,25 @@ ENUM_NURBS decompose_curve_to_bezier(int interval_segment, const Eigen::Vector<T
     return ENUM_NURBS::NURBS_SUCCESS;
 }
 
+
+template<typename T>
+ENUM_NURBS get_all_defference_knots(int degree, const Eigen::VectorX<T> &knots_vector, std::vector<T> &knots)
+{
+    knots.clear();
+    int knots_count = knots_vector.size();
+    knots_count -= degree;
+    T current_knots = knots_vector[0];
+    knots.push_back(current_knots);
+    for (int index = degree + 1; index < knots_count; ++index)
+    {
+        if (current_knots != knots_vector[index])
+        {
+            current_knots = knots_vector[index];
+            knots.push_back(current_knots);
+        }
+    }
+    return ENUM_NURBS::NURBS_SUCCESS;
+}
 
 template<typename T>
 ENUM_NURBS find_interval_segment_count(int degree, const Eigen::VectorX<T> &knots_vector, int &count)
@@ -3755,7 +3774,7 @@ ENUM_NURBS bezier_to_power_matrix(int degree, Eigen::MatrixX<T> &mat)
     T sign = -1.0;
     for (int i = 1; i < degree; ++i)
     {
-        mat(i, i) = Bin(i, degree);
+        mat(i, i) = Bin(degree, i);
         mat(0, i) = mat(degree - i, degree) = sign * mat(i, i);
         sign = -sign;
     }

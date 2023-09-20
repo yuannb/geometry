@@ -1,9 +1,9 @@
 #include "surface.h"
 
-surface::surface()
+old_surface::old_surface()
 {
 }
 
-surface::~surface()
+old_surface::~old_surface()
 {
 }

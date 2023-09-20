@@ -15,6 +15,8 @@
 #include "bezier_surface.h"
 #include "nurbs_surface.h"
 #include "time.h"
+#include "polynomial_curve.h"
+#include "convert_nubrs_with_polynomial.h"
 // using namespace std;
 
 // void test_DeCasteljaul_t()
@@ -3578,7 +3580,9 @@ void test_curve_reverse_1()
     for (int i = 0; i < 70; ++i)
     {
         Eigen::Vector2d point;
-        (static_cast<curve<nurbs_curve<double, 2, true, -1, -1>> *>(curve1))->point_on_curve(0.01 * i, point);
+        curve<nurbs_curve<double, 2, true, -1, -1>> * curve2 = (static_cast<curve<nurbs_curve<double, 2, true, -1, -1>> *>(curve1));
+        
+        curve2->point_on_curve(0.01 * i, point);
         Eigen::Vector2d project_point;
         new_curve.point_on_curve(0.01 * i, project_point);
         pointss.push_back(point);
@@ -3606,10 +3610,177 @@ void test_curve_reverse_1()
 }
 
 
+void test_nurbs_to_polynomial_1()
+{
+    Eigen::Vector<double, 3> v1{0, 0, 1};
+    Eigen::Vector<double, 3> v2{0.3, 0.2, 0.5};
+    Eigen::Vector<double, 3> v3{1.0 / 2.0, 1, 2};
+    Eigen::Vector<double, 3> v4{0.7, 0.5, 3};
+    Eigen::Vector<double, 3> v5{1, 0, 0.5};
+    Eigen::Vector<double, 3> v6{1.2, -0.3, 1};
+    Eigen::Matrix<double, 3, Eigen::Dynamic> mat(3, 6);
+    mat.col(0) = v1;
+    mat.col(1) = v2;
+    mat.col(2) = v3;
+    mat.col(3) = v4;
+    mat.col(4) = v5;
+    mat.col(5) = v6;
+
+
+    Eigen::VectorX<double> knots_vector(10);
+    knots_vector << 0, 0, 0, 0, 0.3, 0.7, 1, 1, 1, 1;
+
+
+    nurbs_curve<double, 2, true, -1, -1> *curve1 = new nurbs_curve<double, 2, true, -1, -1>(knots_vector, mat);
+    std::vector<Eigen::Vector2d> pointss;
+    std::vector<std::vector<Eigen::Vector2d>> points2(3);
+    std::vector<polynomial_curve<double, 2, true, -1, -1>*> poly_curves(3);
+    convert_nubrs_to_polynomial(*curve1, poly_curves);
+    for (int i = 0; i < 100; ++i)
+    {
+        Eigen::Vector2d point, p1, p2, p3;
+        (static_cast<curve<nurbs_curve<double, 2, true, -1, -1>> *>(curve1))->point_on_curve(0.01 * i, point);
+        pointss.push_back(point);
+        poly_curves[0]->point_on_curve(0.003 * i, p1);
+        poly_curves[1]->point_on_curve(0.3 +  0.004 * i, p2);
+        poly_curves[2]->point_on_curve(0.7 + 0.003 * i, p3);
+        points2[0].push_back(p1);
+        points2[1].push_back(p2);
+        points2[2].push_back(p3);
+    }
+    delete curve1;
+    delete poly_curves[0];
+    delete poly_curves[1];
+    delete poly_curves[2];
+
+    //     // // write doc
+    std::string dir("view.obj");
+    std::ofstream outfile(dir);
+
+    for (auto point : pointss)
+    {
+        outfile << "v " << point[0] << " " <<
+           point[1] << " " << 0 << std::endl;
+    }
+
+    for (int index = 0; index < 3; ++index)
+    {
+        std::string dir2("view" + std::to_string(index) + ".obj");
+        std::ofstream outfile2(dir2);
+        for (auto point : points2[index])
+        {
+            outfile2 << "v " << point[0] << " " <<
+            point[1] << " " << 0 << std::endl;
+        }
+    }
+
+}
+
+void nurbs_surface_to_polynomial_1()
+{
+    Eigen::VectorX<double> u_knots_vector(7);
+    u_knots_vector<< 0, 0, 0, 2.5, 5, 5, 5;
+    Eigen::VectorX<double> v_knots_vector(7);
+    v_knots_vector << 0, 0, 0, 1.5, 3, 3, 3;
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points1(4, 4);
+    points1 << 0, 0, 0, 0,
+               2, 6, 2, 8,
+               5, 4, 0, 2,
+               1, 2, 1, 2;
+
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points2(4, 4);
+    points2 << 4, 12, 4, 8,
+               6, 24, 10, 28,
+               8, 12, 0, 0,
+               2, 6,  2, 4;
+
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points3(4, 4);
+    points3 << 4, 8, 4, 12,
+               2, 6, 4, 12,
+               4, 4, 0, -3,
+               1, 2, 1, 3;
+
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points4(4, 4);
+    points4 << 4, 8, 4, 12,
+               2, 6, 4, 12,
+               4, 8, 4, 12,
+               1, 2, 1, 3;
+
+    Eigen::VectorX<Eigen::Matrix<double, 4, Eigen::Dynamic>> control_points(4);
+    control_points(0) = points1;
+    control_points(1) = points2;
+    control_points(2) = points3;
+    control_points(3) = points4;
+    nurbs_surface<double, 3, -1, -1, -1, -1, true> test_surface(u_knots_vector, v_knots_vector, control_points);
+    Eigen::Vector<double, 2> insert_knots{1.25, 3.75};
+    Eigen::Vector<double, 2> insert_knots_v{0.75, 2.25};
+    test_surface.refine_knots_vector(insert_knots, ENUM_DIRECTION::U_DIRECTION);
+    test_surface.refine_knots_vector(insert_knots_v, ENUM_DIRECTION::V_DIRECTION);
+    Eigen::MatrixX<polynomial_surface<double, 3, -1, -1, true> *> bezier_surfaces;
+    // Eigen::MatrixX<nurbs_surface<double, 3, -1, -1,-1, -1, true> *> bezier_surfaces;
+    convert_nubrs_to_polynomial(test_surface, bezier_surfaces);
+    // test_surface.decompose_to_bezier(bezier_surfaces);
+    Eigen::Matrix<std::vector<Eigen::Vector3d>, 4, 4>  pointss;
+    for (int j = 0; j < 4; ++j)
+    {
+        for (int i = 0; i < 4; ++i)
+        {
+            for (int k = 0; k <= 100; ++k)
+            {
+                for (int l = 0; l <= 100; ++l)
+                {
+                    Eigen::Vector3d point;
+                    bezier_surfaces(i, j)->point_on_surface(1.25 * i + 0.0125 * k, 0.75 * j + 0.0075 * l, point);
+                    pointss(i, j).push_back(point);
+                }
+            }
+        }
+    }
+
+    std::vector<Eigen::Vector3d> pss;
+
+    for (int k = 0; k <= 100; ++k)
+    {
+        for (int l = 0; l <= 100; ++l)
+        {
+            Eigen::Vector3d point;
+            test_surface.point_on_surface(0.05 * k, 0.03 * l, point);
+            pss.push_back(point);
+        }
+    }
+
+    for (int i = 0; i < 4; ++i)
+    {
+        for (int j = 0; j < 4; ++j)
+        {
+            //     // // write doc
+            std::string dir("view" + std::to_string(i * 4 + j) + ".obj");
+            std::ofstream outfile(dir);
+            for (auto point : pointss(i, j))
+            {
+                outfile << "v " << point[0] << " " <<
+                point[1] << " " << point[2] << std::endl;
+            }
+            outfile.close();
+        }
+
+    }
+
+    std::string dir2("view.obj");
+    std::ofstream outfile2(dir2);
+    for (auto point : pss)
+    {
+        outfile2 << "v " << point[0] << " " <<
+        point[1] << " " << point[2] << std::endl;
+    }
+    outfile2.close();
+}
+
+
 int main()
 {
 
-    test_curve_reverse_1();
+    nurbs_surface_to_polynomial_1();
     return 0;
 }
 

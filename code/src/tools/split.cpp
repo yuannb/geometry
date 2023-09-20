@@ -622,7 +622,7 @@ void split(std::shared_ptr<Solid> S, Eigen::Vector4d &SP, std::shared_ptr<Solid>
 		Eigen::Vector4d eq;
 		faceeq(f->flout.get(), eq);
 		std::shared_ptr<plane> p = std::make_shared<plane>(eq);
-		f->surf = std::static_pointer_cast<surface>(p);
+		f->surf = std::static_pointer_cast<old_surface>(p);
 	}
 	getmaxnames(S->solidno);
 	std::unordered_set<std::shared_ptr<Vertex>> soov = splitgenerate(S, SP);

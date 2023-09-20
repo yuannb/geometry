@@ -8,7 +8,7 @@
 #include <iosfwd>
 #include "params.h"
 
-class surface;
+class old_surface;
 class face : public std::enable_shared_from_this<face>
 {
 public:
@@ -25,7 +25,7 @@ public:
     std::weak_ptr<Solid> fsolid; // back pointer to solid
     std::shared_ptr<Loop> flout;  // pointer to outer loop
     std::shared_ptr<Loop> floops; // pointer to list of loops
-    std::shared_ptr<surface> surf; //face equation
+    std::shared_ptr<old_surface> surf; //face equation
     std::shared_ptr<Face> nextf;  // pointer to next face
     std::weak_ptr<Face> prevf;  // pointer to previous face
 };

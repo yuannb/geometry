@@ -2,7 +2,7 @@
 #include <Eigen/Dense>
 #include "surface.h"
 
-class plane : public surface
+class plane : public old_surface
 {
 public:
     Eigen::Vector4d equation;

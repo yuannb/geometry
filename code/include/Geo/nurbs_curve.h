@@ -908,7 +908,6 @@ private:
     Eigen::Vector<T, Eigen::Dynamic> m_knots_vector; //degree + 1 + points_count
     Eigen::Matrix<T, rows, Eigen::Dynamic> m_control_points; //(rows, points_count)
 
-
 public:
     nurbs_curve() = default;
     nurbs_curve(const Eigen::Vector<T, Eigen::Dynamic> &knots_vector,
@@ -926,6 +925,14 @@ public:
         m_control_points = nurbs_curve_to_copy.get_control_points();
     }
 
+
+    ENUM_NURBS get_ends_knots(std::array<T, 2> &ends_knots) const
+    {
+        int konts_size = m_knots_vector.size();
+        ends_knots[0] = m_knots_vector[0];
+        ends_knots[1] = m_knots_vector[konts_size - 1];
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
 
 
     ENUM_NURBS get_ends_point(std::array<Eigen::Vector<T, dim>, 2> &points) const
@@ -1250,7 +1257,7 @@ public:
     /// @brief 将nurbs曲线分解成bezier曲线
     /// @param bezier_curves 分解的bezier曲线, 内存用户释放
     /// @return ENUM_NURBS错误码
-    ENUM_NURBS decompose_to_bezier(std::vector<bezier_curve<T, dim, is_rational, -1> *> &bezier_curves)
+    ENUM_NURBS decompose_to_bezier(std::vector<bezier_curve<T, dim, is_rational, -1> *> &bezier_curves) const
     {
         Eigen::VectorX<T> new_knots_vector;
         Eigen::VectorX<Eigen::Matrix<T, rows, Eigen::Dynamic>> new_control_points;
@@ -1272,7 +1279,7 @@ public:
     /// @brief 将nurbs曲线分解成bezier曲线
     /// @param bezier_curves 分解的bezier曲线, 内存用户释放
     /// @return ENUM_NURBS错误码
-    ENUM_NURBS decompose_to_bezier(std::vector<nurbs_curve<T, dim, is_rational, -1, -1> *> &nurbs_curves)
+    ENUM_NURBS decompose_to_bezier(std::vector<nurbs_curve<T, dim, is_rational, -1, -1> *> &nurbs_curves) const
     {
         Eigen::VectorX<T> new_knots_vector;
         Eigen::VectorX<Eigen::Matrix<T, rows, Eigen::Dynamic>> new_control_points;
@@ -1454,7 +1461,7 @@ public:
 
 
     ENUM_NURBS parallel_projection(const Eigen::Vector<T, dim> &reference_point, const Eigen::Vector<T, dim> &normal, 
-        const Eigen::Vector<T, dim> &projection_direction, nurbs_curve<T, dim, is_rational, -1, -1> &project_nurbs)
+        const Eigen::Vector<T, dim> &projection_direction, nurbs_curve<T, dim, is_rational, -1, -1> &project_nurbs) const
     {
         Eigen::Matrix<T, rows, Eigen::Dynamic> new_control_points;
         prallel_projection_curve<T, dim, is_rational>::parallel_projection(reference_point, normal, projection_direction, m_control_points, new_control_points);
@@ -1465,7 +1472,7 @@ public:
     }
 
     ENUM_NURBS perspective_projection(const Eigen::Vector<T, dim> &reference_point, const Eigen::Vector<T, dim> &normal, 
-        const Eigen::Vector<T, dim> &eye, nurbs_curve<T, dim, true, -1, -1> &project_nurbs)
+        const Eigen::Vector<T, dim> &eye, nurbs_curve<T, dim, true, -1, -1> &project_nurbs) const
     {
         Eigen::Matrix<T, dim + 1, Eigen::Dynamic> new_control_points;
         perspective_projection_curve<T, dim, is_rational>::perspective_projection(reference_point, normal, eye, m_control_points, new_control_points);
@@ -2033,3 +2040,28 @@ struct geo_traits<nurbs_curve<T, dim, is_rational, points_count, degree> >
     using point_number_type = T;
     using point_type = typename  Eigen::Vector<T, dim> ;
 };
+
+
+template<typename T, int dim, bool is_rational>
+ENUM_NURBS save_obj(const nurbs_curve<T, dim, is_rational, -1, -1> &nurbs_cur, const std::string &path)
+{
+    std::array<T, 2> end_konts;
+    nurbs_cur.get_ends_knots(end_konts); 
+    T step = (end_konts[1] - end_konts[0]) / 100.0;
+    std::vector<Eigen::Vector<T, dim>> points;
+    for (int u_index = 0; u_index < 100; ++u_index)
+    {
+        Eigen::Vector<T, dim> point;
+        nurbs_cur.point_on_curve(u_index * step + end_konts[0], point);
+        points.push_back(point);
+    }
+    std::ofstream outfile2(path);
+    for (auto point : points)
+    {
+        outfile2 << "v " << point[0] << " " <<
+        point[1] << " " << point[2] << std::endl;
+    }
+    outfile2.close();
+    return ENUM_NURBS::NURBS_SUCCESS;
+}
+

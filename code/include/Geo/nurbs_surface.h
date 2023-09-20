@@ -3,6 +3,7 @@
 #include "bezier_surface.h"
 #include "nurbs_curve.h"
 #include <concepts>
+#include "surface.h"
 //TODO: U向控制点或者V向控制点个数不固定, 另一个方向固定
 
 /*
@@ -671,7 +672,7 @@ public:
 /// @tparam dim : nurbs所在欧氏空间的维数
 /// @tparam is_rational : 是否时有理nurbs
 template<typename T, int dim, bool is_rational>
-class nurbs_surface<T, dim, -1, -1, -1, -1, is_rational>
+class nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> : public surface<nurbs_surface<T, dim, -1, -1, -1, -1, is_rational>>
 {
 private:
     static constexpr int point_size = is_rational ? dim + 1 : dim;
@@ -691,6 +692,27 @@ public:
         m_v_degree = m_v_knots_vector.size() - m_control_points.rows() - 1;
         m_u_degree = m_u_knots_vector.size() - m_control_points[0].cols() - 1;
     }
+
+    nurbs_surface(const Eigen::VectorX<T> &u_knots_vector, const Eigen::VectorX<T> &v_knots_vector,
+       const Eigen::MatrixX<Eigen::Vector<T, point_size>> &control_points) :
+       m_u_knots_vector(u_knots_vector), m_v_knots_vector(v_knots_vector)
+    {
+        int rows = control_points.rows();
+        int cols = control_points.cols();
+        m_control_points.resize(rows);
+        for (int row_index = 0; row_index < rows; ++row_index)
+        {
+            m_control_points[row_index].resize(point_size, cols);
+            for (int col_index = 0; col_index < cols; ++col_index)
+            {
+                m_control_points[row_index].col(col_index) = control_points(row_index, col_index);
+            }
+        }
+        m_v_degree = m_v_knots_vector.size() - m_control_points.rows() - 1;
+        m_u_degree = m_u_knots_vector.size() - m_control_points[0].cols() - 1;
+    }
+
+
     nurbs_surface(const nurbs_surface &surf)
     {
         m_u_degree = surf.get_u_degree();
@@ -746,6 +768,17 @@ public:
         return ENUM_NURBS::NURBS_SUCCESS;
     }
     
+
+    ENUM_NURBS get_u_different_knots(std::vector<T> &vec) const
+    {
+        return  get_all_defference_knots(m_u_degree, m_u_knots_vector, vec);
+    }
+
+    ENUM_NURBS get_v_different_knots(std::vector<T> &vec) const
+    {
+        return  get_all_defference_knots(m_v_degree, m_v_knots_vector, vec);
+    }
+
     ENUM_NURBS set_uv_degree(int u_degree, int v_degree)
     {
         m_u_degree = u_degree;
@@ -763,6 +796,28 @@ public:
     ENUM_NURBS set_control_points(Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> &points)
     {
         m_control_points = points;
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    ENUM_NURBS get_control_points_row(int row, Eigen::Matrix<T, point_size, Eigen::Dynamic> &points) const
+    {
+        if (row > m_control_points.rows() || row < 0)
+            return ENUM_NURBS::NURBS_ERROR;
+        points = m_control_points[row];
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    ENUM_NURBS get_control_points_col(int col, Eigen::Matrix<T, point_size, Eigen::Dynamic> &points) const
+    {
+        int cols = m_control_points[0].cols();
+        if (col > cols || col < 0)
+            return ENUM_NURBS::NURBS_ERROR;
+        int rows = m_control_points.rows();
+        points.resize(point_size, rows);
+        for (int index = 0; index < rows; ++index)
+        {
+            points.col(index) = m_control_points[index].col(col);
+        }
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
@@ -1089,7 +1144,7 @@ public:
     /// @brief 将nurbs曲线分解成bezier曲面
     /// @param bezier_curves 分解的bezier曲线, 内存用户释放
     /// @return ENUM_NURBS错误码
-    ENUM_NURBS decompose_to_bezier(Eigen::MatrixX<bezier_surface<T, dim,-1, -1, is_rational> *> &bezier_surfaces)
+    ENUM_NURBS decompose_to_bezier(Eigen::MatrixX<bezier_surface<T, dim,-1, -1, is_rational> *> &bezier_surfaces) const
     {
         //先u向加细成bezier
         Eigen::VectorX<T> new_knots_vector;
@@ -1172,6 +1227,131 @@ public:
             for (int j = 0; j < v_interval_count; ++j)
             {
                 bezier_surface<T, dim, -1, -1, is_rational> *bs = new bezier_surface<T, dim, -1, -1, is_rational>(bezier_surface_control_points(i, j));
+                bezier_surfaces(i, j) = bs;
+            }
+        }
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+
+    /// @brief 将nurbs曲线分解成bezier曲面
+    /// @param bezier_curves 分解的bezier曲线, 内存用户释放
+    /// @return ENUM_NURBS错误码
+    ENUM_NURBS decompose_to_bezier(Eigen::MatrixX<nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> *> &bezier_surfaces) const
+    {
+        //先u向加细成bezier
+        Eigen::VectorX<T> new_knots_vector;
+        Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> new_control_points;
+        int u_interval_count = -1, v_interval_count = -1;
+        find_interval_segment_count<T>(m_u_degree, m_u_knots_vector, u_interval_count);
+        find_interval_segment_count<T>(m_v_degree, m_v_knots_vector, v_interval_count);
+        new_control_points.resize(u_interval_count);
+        int rows_count = m_control_points.rows() - 1;
+
+        //(B_ij)(k,l)表示第(i, j)段beizer曲面的第(k, l)个控制点
+        Eigen::MatrixX<Eigen::MatrixX<Eigen::Vector<T, point_size>>> bezier_surface_control_points(u_interval_count, v_interval_count);
+        for (int i = 0; i < u_interval_count; ++i)
+        {
+            for (int j = 0; j < v_interval_count; ++j)
+            {
+                bezier_surface_control_points(i,j).resize(m_v_degree + 1, m_u_degree + 1);
+            }
+        }
+        
+        //T[i].col(j)表示第i列曲线的第j个控制点
+        Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> temp_control_points;
+        int cols_count = u_interval_count * m_u_degree;
+        temp_control_points.resize(cols_count + 1);
+        int rsize = m_v_knots_vector.size() - m_v_degree - 1;
+        for (int i = 0; i <= cols_count; ++i)
+        {
+            temp_control_points[i].resize(point_size, rsize);
+        }
+
+        for (int index = 0; index <= rows_count; ++index)
+        {
+            decompose_curve_to_bezier<T, point_size>(m_u_degree, u_interval_count, m_u_knots_vector, m_control_points[index], new_knots_vector, new_control_points);
+            for (int i = 0; i < u_interval_count; ++i)
+            {
+                for (int k = 0; k < m_u_degree; ++k)
+                {       
+                    temp_control_points[i * m_u_degree + k].col(index) = new_control_points[i].col(k);
+                }
+            }
+            temp_control_points[cols_count].col(index) = new_control_points[u_interval_count - 1].col(m_u_degree);           
+        }
+
+        //在加细v向
+        Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> v_new_control_points;
+        v_new_control_points.resize(v_interval_count);
+        for (int index = 0; index < cols_count; ++index)
+        {
+            int br = index % m_v_degree;
+            int r = index / m_v_degree;
+            decompose_curve_to_bezier<T, point_size>(m_v_degree, v_interval_count, m_v_knots_vector, temp_control_points[index], new_knots_vector, v_new_control_points);
+            
+            for (int i = 0; i < v_interval_count; ++i)
+            {
+                for (int k = 0; k <= m_v_degree; ++k)
+                {
+                    bezier_surface_control_points(r, i)(k, br) = v_new_control_points[i].col(k);
+                }
+                if (r != 0 && br == 0)
+                {
+                    for (int k = 0; k <= m_v_degree; ++k)
+                    {
+                        bezier_surface_control_points(r - 1, i)(k, m_u_degree) = v_new_control_points[i].col(k);
+                    }    
+                }
+            }        
+        }
+        decompose_curve_to_bezier<T, point_size>(m_v_degree, v_interval_count, m_v_knots_vector, temp_control_points[cols_count], new_knots_vector, v_new_control_points);
+        for (int i = 0; i < v_interval_count; ++i)
+        {
+            for (int k = 0; k <= m_v_degree; ++k)
+            {
+                bezier_surface_control_points(u_interval_count - 1, i)(k, m_u_degree) = v_new_control_points[i].col(k);
+            }
+        }
+
+        std::vector<Eigen::VectorX<T>> new_u_knots_vectors(u_interval_count);
+        int current_u_knots_index = 0;
+        int u_interval_index = 0;
+        int u_knots_count = m_u_knots_vector.size();
+        for (int index = 0; index < u_knots_count; ++index)
+        {
+            if (m_u_knots_vector[current_u_knots_index] != m_u_knots_vector[index])
+            {
+                new_u_knots_vectors[u_interval_index].resize(2 * m_u_degree + 2);
+                new_u_knots_vectors[u_interval_index].block(0, 0, m_u_degree + 1, 1).setConstant(m_u_knots_vector[current_u_knots_index]);
+                new_u_knots_vectors[u_interval_index].block(m_u_degree + 1, 0, m_u_degree + 1, 1).setConstant(m_u_knots_vector[index]);
+                ++u_interval_index;
+                current_u_knots_index = index;
+            }
+        }
+
+        std::vector<Eigen::VectorX<T>> new_v_knots_vectors(v_interval_count);
+        int current_v_knots_index = 0;
+        int v_interval_index = 0;
+        int v_knots_count = m_v_knots_vector.size();
+        for (int index = 0; index < v_knots_count; ++index)
+        {
+            if (m_v_knots_vector[current_v_knots_index] != m_v_knots_vector[index])
+            {
+                new_v_knots_vectors[v_interval_index].resize(2 * m_v_degree + 2);
+                new_v_knots_vectors[v_interval_index].block(0, 0, m_v_degree + 1, 1).setConstant(m_v_knots_vector[current_v_knots_index]);
+                new_v_knots_vectors[v_interval_index].block(m_v_degree + 1, 0, m_v_degree + 1, 1).setConstant(m_v_knots_vector[index]);
+                ++v_interval_index;
+                current_v_knots_index = index;
+            }
+        }
+
+        bezier_surfaces.resize(u_interval_count, v_interval_count);
+        for (int i = 0; i < u_interval_count; ++i)
+        {
+            for (int j = 0; j < v_interval_count; ++j)
+            {
+                nurbs_surface<T, dim,-1, -1, -1, -1, is_rational> *bs = new nurbs_surface<T, dim,-1, -1, -1, -1, is_rational>(new_u_knots_vectors[i], new_v_knots_vectors[j], bezier_surface_control_points(i, j));
                 bezier_surfaces(i, j) = bs;
             }
         }
@@ -1305,7 +1485,7 @@ public:
     }
 
 
-    bool is_u_closed()
+    bool is_u_closed() const
     {
         int v_count = m_control_points.rows();
         int u_count = m_control_points[0].cols();
@@ -1319,7 +1499,7 @@ public:
         return true;
     }
 
-    bool is_v_closed()
+    bool is_v_closed() const
     {
         int v_count = m_control_points.rows();
         int u_count = m_control_points[0].cols();
@@ -1335,7 +1515,7 @@ public:
     }
 
     //TODO: 写个多线程, 多线程每次结果可能都会不同
-    ENUM_NURBS find_nearst_point_on_surface(const Eigen::Vector<T, dim> &point, T &u, T &v, Eigen::Vector<T, dim> &nearst_point)
+    ENUM_NURBS find_nearst_point_on_surface(const Eigen::Vector<T, dim> &point, T &u, T &v, Eigen::Vector<T, dim> &nearst_point) const
     {
         // TODO : 包围盒加速
         T u_min = m_u_knots_vector[0];
@@ -1480,7 +1660,7 @@ public:
 
     //反求参数空间的切向量,没有测试
     ENUM_NURBS surface_tangent_vector_inversion(const Eigen::Vector<T, dim> &tangent_on_surface, 
-        const Eigen::Vector<T, dim> &point ,Eigen::Vector<T, 2> &tangent_on_param_space)
+        const Eigen::Vector<T, dim> &point ,Eigen::Vector<T, 2> &tangent_on_param_space) const
     {
         T u, v;
         Eigen::Vector<T, dim> nearst_point;
@@ -1506,7 +1686,7 @@ public:
     }
 
     ENUM_NURBS surface_reparameter(const nurbs_curve<T, 1, true, -1, -1> &reparameter_function, ENUM_DIRECTION direction,
-        nurbs_surface<T, dim, -1, -1, -1, -1, true> &new_nurbs_surface)
+        nurbs_surface<T, dim, -1, -1, -1, -1, true> &new_nurbs_surface) const
     {
         nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> *copy_surface = new nurbs_surface<T, dim, -1, -1, -1, -1, is_rational>(*this);
         if (direction == ENUM_DIRECTION::V_DIRECTION)
@@ -1693,3 +1873,44 @@ public:
 
 };
 
+template<typename T, int dim, bool is_rational>
+ENUM_NURBS save_obj(const nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> &surf, const std::string &path)
+{
+    Eigen::VectorX<T> u_knots_vector = surf.get_u_knots();
+    Eigen::VectorX<T> v_knots_vector = surf.get_v_knots();;
+    int u_knots_size = u_knots_vector.size();
+    int v_knots_size = v_knots_vector.size();
+    T u_high = u_knots_vector[u_knots_size - 1];
+    T u_low = u_knots_vector[0];
+    T v_high = v_knots_vector[v_knots_size - 1];
+    T v_low = v_knots_vector[0];
+    T u_step = (u_high - u_low) / 100.0;
+    T v_step = (v_high - v_low) / 100.0;
+    std::vector<Eigen::Vector<T, dim>> points;
+    for (int u_index = 0; u_index < 100; ++u_index)
+    {
+        for (int v_index = 0; v_index < 100; ++v_index)
+        {
+            Eigen::Vector<T, dim> point;
+            surf.point_on_surface(u_index * u_step + u_low, v_index * v_step + v_low, point);
+            points.push_back(point);
+        }
+    }
+    std::ofstream outfile2(path);
+    for (auto point : points)
+    {
+        outfile2 << "v " << point[0] << " " <<
+        point[1] << " " << point[2] << std::endl;
+    }
+    outfile2.close();
+    return ENUM_NURBS::NURBS_SUCCESS;
+}
+
+template<typename T, int dim, int rows, int cols, int u_degree, int v_degree, bool is_rational>
+struct geo_traits<nurbs_surface<T, dim, rows, cols, u_degree, v_degree, is_rational> >
+{
+    static constexpr int point_size = is_rational ? dim + 1 : dim;
+    using type = nurbs_surface<T, dim, rows, cols, u_degree, v_degree, is_rational>;
+    using point_number_type = T;
+    using point_type = typename  Eigen::Vector<T, dim> ;
+};
