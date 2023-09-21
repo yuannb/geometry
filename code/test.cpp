@@ -17,7 +17,6 @@
 #include "time.h"
 #include "polynomial_curve.h"
 #include "convert_nubrs_with_polynomial.h"
-// using namespace std;
 
 // void test_DeCasteljaul_t()
 // {
@@ -3776,11 +3775,82 @@ void nurbs_surface_to_polynomial_1()
     outfile2.close();
 }
 
+void test_polynomial_to_nurbs_1()
+{
+    Eigen::Vector<double, 3> v1{0, 0, 1};
+    Eigen::Vector<double, 3> v2{0.3, 0.2, 0.5};
+    Eigen::Vector<double, 3> v3{1.0 / 2.0, 1, 2};
+    Eigen::Vector<double, 3> v4{0.7, 0.5, 3};
+    Eigen::Vector<double, 3> v5{1, 0, 0.5};
+    Eigen::Vector<double, 3> v6{1.2, -0.3, 1};
+    Eigen::Matrix<double, 3, Eigen::Dynamic> mat(3, 6);
+    mat.col(0) = v1;
+    mat.col(1) = v2;
+    mat.col(2) = v3;
+    mat.col(3) = v4;
+    mat.col(4) = v5;
+    mat.col(5) = v6;
+
+
+    Eigen::VectorX<double> knots_vector(10);
+    knots_vector << 0, 0, 0, 0, 0.3, 0.7, 1, 1, 1, 1;
+
+
+    nurbs_curve<double, 2, true, -1, -1> *curve1 = new nurbs_curve<double, 2, true, -1, -1>(knots_vector, mat);
+    std::vector<Eigen::Vector2d> pointss;
+    std::vector<std::vector<Eigen::Vector2d>> points2(3);
+    std::vector<polynomial_curve<double, 2, true, -1, -1>*> poly_curves(3);
+    nurbs_curve<double, 2, true, -1, -1> curve11;
+    nurbs_curve<double, 2, true, -1, -1> curve12;
+    nurbs_curve<double, 2, true, -1, -1> curve13;
+    convert_nubrs_to_polynomial(*curve1, poly_curves);
+    convert_polynomial_to_nubrs(*(poly_curves[0]), Interval(0.0, 0.3), curve11);
+    convert_polynomial_to_nubrs(*(poly_curves[1]), Interval(0.3, 0.7), curve12);
+    convert_polynomial_to_nubrs(*(poly_curves[2]), Interval(0.7, 1.0), curve13);
+    for (int i = 0; i < 100; ++i)
+    {
+        Eigen::Vector2d point, p1, p2, p3;
+        (static_cast<curve<nurbs_curve<double, 2, true, -1, -1>> *>(curve1))->point_on_curve(0.01 * i, point);
+        pointss.push_back(point);
+        curve11.point_on_curve(0.003 * i, p1);
+        curve12.point_on_curve(0.3 +  0.004 * i, p2);
+        curve13.point_on_curve(0.7 + 0.003 * i, p3);
+        points2[0].push_back(p1);
+        points2[1].push_back(p2);
+        points2[2].push_back(p3);
+    }
+    delete curve1;
+    delete poly_curves[0];
+    delete poly_curves[1];
+    delete poly_curves[2];
+
+    //     // // write doc
+    std::string dir("view.obj");
+    std::ofstream outfile(dir);
+
+    for (auto point : pointss)
+    {
+        outfile << "v " << point[0] << " " <<
+           point[1] << " " << 0 << std::endl;
+    }
+
+    for (int index = 0; index < 3; ++index)
+    {
+        std::string dir2("view" + std::to_string(index) + ".obj");
+        std::ofstream outfile2(dir2);
+        for (auto point : points2[index])
+        {
+            outfile2 << "v " << point[0] << " " <<
+            point[1] << " " << 0 << std::endl;
+        }
+    }
+
+}
 
 int main()
 {
 
-    nurbs_surface_to_polynomial_1();
+    test_polynomial_to_nurbs_1();
     return 0;
 }
 

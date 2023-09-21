@@ -435,7 +435,7 @@ public:
         int rows_count = m_control_points.rows() - 1;
 
         //(B_ij)(k,l)表示第(i, j)段beizer曲面的第(k, l)个控制点
-        Eigen::MatrixX<Eigen::Matrix<Eigen::Vector<T, point_size>, u_degree + 1, v_degree + 1>> bezier_surface_control_points(u_interval_count, v_interval_count);
+        Eigen::MatrixX<Eigen::Matrix<Eigen::Vector<T, point_size>, v_degree + 1, u_degree + 1>> bezier_surface_control_points(u_interval_count, v_interval_count);
 
         //T[i].col(j)表示第i列曲线的第j个控制点
         Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> temp_control_points;
@@ -473,13 +473,13 @@ public:
             {
                 for (int k = 0; k <= v_degree; ++k)
                 {
-                    bezier_surface_control_points(r, i)(br, k) = v_new_control_points[i].col(k);
+                    bezier_surface_control_points(r, i)(k, br) = v_new_control_points[i].col(k);
                 }
                 if (r != 0 && br == 0)
                 {
                     for (int k = 0; k <= v_degree; ++k)
                     {
-                        bezier_surface_control_points(r - 1, i)(u_degree, k) = v_new_control_points[i].col(k);
+                        bezier_surface_control_points(r - 1, i)(k, u_degree) = v_new_control_points[i].col(k);
                     }    
                 }
             }        
@@ -489,7 +489,7 @@ public:
         {
             for (int k = 0; k <= v_degree; ++k)
             {
-                bezier_surface_control_points(u_interval_count - 1, i)(u_degree, k) = v_new_control_points[i].col(k);
+                bezier_surface_control_points(u_interval_count - 1, i)(k, u_degree) = v_new_control_points[i].col(k);
             }
         }
 
@@ -1161,7 +1161,7 @@ public:
         {
             for (int j = 0; j < v_interval_count; ++j)
             {
-                bezier_surface_control_points(i,j).resize(m_u_degree + 1, m_v_degree + 1);
+                bezier_surface_control_points(i,j).resize(m_v_degree + 1, m_u_degree + 1);
             }
         }
         
@@ -1201,13 +1201,13 @@ public:
             {
                 for (int k = 0; k <= m_v_degree; ++k)
                 {
-                    bezier_surface_control_points(r, i)(br, k) = v_new_control_points[i].col(k);
+                    bezier_surface_control_points(r, i)(k, br) = v_new_control_points[i].col(k);
                 }
                 if (r != 0 && br == 0)
                 {
                     for (int k = 0; k <= m_v_degree; ++k)
                     {
-                        bezier_surface_control_points(r - 1, i)(m_u_degree, k) = v_new_control_points[i].col(k);
+                        bezier_surface_control_points(r - 1, i)(k, m_u_degree) = v_new_control_points[i].col(k);
                     }    
                 }
             }        
@@ -1217,7 +1217,7 @@ public:
         {
             for (int k = 0; k <= m_v_degree; ++k)
             {
-                bezier_surface_control_points(u_interval_count - 1, i)(m_u_degree, k) = v_new_control_points[i].col(k);
+                bezier_surface_control_points(u_interval_count - 1, i)(k, m_u_degree) = v_new_control_points[i].col(k);
             }
         }
 

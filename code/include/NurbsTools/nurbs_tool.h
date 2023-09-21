@@ -21,6 +21,7 @@ struct Interval
 {
     Eigen::Vector2<T> m_interval;
     Interval() = default;
+    Interval(T low, T high) { m_interval[0] = low; m_interval[1] = high; }
     T get_low() const { return m_interval[0]; }
     T get_high() const { return m_interval[1]; }
 };
@@ -3794,6 +3795,43 @@ ENUM_NURBS bezier_to_power_matrix(int degree, Eigen::MatrixX<T> &mat)
 
     return ENUM_NURBS::NURBS_SUCCESS;
 }
+
+// 变换矩阵的元素类型本应为int, 但是Eigen库不支持不同模板之间的乘法, 因此改成T
+template<typename T>
+ENUM_NURBS power_matrix_to_bezier(const Eigen::MatrixX<T> &M, Eigen::MatrixX<T> &MI)
+{
+    int p = M.cols() - 1;
+    if (p <= 0)
+        return ENUM_NURBS::NURBS_ERROR;
+    
+    MI.resize(p + 1, p + 1);
+    MI.setConstant(0.0);
+
+    for (int i = 0; i <= p; ++i)
+    {
+        MI(0, i) = 1.0;
+        MI(i, p) = 1.0;
+        MI(i, i) = 1.0 / M(i, i);
+    }
+    int k1 = (p + 1) / 2;
+    int pk = p - 1;
+    for (int k = 1; k < k1; ++k)
+    {
+        for (int j = k + 1; j <= pk; ++j)
+        {
+            T d = 0.0;
+            for (int i = k; i < j; ++i)
+                d -= M(i, j) * MI(k, i);
+            MI(k, j) = d / M(j, j);
+            MI(p - j, pk) = MI(k, j);
+        }
+        pk -= 1;
+    }
+
+    return ENUM_NURBS::NURBS_SUCCESS;
+}
+
+
 
 template<typename T>
 ENUM_NURBS reparameter_matrix_of_p_degree(int p, T c, T d, Eigen::MatrixX<T> &mat)

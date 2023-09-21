@@ -32,6 +32,11 @@ public:
         m_points = points;
     }
 
+    ENUM_NURBS get_control_points(Eigen::Matrix<T, point_size, Eigen::Dynamic> &points) const
+    {
+        points = m_points;
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
 
     ENUM_NURBS point_on_curve(T u, Eigen::Vector<T, dim> &point) const
     {
@@ -43,6 +48,10 @@ public:
         Eigen::Vector<T, point_size> vec = m_points * coeff;
         point = project_point<T, is_rational, point_size>::project_point_to_euclidean_space(vec);
         return ENUM_NURBS::NURBS_SUCCESS;
+    }
+    int get_degree() const
+    {
+        return m_degree;
     }
 };
 

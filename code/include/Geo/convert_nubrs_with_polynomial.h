@@ -4,7 +4,6 @@
 #include "polynomial_curve.h"
 #include "nurbs_surface.h"
 #include "polynomial_surface.h"
-
 //将转换函数新写一个文件可以避免nurbs和polynomail的相互包含
 template<typename T, int dim, bool is_rational, int points_count, int degree>
 ENUM_NURBS convert_nubrs_to_polynomial(const nurbs_curve<T, dim, is_rational, points_count, degree> &old_curve,
@@ -101,6 +100,40 @@ ENUM_NURBS convert_nubrs_to_polynomial(const nurbs_surface<T, dim, rows, cols, u
             delete surf;
         }
     }
+
+    return ENUM_NURBS::NURBS_SUCCESS;
+}
+
+
+//此处为单polynomial curve(surface) 转nurbs curve(surface). 多条polynomial的问题可以将每条polynomial转成nurbs
+//然后调用nurbs的相关算法拼成一个, 然后再调用节点消去算法, 最终可以得到一条nurbs
+template<typename T, int dim, bool is_rational, int points_count, int degree>
+ENUM_NURBS convert_polynomial_to_nubrs(const polynomial_curve<T, dim, is_rational, points_count, degree> &old_curve, const Interval<T> &interval,
+    nurbs_curve<T, dim, is_rational, points_count, degree> &nurbs)
+{
+    Eigen::MatrixX<T> M_p;
+    int curve_degree = old_curve.get_degree();
+    bezier_to_power_matrix(curve_degree, M_p);
+    Eigen::MatrixX<T> MI_p;
+    power_matrix_to_bezier(M_p, MI_p);
+
+    T high = interval.get_high();
+    T low = interval.get_low();
+    T c = high - low;
+
+    Eigen::MatrixX<T> R_p;
+    reparameter_matrix_of_p_degree(curve_degree, c, low, R_p);
+
+    Eigen::Matrix<T, is_rational ? dim + 1 : dim, Eigen::Dynamic> control_points;
+    old_curve.get_control_points(control_points);
+    Eigen::Matrix<T, is_rational ? dim + 1 : dim, Eigen::Dynamic> new_control_points = control_points * (R_p * MI_p);
+
+    Eigen::VectorX<T> knots_vector(2 * curve_degree + 2);
+    knots_vector.block(0, 0, curve_degree + 1, 1).setConstant(low);
+    knots_vector.block(curve_degree + 1, 0, curve_degree + 1, 1).setConstant(high);
+    nurbs.set_control_points(new_control_points);
+    nurbs.set_knots_vector(knots_vector);
+    nurbs.set_degree(curve_degree);
 
     return ENUM_NURBS::NURBS_SUCCESS;
 }
