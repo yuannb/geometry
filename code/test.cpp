@@ -3847,10 +3847,111 @@ void test_polynomial_to_nurbs_1()
 
 }
 
+void polynomial_to_nurbs_surface_1()
+{
+    Eigen::VectorX<double> u_knots_vector(7);
+    u_knots_vector<< 0, 0, 0, 2.5, 5, 5, 5;
+    Eigen::VectorX<double> v_knots_vector(7);
+    v_knots_vector << 0, 0, 0, 1.5, 3, 3, 3;
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points1(4, 4);
+    points1 << 0, 0, 0, 0,
+               2, 6, 2, 8,
+               5, 4, 0, 2,
+               1, 2, 1, 2;
+
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points2(4, 4);
+    points2 << 4, 12, 4, 8,
+               6, 24, 10, 28,
+               8, 12, 0, 0,
+               2, 6,  2, 4;
+
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points3(4, 4);
+    points3 << 4, 8, 4, 12,
+               2, 6, 4, 12,
+               4, 4, 0, -3,
+               1, 2, 1, 3;
+
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points4(4, 4);
+    points4 << 4, 8, 4, 12,
+               2, 6, 4, 12,
+               4, 8, 4, 12,
+               1, 2, 1, 3;
+
+    Eigen::VectorX<Eigen::Matrix<double, 4, Eigen::Dynamic>> control_points(4);
+    control_points(0) = points1;
+    control_points(1) = points2;
+    control_points(2) = points3;
+    control_points(3) = points4;
+    nurbs_surface<double, 3, -1, -1, -1, -1, true> test_surface(u_knots_vector, v_knots_vector, control_points);
+    Eigen::Vector<double, 2> insert_knots{1.25, 3.75};
+    Eigen::Vector<double, 2> insert_knots_v{0.75, 2.25};
+    test_surface.refine_knots_vector(insert_knots, ENUM_DIRECTION::U_DIRECTION);
+    test_surface.refine_knots_vector(insert_knots_v, ENUM_DIRECTION::V_DIRECTION);
+    Eigen::MatrixX<polynomial_surface<double, 3, -1, -1, true> *> bezier_surfaces;
+    convert_nubrs_to_polynomial(test_surface, bezier_surfaces);
+    Eigen::Matrix<std::vector<Eigen::Vector3d>, 4, 4>  pointss;
+    for (int j = 0; j < 4; ++j)
+    {
+        for (int i = 0; i < 4; ++i)
+        {
+            nurbs_surface<double, 3, -1, -1, -1, -1, true> nurbs_surf;
+            convert_polynomial_to_nubrs(*(bezier_surfaces(i, j)), Interval(1.25 * i, 1.25 * (i + 1)), Interval(0.75 * j, 0.75 * (j + 1)), nurbs_surf);
+            for (int k = 0; k <= 100; ++k)
+            {
+                for (int l = 0; l <= 100; ++l)
+                {
+                    Eigen::Vector3d point;
+                    nurbs_surf.point_on_surface(1.25 * i + 0.0125 * k, 0.75 * j + 0.0075 * l, point);
+                    pointss(i, j).push_back(point);
+                }
+            }
+        }
+    }
+
+    std::vector<Eigen::Vector3d> pss;
+
+    for (int k = 0; k <= 100; ++k)
+    {
+        for (int l = 0; l <= 100; ++l)
+        {
+            Eigen::Vector3d point;
+            test_surface.point_on_surface(0.05 * k, 0.03 * l, point);
+            pss.push_back(point);
+        }
+    }
+
+    for (int i = 0; i < 4; ++i)
+    {
+        for (int j = 0; j < 4; ++j)
+        {
+            //     // // write doc
+            std::string dir("view" + std::to_string(i * 4 + j) + ".obj");
+            std::ofstream outfile(dir);
+            for (auto point : pointss(i, j))
+            {
+                outfile << "v " << point[0] << " " <<
+                point[1] << " " << point[2] << std::endl;
+            }
+            outfile.close();
+        }
+
+    }
+
+    std::string dir2("view.obj");
+    std::ofstream outfile2(dir2);
+    for (auto point : pss)
+    {
+        outfile2 << "v " << point[0] << " " <<
+        point[1] << " " << point[2] << std::endl;
+    }
+    outfile2.close();
+}
+
+
 int main()
 {
 
-    test_polynomial_to_nurbs_1();
+    polynomial_to_nurbs_surface_1();
     return 0;
 }
 

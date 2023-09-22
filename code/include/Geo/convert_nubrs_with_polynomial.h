@@ -138,3 +138,66 @@ ENUM_NURBS convert_polynomial_to_nubrs(const polynomial_curve<T, dim, is_rationa
     return ENUM_NURBS::NURBS_SUCCESS;
 }
 
+
+template<typename T, int dim, int rows, int cols, int u_degree, int v_degree, bool is_rational>
+ENUM_NURBS convert_polynomial_to_nubrs(const polynomial_surface<T, dim, u_degree, v_degree, is_rational> &old_surface,
+    const Interval<T> &u_interval, const Interval<T> &v_interval,  nurbs_surface<T, dim, rows, cols, u_degree, v_degree, is_rational> &nurbs)
+{
+    int surface_u_degree = old_surface.get_u_degree();
+    int surface_v_degree = old_surface.get_v_degree();
+
+    Eigen::MatrixX<T> M_p, M_q;
+    bezier_to_power_matrix(surface_u_degree, M_p);
+    bezier_to_power_matrix(surface_v_degree, M_q);
+    Eigen::MatrixX<T> MI_p, MI_q;
+    power_matrix_to_bezier(M_p, MI_p);
+    power_matrix_to_bezier(M_q, MI_q);
+    MI_q.transposeInPlace();
+    Eigen::MatrixX<T> R_p;
+    T u_low = u_interval.get_low();
+    T u_high = u_interval.get_high();
+    reparameter_matrix_of_p_degree(surface_u_degree, u_high - u_low, u_low, R_p);
+
+    Eigen::MatrixX<T> R_q;
+    T v_low = v_interval.get_low();
+    T v_high = v_interval.get_high();
+    reparameter_matrix_of_p_degree(surface_v_degree, v_high - v_low, v_low, R_q);
+    R_q.transposeInPlace();
+    std::vector<Eigen::Matrix<T, is_rational ? dim + 1 : dim, Eigen::Dynamic>> temp(surface_v_degree + 1);
+    Eigen::VectorX<Eigen::Matrix<T, is_rational ? dim + 1 : dim, Eigen::Dynamic>> nurbs_points(surface_v_degree + 1);
+
+    for (int index = 0; index <= surface_v_degree; ++index)
+    {
+        Eigen::Matrix<T, is_rational ? dim + 1 : dim, Eigen::Dynamic> row_points;
+        old_surface.get_control_points_row(index, row_points);
+        temp[index] = row_points * R_p * MI_p;
+    }
+
+    auto left_mat =  MI_q * R_q;
+
+    for (int v_index = 0; v_index <= surface_v_degree; ++v_index)
+    {
+        nurbs_points[v_index].resize(is_rational ? dim + 1 : dim, surface_u_degree + 1);
+        nurbs_points[v_index].setConstant(0.0);
+        for (int u_index = 0; u_index <= surface_u_degree; ++u_index)
+        {
+            for (int index = 0; index <= surface_v_degree; ++index)
+            {
+                nurbs_points[v_index].col(u_index) += left_mat(v_index, index) * temp[index].col(u_index);
+            }
+        }
+    }
+    Eigen::VectorX<T> u_knots_vector(2 * surface_u_degree + 2);
+    Eigen::VectorX<T> v_knots_vector(2 * surface_v_degree + 2);
+    u_knots_vector.block(0, 0, surface_u_degree + 1, 1).setConstant(u_low);
+    u_knots_vector.block(surface_u_degree + 1, 0, surface_u_degree + 1, 1).setConstant(u_high);
+    v_knots_vector.block(0, 0, surface_v_degree + 1, 1).setConstant(v_low);
+    v_knots_vector.block(surface_v_degree + 1, 0, surface_v_degree + 1, 1).setConstant(v_high);
+    nurbs.set_control_points(nurbs_points);
+    nurbs.set_uv_degree(surface_u_degree, surface_v_degree);
+    nurbs.set_uv_knots(u_knots_vector, v_knots_vector);
+
+    return ENUM_NURBS::NURBS_SUCCESS;
+}
+
+

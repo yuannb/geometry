@@ -48,16 +48,27 @@ public:
         Eigen::Matrix<T, point_size, Eigen::Dynamic> temp_mat;
         temp_mat.resize(point_size, m_v_degree + 1);
 
-        // std::cout << u_coeff << std::endl;
-        // std::cout << v_coeff << std::endl;
-
         for (int index = 0; index <= m_v_degree; ++index)
         {
-            // std::cout <<  m_points[index] << std::endl;
             temp_mat.col(index) = m_points[index] * u_coeff;
         }
         Eigen::Vector<T, point_size> vec = temp_mat * v_coeff;
         point = project_point<T, is_rational, point_size>::project_point_to_euclidean_space(vec);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    int get_u_degree() const
+    {
+        return m_u_degree;
+    }
+    int get_v_degree() const
+    {
+        return m_v_degree;
+    }
+
+    ENUM_NURBS get_control_points_row(int row, Eigen::Matrix<T, point_size, Eigen::Dynamic> &points) const
+    {
+        points = m_points[row];
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
