@@ -16,7 +16,8 @@
 #include "nurbs_surface.h"
 #include "time.h"
 #include "polynomial_curve.h"
-#include "convert_nubrs_with_polynomial.h"
+#include "convert_nubrs_with_polynomial.h" 
+#include "create_nurbs_arc.h"
 
 // void test_DeCasteljaul_t()
 // {
@@ -3947,11 +3948,109 @@ void polynomial_to_nurbs_surface_1()
     outfile2.close();
 }
 
+void creat_nurbs_arc_1()
+{
+    Eigen::Vector<double, 3> center{0, 0, 0};
+    Eigen::Vector<double, 3> u_dir{1, 0, 0};
+    Eigen::Vector<double, 3> v_dir{0, 1, 0};
+    double radius = 10;
+    double start_angles = 0;
+    double end_angles = PI + 0.78;
+    nurbs_curve<double, 3, true, -1, -1> nurbs;
+    create_nurbs_circle(center, u_dir, v_dir, radius, start_angles, end_angles, nurbs);
+    std::vector<Eigen::Vector3d> pointss;
+    for (int i = 0; i < 100; ++i)
+    {
+        Eigen::Vector3d point;   
+        nurbs.point_on_curve(0.01 * i, point);
+        pointss.push_back(point);
+    }
+    //     // // write doc
+    std::string dir("view2.obj");
+    std::ofstream outfile(dir);
+
+    for (auto point : pointss)
+    {
+        outfile << "v " << point[0] << " " <<
+        point[1] << " " << point[2] << std::endl;
+    }
+}
+
+void creat_nurbs_arc_2()
+{
+    Eigen::Vector<double, 3> center{0, 0, 0};
+    Eigen::Vector<double, 3> u_dir{1, 0, 0};
+    Eigen::Vector<double, 3> v_dir{0, 1, 0};
+    nurbs_curve<double, 3, true, -1, -1> nurbs;
+    Eigen::Vector<double, 3> P0 = center + 10 * u_dir;
+    Eigen::Vector<double, 3> P2 = center - 10 * v_dir;
+    Eigen::Vector<double, 3> S = (5.0 * std::sqrt(2.0)) * (u_dir + v_dir);
+    create_open_conic<double, 3>(P0, v_dir, P2, u_dir, S, nurbs);
+    std::vector<Eigen::Vector3d> pointss;
+    for (int i = 0; i < 100; ++i)
+    {
+        Eigen::Vector3d point;   
+        nurbs.point_on_curve(0.01 * i, point);
+        pointss.push_back(point);
+    }
+    //     // // write doc
+    std::string dir("view2.obj");
+    std::ofstream outfile(dir);
+
+    for (auto point : pointss)
+    {
+        outfile << "v " << point[0] << " " <<
+        point[1] << " " << point[2] << std::endl;
+    }
+}
+
+void creat_nurbs_arc_3()
+{
+    Eigen::Vector<double, 3> center{0, 0, 0};
+    Eigen::Vector<double, 3> u_dir{1, 0, 0};
+    Eigen::Vector<double, 3> v_dir{0, 1, 0};
+    double radius = 10;
+    double start_angles = 0;
+    double end_angles = PI + 0.78;
+    nurbs_curve<double, 3, true, -1, -1> nurbs;
+    create_nurbs_circle(center, u_dir, v_dir, radius, start_angles, end_angles, nurbs);
+    bezier_curve<double, 3, true, -1> bezier;
+    create_bezier_circle(radius, bezier);
+    std::vector<Eigen::Vector3d> pointss;
+    std::vector<Eigen::Vector3d> pointss2;
+    for (int i = 0; i < 100; ++i)
+    {
+        Eigen::Vector3d point;   
+        nurbs.point_on_curve(0.01 * i, point);
+        pointss.push_back(point);
+        Eigen::Vector3d point1;
+        bezier.point_on_curve(0.01 * i, point1);
+        pointss2.push_back(point1);
+    }
+    //     // // write doc
+    std::string dir("view2.obj");
+    std::ofstream outfile(dir);
+
+    for (auto point : pointss)
+    {
+        outfile << "v " << point[0] << " " <<
+        point[1] << " " << point[2] << std::endl;
+    }
+    std::string dir2("view.obj");
+    std::ofstream outfile2(dir2);
+
+    for (auto point : pointss2)
+    {
+        outfile2 << "v " << point[0] << " " <<
+        point[1] << " " << point[2] << std::endl;
+    }
+}
+
 
 int main()
 {
 
-    polynomial_to_nurbs_surface_1();
+    creat_nurbs_arc_3();
     return 0;
 }
 

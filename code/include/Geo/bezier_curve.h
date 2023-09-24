@@ -15,7 +15,7 @@ public:
             m_control_points.col(col_index) = points[col_index];
         }
     }
-    ENUM_NURBS point_on_curve(T u, Eigen::Vector<T, dim> &point)
+    ENUM_NURBS point_on_curve(T u, Eigen::Vector<T, dim> &point) const
     {
         if (u < 0.0 || u > 1.0)
             return NURBS_PARAM_IS_OUT_OF_DOMAIN;
@@ -25,7 +25,7 @@ public:
         return NURBS_SUCCESS;
     }
 
-    ENUM_NURBS point_on_curve_b(T u, Eigen::Vector<T, dim> &point)
+    ENUM_NURBS point_on_curve_b(T u, Eigen::Vector<T, dim> &point) const
     {
         if (u < 0.0 || u > 1.0)
             return NURBS_PARAM_IS_OUT_OF_DOMAIN;
@@ -41,6 +41,40 @@ public:
         m_control_points = control_points;
         return ENUM_NURBS::NURBS_SUCCESS;
     }
+    ENUM_NURBS get_control_points(Eigen::Matrix<T, row_size, points_count> &control_points) const
+    {
+        control_points = m_control_points;
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+    
+    ENUM_NURBS get_control_points(int index, Eigen::Vector<T, dim> &control_point) const
+    {
+        if (index >= points_count || index < 0)
+            return ENUM_NURBS::NURBS_ERROR;
+        if constexpr (is_rational == false)
+        {
+            control_point = m_control_points.col(index);
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+        control_point = m_control_points.template block<dim, 1>(0, index) / m_control_points(dim, index);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    ENUM_NURBS get_weight(int index, T &w) const
+    {
+        if (index >= points_count || index < 0)
+            return ENUM_NURBS::NURBS_ERROR;        
+        if constexpr (is_rational == false)
+        {
+            w = 1.0;
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+
+        w = m_control_points(dim, index);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+
 };
 
 template<typename T, int dim, bool is_rational>
@@ -60,7 +94,7 @@ public:
             m_control_points.col(col_index) = points[col_index];
         }
     }
-    ENUM_NURBS point_on_curve(T u, Eigen::Vector<T, dim> &point)
+    ENUM_NURBS point_on_curve(T u, Eigen::Vector<T, dim> &point) const
     {
         if (u < 0.0 || u > 1.0)
             return NURBS_PARAM_IS_OUT_OF_DOMAIN;
@@ -70,7 +104,7 @@ public:
         return NURBS_SUCCESS;
     }
 
-    ENUM_NURBS point_on_curve_b(T u, Eigen::Vector<T, dim> &point)
+    ENUM_NURBS point_on_curve_b(T u, Eigen::Vector<T, dim> &point) const
     {
         if (u < 0.0 || u > 1.0)
             return NURBS_PARAM_IS_OUT_OF_DOMAIN;
@@ -84,6 +118,37 @@ public:
     ENUM_NURBS set_control_points(const Eigen::Matrix<T, row_size, Eigen::Dynamic> &control_points)
     {
         m_control_points = control_points;
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+    ENUM_NURBS get_control_points(Eigen::Matrix<T, row_size, Eigen::Dynamic> &control_points) const
+    {
+        control_points = m_control_points;
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+    ENUM_NURBS get_control_points(int index, Eigen::Vector<T, dim> &control_point) const
+    {
+        if (index >= m_control_points.cols() || index < 0)
+            return ENUM_NURBS::NURBS_ERROR;
+        if constexpr (is_rational == false)
+        {
+            control_point = m_control_points.col(index);
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+        control_point = m_control_points.template block<dim, 1>(0, index) / m_control_points(dim, index);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    ENUM_NURBS get_weight(int index, T &w) const
+    {
+        if (index >= m_control_points.cols() || index < 0)
+            return ENUM_NURBS::NURBS_ERROR;        
+        if constexpr (is_rational == false)
+        {
+            w = 1.0;
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+
+        w = m_control_points(dim, index);
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 };

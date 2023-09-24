@@ -32,8 +32,7 @@ public:
 
     // curve() = delete;
 
-    ~curve() { };
-
+    virtual  ~curve() { };
 
     ENUM_NURBS point_on_curve(point_number_type u, point_type &point)
     {

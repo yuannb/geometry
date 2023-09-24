@@ -3849,3 +3849,18 @@ ENUM_NURBS reparameter_matrix_of_p_degree(int p, T c, T d, Eigen::MatrixX<T> &ma
     return ENUM_NURBS::NURBS_SUCCESS;
 }
 
+
+
+template<typename T, int dim>
+T angle_between_tow_vector(const Eigen::Vector<T, dim> &v1, const Eigen::Vector<T, dim> &v2)
+{
+    T v1_length = v1.norm();
+    T v2_length = v2.norm();
+
+    T cos_angle = v1.dot(v2) / (v1_length * v2_length);
+    if (cos_angle >= 1.0)
+        return 0.0;
+    if (cos_angle <= -1.0)
+        return M_PI;
+    return std::acos(cos_angle);
+}
