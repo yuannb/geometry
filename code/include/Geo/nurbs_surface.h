@@ -28,7 +28,21 @@
 template<typename T, int dim, int rows, int cols, int u_degree, int v_degree, bool is_rational>
 class nurbs_surface
 {
+    static constexpr int point_size = is_rational ? dim + 1 : dim;
     //TODO:
+    int get_u_degree();
+    int get_v_degree();
+    ENUM_NURBS reverse_uv();
+    Eigen::VectorX<T> get_u_knots() const;
+    Eigen::VectorX<T> get_v_knots() const;
+    ENUM_NURBS set_u_degree(int degree);
+    ENUM_NURBS set_v_degree(int degree);
+    ENUM_NURBS get_u_different_knots(std::vector<T> &vec) const;
+    ENUM_NURBS get_v_different_knots(std::vector<T> &vec) const;
+    ENUM_NURBS set_uv_degree(int u_degree_, int v_degree_);
+    ENUM_NURBS set_control_points(Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> &points);
+    ENUM_NURBS point_on_surface(T u, T v, Eigen::Vector<T, dim> &point) const;
+    ENUM_NURBS set_uv_knots(const Eigen::VectorX<T> &u_knots, const Eigen::VectorX<T> &v_knots);
 };
 
 

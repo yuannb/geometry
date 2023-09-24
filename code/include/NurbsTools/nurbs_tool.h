@@ -3864,3 +3864,84 @@ T angle_between_tow_vector(const Eigen::Vector<T, dim> &v1, const Eigen::Vector<
         return M_PI;
     return std::acos(cos_angle);
 }
+
+
+/// @brief 合并两个nurbs曲线的节点矢量(阶数相同, 端点相同)
+/// @tparam T double float int...
+/// @param degree nurbs的阶数
+/// @param vec1 待合并第一个节点矢量
+/// @param vec2 待合并第一个节点矢量
+/// @param merge_vector 后并后的节点矢量
+/// @param vec1_add vec1 + vec1_add = merge_vector
+/// @param vec2_add vec2 + vec2_add = merge_vector
+/// @param eps 判断两个节点相等的容差
+/// @return 
+template<typename T>
+ENUM_NURBS merge_two_knots_vector(int degree, const Eigen::VectorX<T> &vec1, const Eigen::VectorX<T> &vec2, std::vector<T> &merge_vector,
+    std::vector<T> &vec1_add, std::vector<T> &vec2_add, T eps = DEFAULT_ERROR)
+{
+    int knots_vector_size1 = vec1.size() - 1;
+    int knots_vector_size2 = vec2.size() - 1;
+    merge_vector.clear();
+    for (int index = 0; index <= degree; ++index)
+    {
+        if (vec1[index] != vec1[0] || vec2[index] != vec1[0])
+            return ENUM_NURBS::NURBS_ERROR;
+        if (vec1[knots_vector_size1 - index] != vec1[knots_vector_size1] || vec2[knots_vector_size2 - index] != vec1[knots_vector_size2])
+            return ENUM_NURBS::NURBS_ERROR;
+        if (std::abs(vec1[index] - vec2[index]) > eps || std::abs(vec1[knots_vector_size1 - index] - vec2[knots_vector_size2 - index]) > eps)
+            return ENUM_NURBS::NURBS_ERROR;
+        merge_vector.push_back(vec1[index]);
+    }
+    
+    int current_index1 = degree + 1, current_index2 = degree + 1;
+    int end1 = knots_vector_size1 - degree - 1;
+    int end2 = knots_vector_size2 - degree - 1;
+    while (current_index1 <= end1 || current_index2 <= end2)
+    {
+        T knots_delta = vec1[current_index1] - vec2[current_index2];
+        if (knots_delta < -eps)
+        {
+            merge_vector.push_back(vec1[current_index1]);
+            if (vec2_add.empty() == false)
+            {
+                if (vec1[current_index1] - vec2_add.back() < eps)
+                    vec2_add.push_back(vec2_add.back());
+            }
+            else
+                vec2_add.push_back(vec1[current_index1]);
+            
+            current_index1 += 1; 
+            continue;
+        }
+        else if (knots_delta > eps)
+        {
+            merge_vector.push_back(vec1[current_index2]);
+            if (vec1_add.empty() == false)
+            {
+                if (vec2[current_index1] - vec1_add.back() < eps)
+                    vec1_add.push_back(vec1_add.back());
+            }
+            else
+                vec1_add.push_back(vec2[current_index1]);
+            
+            current_index2 += 1; 
+            continue;
+        }
+
+        //else
+        merge_vector.push_back(vec1[current_index2]);
+        vec1_add.push_back(vec1_add.back());
+        vec2_add.push_back(vec2_add.back());
+        current_index2 += 1;
+        current_index1 += 1; 
+    }
+    
+    for (int index = 0; index <= degree; ++index)
+    {
+        merge_vector.push_back(vec1[knots_vector_size1 - index]);
+    }
+    return ENUM_NURBS::NURBS_SUCCESS;
+
+}
+

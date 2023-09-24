@@ -18,6 +18,7 @@
 #include "polynomial_curve.h"
 #include "convert_nubrs_with_polynomial.h" 
 #include "create_nurbs_arc.h"
+#include "contruct_primitive_nurbs_surface.h"
 
 // void test_DeCasteljaul_t()
 // {
@@ -4046,11 +4047,156 @@ void creat_nurbs_arc_3()
     }
 }
 
+void test_bilinear_surface_1()
+{
+    Eigen::Vector<double, 3> P00{10, 0, 10};
+    Eigen::Vector<double, 3> P01{0, 0, 0};
+    Eigen::Vector<double, 3> P10{10, 10, 0};
+    Eigen::Vector<double, 3> P11{0, 10, 10};
+
+    nurbs_surface<double, 3, -1, -1, -1, -1, false> test_surface;
+    create_bilinear_nurbs_surface(P00, P01, P10, P11, test_surface);
+
+    std::vector<Eigen::Vector3d> pss;
+    for (int k = 0; k <= 100; ++k)
+    {
+        for (int l = 0; l <= 100; ++l)
+        {
+            Eigen::Vector3d point;
+            test_surface.point_on_surface(0.01 * k, 0.01 * l, point);
+            pss.push_back(point);
+        }
+    }
+
+    std::string dir2("view.obj");
+    std::ofstream outfile2(dir2);
+    for (auto point : pss)
+    {
+        outfile2 << "v " << point[0] << " " <<
+        point[1] << " " << point[2] << std::endl;
+    }
+    outfile2.close();
+}
+
+void creat_cylinder_1()
+{
+    Eigen::Vector<double, 3> n_dir{0, 0, 1};
+    double radius = 10;
+
+    nurbs_curve<double, 3, true, -1, -1> bezier;
+    create_bezier_circle(radius, bezier);
+    std::vector<Eigen::Vector3d> pointss;
+    std::vector<Eigen::Vector3d> pointss2;
+    nurbs_surface<double, 3, -1, -1, -1, -1, true> surf;
+    create_cylinder_surface(bezier, 10.0, n_dir, surf);
+    
+    std::vector<Eigen::Vector3d> pss;
+    for (int k = 0; k <= 100; ++k)
+    {
+        for (int l = 0; l <= 100; ++l)
+        {
+            Eigen::Vector3d point;
+            surf.point_on_surface(0.01 * k, 0.01 * l, point);
+            pss.push_back(point);
+        }
+    }
+
+    std::string dir2("view.obj");
+    std::ofstream outfile2(dir2);
+    for (auto point : pss)
+    {
+        outfile2 << "v " << point[0] << " " <<
+        point[1] << " " << point[2] << std::endl;
+    }
+    outfile2.close();
+}
+
+void create_ruled_surface_1()
+{
+    Eigen::Vector<double, 3> center{0, 0, 10};
+    Eigen::Vector<double, 3> u_dir{1, 0, 0};
+    Eigen::Vector<double, 3> v_dir{0, 1, 0};
+    double radius = 10;
+
+    nurbs_curve<double, 3, true, -1, -1> nurbs;
+    Eigen::Vector<double, 3> P0 = center + 10 * u_dir;
+    Eigen::Vector<double, 3> P2 = center - 10 * v_dir;
+    Eigen::Vector<double, 3> S = (5.0 * std::sqrt(2.0)) * (u_dir + v_dir);
+    create_open_conic<double, 3>(P0, v_dir, P2, u_dir, S, nurbs);
+
+
+    nurbs_curve<double, 3, true, -1, -1> bezier;
+    create_bezier_circle(radius, bezier);
+    std::vector<Eigen::Vector3d> pointss;
+    std::vector<Eigen::Vector3d> pointss2;
+    nurbs_surface<double, 3, -1, -1, -1, -1, true> surf;
+    create_ruled_surface(nurbs, bezier, surf);
+    std::vector<Eigen::Vector3d> pss;
+    for (int k = 0; k <= 100; ++k)
+    {
+        for (int l = 0; l <= 100; ++l)
+        {
+            Eigen::Vector3d point;
+            surf.point_on_surface(0.01 * k, 0.01 * l, point);
+            pss.push_back(point);
+        }
+    }
+
+    std::string dir2("view.obj");
+    std::ofstream outfile2(dir2);
+    for (auto point : pss)
+    {
+        outfile2 << "v " << point[0] << " " <<
+        point[1] << " " << point[2] << std::endl;
+    }
+    outfile2.close();
+}
+
+void create_revolved_surface_1()
+{
+    Eigen::Vector<double, 3> center{0, 0, 10};
+    Eigen::Vector<double, 3> u_dir{1, 0, 0};
+    Eigen::Vector<double, 3> v_dir{0, 0, 1};
+    double radius = 10;
+    nurbs_curve<double, 3, true, -1, -1> nurbs;
+    create_nurbs_circle(center, u_dir, v_dir, radius, 0.0, M_PI, nurbs);
+
+    std::vector<Eigen::Vector3d> pointss;
+    for (int i = 0; i < 100; ++i)
+    {
+        Eigen::Vector3d point;   
+        nurbs.point_on_curve(0.01 * i, point);
+        pointss.push_back(point);
+    }
+
+    nurbs_surface<double, 3, -1, -1, -1, -1, true> surf;
+    create_revolved_surface<double>(nurbs, center, u_dir, M_PI * 2.0, surf);
+    std::vector<Eigen::Vector3d> pss;
+    for (int k = 0; k <= 100; ++k)
+    {
+        for (int l = 0; l <= 100; ++l)
+        {
+            Eigen::Vector3d point;
+            surf.point_on_surface(0.01 * k, 0.01 * l, point);
+            pss.push_back(point);
+        }
+    }
+
+    std::string dir2("view.obj");
+    std::ofstream outfile2(dir2);
+    for (auto point : pss)
+    {
+        outfile2 << "v " << point[0] << " " <<
+        point[1] << " " << point[2] << std::endl;
+    }
+    outfile2.close();
+}
+
 
 int main()
 {
 
-    creat_nurbs_arc_3();
+    create_revolved_surface_1();
     return 0;
 }
 

@@ -4,13 +4,13 @@
 #include "nurbs_surface.h"
 #include <numbers>
 
-//要求start_angle < end_angle; 如果想要顺时针的圆弧, 可以之后再nurbs反向
+//start_angle < end_angle : 逆时针圆弧;  start_angle > end_angle : 顺时针的圆弧
 template<typename T, int dim>
 ENUM_NURBS create_nurbs_circle(const Eigen::Vector<T, dim> &center, const Eigen::Vector<T, dim> &u_dir, const Eigen::Vector<T, dim> &v_dir,
     T radius, T start_angle, T end_angle, nurbs_curve<T, dim, true, -1, -1> &nurbs)
 {
-    if(end_angle < start_angle)
-        return ENUM_NURBS::NURBS_ERROR;
+    // if(end_angle < start_angle)
+    //     return ENUM_NURBS::NURBS_ERROR;
     T theta = end_angle - start_angle;
     if (theta > M_PI * 2 + DEFAULT_ERROR)
         return ENUM_NURBS::NURBS_ERROR;
@@ -43,7 +43,20 @@ ENUM_NURBS create_nurbs_circle(const Eigen::Vector<T, dim> &center, const Eigen:
         int rankExternMat = externMatSvd.rank();
         if (rankMat != 2 && rankExternMat != 2)
         {
-            return ENUM_NURBS::NURBS_ERROR;
+            if (radius < DEFAULT_ERROR)
+            {
+                control_points(dim, index + 1) = w1;
+                control_points.template block<dim, 1>(0, index + 1) = w1 * center;
+                index += 2;
+                if (i < narcs)
+                {
+                    P0 = P2;
+                    T0 = T2;
+                }
+                continue;
+            }
+            else
+                return ENUM_NURBS::NURBS_ERROR;
         }
         Eigen::Vector2<T> v = matSvd.solve(vec);
         Eigen::Vector<T, dim> middle_point = ((v[0] * T0 + P0) + (v[1] * T2 + P2)) / 2.0;
@@ -404,6 +417,41 @@ ENUM_NURBS create_bezier_circle(T r, bezier_curve<T, dim, true, -1> &bezier)
     control_points(1, 5) = r * -5.0;
     control_points(dim, 5) = 5.0;
     bezier.set_control_points(control_points);
+    return ENUM_NURBS::NURBS_SUCCESS;
+}
+
+//创建一个xy平面, 半径为r的, 圆心在原点的整圆, 结果为5次有理bezier曲线(无内部节点), 如果想要得到任意平面整圆, 只需要做一个刚体变换即可
+template<typename T, int dim>
+ENUM_NURBS create_bezier_circle(T r, nurbs_curve<T, dim, true, -1, -1> &nurbs)
+{
+    Eigen::Matrix<T, dim + 1, Eigen::Dynamic> control_points(dim + 1, 6);
+    control_points.setConstant(0.0);
+    control_points(1, 0) = -5.0 * r;
+    control_points(dim, 0) = 5.0;
+    
+    control_points(0, 1) = 4.0 * r;
+    control_points(1, 1) = -r;
+    control_points(dim, 1) = 1.0;
+    
+    control_points(0, 2) = 2.0 * r;
+    control_points(1, 2) = r * 3.0;
+    control_points(dim, 2) = 1.0;
+
+    control_points(0, 3) = -2.0 * r;
+    control_points(1, 3) = r * 3.0;
+    control_points(dim, 3) = 1.0;
+
+    control_points(0, 4) = -4.0 * r;
+    control_points(1, 4) = r * -1.0;
+    control_points(dim, 4) = 1.0;
+
+    control_points(1, 5) = r * -5.0;
+    control_points(dim, 5) = 5.0;
+    nurbs.set_control_points(control_points);
+    Eigen::VectorX<T> knots_vector(12);
+    knots_vector << 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1;
+    nurbs.set_knots_vector(knots_vector);
+    nurbs.set_degree(5);
     return ENUM_NURBS::NURBS_SUCCESS;
 }
 

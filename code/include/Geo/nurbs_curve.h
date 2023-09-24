@@ -36,6 +36,19 @@ public:
         return INDEX_IS_OUTSIDE_OF_KNOTS_VECTOR;
     }
 
+    
+    
+    int get_control_points_count() const;
+    ENUM_NURBS get_control_point(int index, Eigen::Vector<T, dim> &point) const;
+    Eigen::VectorX<T> get_knots_vector() const;
+    ENUM_NURBS degree_elevate(int t);
+    ENUM_NURBS curve_reparameter_with_linear_function(T alpha, T beta,
+        nurbs_curve<T, dim, is_rational, -1, -1> &new_nurbs) const;
+    Eigen::Matrix<T, rows, Eigen::Dynamic> get_control_points() const;
+    ENUM_NURBS get_weight(int index, T &w) const;
+    
+    
+    
     int get_knots_count() const
     {
         return m_knots_vector.size();
@@ -992,7 +1005,36 @@ public:
         return count;
     }
 
+    ENUM_NURBS get_weight(int index, T &w) const
+    {
+        if (index < 0 || index >= m_control_points.cols())
+            return ENUM_NURBS::NURBS_ERROR;
+        if constexpr (is_rational == true)
+        {
+            w = m_control_points(dim, index);
+            return  ENUM_NURBS::NURBS_SUCCESS;
+        }
+        //else
+        w = 1.0;
+        return ENUM_NURBS::NURBS_SUCCESS;
 
+    }
+
+    ENUM_NURBS get_control_point(int index, Eigen::Vector<T, dim> &point) const
+    {
+        if (index < 0 || index >= m_control_points.cols())
+            return ENUM_NURBS::NURBS_ERROR;
+        if constexpr (is_rational == true)
+        {
+            point = m_control_points.template block<dim, 1>(0, index) / m_control_points(dim, index);
+        }
+        else
+        {
+            point = m_control_points.col(index);
+        }
+
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
 
     int is_include_konts(T u, T eps = 0.0) const
     {
@@ -1030,6 +1072,11 @@ public:
     Eigen::Matrix<T, rows, Eigen::Dynamic> get_control_points() const
     {
         return m_control_points;
+    }
+
+    int get_control_points_count() const
+    {
+        return m_control_points.cols();
     }
 
     Eigen::VectorX<T> get_knots_vector() const
