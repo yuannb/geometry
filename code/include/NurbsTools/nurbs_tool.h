@@ -3945,3 +3945,41 @@ ENUM_NURBS merge_two_knots_vector(int degree, const Eigen::VectorX<T> &vec1, con
 
 }
 
+
+//mat的每列为缩放的方向, 必须是单位向量
+template<typename T, int dim, bool is_rational, int point_size = is_rational ? dim + 1 : dim>
+ENUM_NURBS sacle_point(Eigen::Vector<T, point_size> &old_point, const Eigen::Matrix<T, dim, dim> &mat,
+    const Eigen::Vector<T, dim> &scale_factory, const Eigen::Vector<T, dim> &center_point)
+{
+    T w = 1.0;
+    if constexpr (is_rational == true)
+        w = old_point[dim];
+
+    Eigen::Vector<T, dim>  vec = old_point.template block<dim, 1>(0, 0) -  w * center_point;
+
+    Eigen::Matrix<T, dim, dim> scale_matrix;
+    scale_matrix.setConstant(0.0);
+    for (int index = 0; index < dim; ++index)
+    {
+        scale_matrix(index, index) = scale_factory[index];
+    }
+
+    old_point.template block<dim, 1>(0, 0) = (mat * scale_matrix * mat.inverse()) * vec + w * center_point;
+    if constexpr (is_rational == true)
+        old_point[dim] = w;
+    return ENUM_NURBS::NURBS_SUCCESS;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+

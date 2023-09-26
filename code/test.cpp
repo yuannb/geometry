@@ -19,6 +19,7 @@
 #include "convert_nubrs_with_polynomial.h" 
 #include "create_nurbs_arc.h"
 #include "contruct_primitive_nurbs_surface.h"
+#include "fit_nurbs.h"
 
 // void test_DeCasteljaul_t()
 // {
@@ -4192,11 +4193,108 @@ void create_revolved_surface_1()
     outfile2.close();
 }
 
+void create_scale_nurbs_surface_1()
+{
+    Eigen::Vector<double, 3> center{0, 0, 10};
+    Eigen::Vector<double, 3> u_dir{1, 0, 0};
+    Eigen::Vector<double, 3> v_dir{0, 0, 1};
+    Eigen::Vector<double, 3> z_dir{0, -1, 0};
+    Eigen::Vector3d scales {2, 3, 1};
+    double radius = 10;
+    nurbs_curve<double, 3, true, -1, -1> nurbs;
+    create_nurbs_circle(center, u_dir, v_dir, radius, 0.0, M_PI, nurbs);
+
+    std::vector<Eigen::Vector3d> pointss;
+    for (int i = 0; i < 100; ++i)
+    {
+        Eigen::Vector3d point;   
+        nurbs.point_on_curve(0.01 * i, point);
+        pointss.push_back(point);
+    }
+
+    nurbs_surface<double, 3, -1, -1, -1, -1, true> surf;
+    create_revolved_surface<double>(nurbs, center, u_dir, M_PI * 2.0, surf);
+    Eigen::Matrix<double, 3, 3> mat;
+    mat << u_dir, v_dir, z_dir;
+    surf.scale_surface(center, mat, scales);
+    std::vector<Eigen::Vector3d> pss;
+    for (int k = 0; k <= 100; ++k)
+    {
+        for (int l = 0; l <= 100; ++l)
+        {
+            Eigen::Vector3d point;
+            surf.point_on_surface(0.01 * k, 0.01 * l, point);
+            pss.push_back(point);
+        }
+    }
+
+    std::string dir2("view.obj");
+    std::ofstream outfile2(dir2);
+    for (auto point : pss)
+    {
+        outfile2 << "v " << point[0] << " " <<
+        point[1] << " " << point[2] << std::endl;
+    }
+    outfile2.close();
+}
+
+
+void create_nurbs_fit_1()
+{
+    Eigen::Vector<double, 3> center{0, 0, 0};
+    Eigen::Vector<double, 3> u_dir{1, 0, 0};
+    Eigen::Vector<double, 3> v_dir{0, 1, 0};
+    double radius = 10;
+    double start_angles = 0;
+    double end_angles = PI + 0.78;
+    nurbs_curve<double, 3, true, -1, -1> nurbs;
+    create_nurbs_circle(center, u_dir, v_dir, radius, start_angles, end_angles, nurbs);
+    Eigen::Matrix<double, 3, Eigen::Dynamic> pointss(3, 5);
+    for (int i = 0; i < 5; ++i)
+    {
+        Eigen::Vector3d point;   
+        nurbs.point_on_curve(0.2 * i, point);
+        pointss.col(i) = point;
+    }
+
+
+    nurbs_curve<double, 3, false, -1, -1> new_nurbs;
+    global_curve_interpolate<double, 3, ENPARAMETERIEDTYPE::CHORD>(pointss, 3, new_nurbs);
+    
+    std::vector<Eigen::Vector3d> new_points;
+    for (int i = 0; i < 100; ++i)
+    {
+        Eigen::Vector3d point;   
+        new_nurbs.point_on_curve(0.01 * i, point);
+        new_points.push_back(point);
+    }
+    //     // // write doc
+    std::string dir("view2.obj");
+    std::ofstream outfile(dir);
+
+    for (auto point : new_points)
+    {
+        outfile << "v " << point[0] << " " <<
+        point[1] << " " << point[2] << std::endl;
+    }
+
+    std::string dir2("view.obj");
+    std::ofstream outfile2(dir2);
+
+    for (int index = 0; index < 5; ++index)
+    {
+        outfile2 << "v " << pointss(0, index) << " " <<
+        pointss(1, index) << " " << pointss(2, index) << std::endl;
+    }
+
+}
+
+
 
 int main()
 {
 
-    create_revolved_surface_1();
+    create_nurbs_fit_1();
     return 0;
 }
 

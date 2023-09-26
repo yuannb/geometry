@@ -33,6 +33,7 @@ class nurbs_surface
     int get_u_degree();
     int get_v_degree();
     ENUM_NURBS reverse_uv();
+    ENUM_NURBS scale_surface(const Eigen::Vector<T, dim> &center, const Eigen::Matrix<T, dim, dim> &mat, const Eigen::Vector<T, dim> &scale_factory);
     Eigen::VectorX<T> get_u_knots() const;
     Eigen::VectorX<T> get_v_knots() const;
     ENUM_NURBS set_u_degree(int degree);
@@ -1881,6 +1882,23 @@ public:
         if (direction == ENUM_DIRECTION::V_DIRECTION)
             reverse_uv();
 
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+
+    ENUM_NURBS scale_surface(const Eigen::Vector<T, dim> &center, const Eigen::Matrix<T, dim, dim> &mat, const Eigen::Vector<T, dim> &scale_factory)
+    {
+        int rows = m_control_points.rows();
+        int cols = m_control_points[0].cols();
+        for (int row_index = 0; row_index < rows; ++row_index)
+        {
+            for (int cols_index = 0; cols_index < cols; ++cols_index)
+            {
+                Eigen::Vector<T, point_size> vec = m_control_points[row_index].col(cols_index);
+                sacle_point<T, dim, is_rational>(vec, mat, scale_factory, center);
+                m_control_points[row_index].col(cols_index) = vec;
+            }
+        }
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
