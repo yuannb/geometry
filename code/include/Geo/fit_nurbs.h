@@ -62,9 +62,9 @@ ENUM_NURBS global_curve_interpolate(const Eigen::Matrix<T, dim, Eigen::Dynamic> 
     solver.compute(mat);
     if (solver.info() != Eigen::Success)
         return ENUM_NURBS::NURBS_ERROR;
-    Eigen::Matrix3d matt;
-    matt.transpose();
     Eigen::Matrix<T, Eigen::Dynamic, dim> control_points = solver.solve(points.transpose());
+    if (solver.info() != Eigen::Success)
+        return ENUM_NURBS::NURBS_ERROR;
     Eigen::Matrix<T, dim, Eigen::Dynamic> transpose_points = control_points.transpose();
     nurbs.set_control_points(transpose_points);
     nurbs.set_knots_vector(knots_vector);
