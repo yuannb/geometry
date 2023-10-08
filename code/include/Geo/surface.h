@@ -12,38 +12,42 @@ public:
     ~old_surface();
     virtual Eigen::Vector3d get_normal() = 0;
 };
-
-template<typename surface_type>
-class surface
+namespace tnurbs
 {
-public:
-    // using derived_type = typename geo_traits<surface_type>::type;
-    using point_number_type = typename geo_traits<surface_type>::point_number_type;
-    using point_type = typename geo_traits<surface_type>::point_type;
-private:
-    Interval<point_number_type> m_u_interval;
-    Interval<point_number_type> m_v_interval;
-
-public:
-
-    // curve() = delete;
-
-    ~surface() { };
-
-
-    ENUM_NURBS point_on_surface(point_number_type u, point_number_type v,  point_type &point)
+    using namespace tnurbs;
+    template<typename surface_type>
+    class surface
     {
-        return static_cast<surface_type*>(this)->point_on_surface(u, v, point);
-    }
+    public:
+        // using derived_type = typename geo_traits<surface_type>::type;
+        using point_number_type = typename geo_traits<surface_type>::point_number_type;
+        using point_type = typename geo_traits<surface_type>::point_type;
+    private:
+        Interval<point_number_type> m_u_interval;
+        Interval<point_number_type> m_v_interval;
 
-    surface_type* get_derived()
-    {
-        return static_cast<surface_type*>(this);
-    }
+    public:
 
-    const surface_type *get_derived() const
-    {
-        return static_cast<const surface_type*>(this);
-    }
-};
+        // curve() = delete;
+
+        ~surface() { };
+
+
+        ENUM_NURBS point_on_surface(point_number_type u, point_number_type v,  point_type &point)
+        {
+            return static_cast<surface_type*>(this)->point_on_surface(u, v, point);
+        }
+
+        surface_type* get_derived()
+        {
+            return static_cast<surface_type*>(this);
+        }
+
+        const surface_type *get_derived() const
+        {
+            return static_cast<const surface_type*>(this);
+        }
+    };
+
+}
 

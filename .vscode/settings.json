@@ -62,11 +62,16 @@
         "*.inc": "cpp",
         "core": "cpp",
         "chrono": "cpp",
-        "cinttypes": "cpp"
+        "cinttypes": "cpp",
+        "svd": "cpp",
+        "sparse": "cpp",
+        "forward_list": "cpp"
     },
     "cmake.enabledOutputParsers": [],
     "cmake.exportCompileCommandsFile": true,
     "C_Cpp.errorSquiggles": "disabled",
+    "C_Cpp.default.includePath": ["./3rd/googletest/googletest/include",
+                                    "./3rd/eigen/include/eigen3"]
     // "cmake.sourceDirectory": "C:/Users/Administrator/Desktop/workbench/code",
     // "cmake.configureOnOpen": false,
 }

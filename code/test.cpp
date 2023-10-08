@@ -20,7 +20,7 @@
 #include "create_nurbs_arc.h"
 #include "contruct_primitive_nurbs_surface.h"
 #include "fit_nurbs.h"
-
+using namespace tnurbs;
 // void test_DeCasteljaul_t()
 // {
 //     Eigen::Vector<double, 3> v1{0, 0, 0};
@@ -4290,68 +4290,14 @@ void create_nurbs_fit_1()
 }
 
 
-void create_nurbs_fit_2()
-{
-    Eigen::Vector<double, 3> center{0, 0, 0};
-    Eigen::Vector<double, 3> u_dir{1, 0, 0};
-    Eigen::Vector<double, 3> v_dir{0, 1, 0};
-    double radius = 10;
-    double start_angles = 0;
-    double end_angles = PI + 0.78;
-    nurbs_curve<double, 3, true, -1, -1> nurbs;
-    create_nurbs_circle(center, u_dir, v_dir, radius, start_angles, end_angles, nurbs);
-    Eigen::Matrix<double, 3, Eigen::Dynamic> pointss(3, 5);
-    for (int i = 0; i < 5; ++i)
-    {
-        Eigen::Vector3d point;   
-        nurbs.point_on_curve(0.2 * i, point);
-        pointss.col(i) = point;
-    }
 
-
-    nurbs_curve<double, 3, false, -1, -1> new_nurbs;
-    Eigen::Vector3d D0{0.1, 0.9, 0};
-    Eigen::Vector3d D1{0.1, -0.9, 0};
-    global_curve_interpolate_with_ends_tangent<double, 3, ENPARAMETERIEDTYPE::CHORD>(pointss, D0, D1, 3, new_nurbs);
-    
-    Eigen::VectorX<Eigen::Vector<double, 3>> ders;
-    new_nurbs.derivative_on_curve(0.0, 1, ders);
-    new_nurbs.derivative_on_curve(1.0, 1, ders);
-
-    std::vector<Eigen::Vector3d> new_points;
-    for (int i = 0; i < 100; ++i)
-    {
-        Eigen::Vector3d point;   
-        new_nurbs.point_on_curve(0.01 * i, point);
-        new_points.push_back(point);
-    }
-    //     // // write doc
-    std::string dir("view2.obj");
-    std::ofstream outfile(dir);
-
-    for (auto point : new_points)
-    {
-        outfile << "v " << point[0] << " " <<
-        point[1] << " " << point[2] << std::endl;
-    }
-
-    std::string dir2("view.obj");
-    std::ofstream outfile2(dir2);
-
-    for (int index = 0; index < 5; ++index)
-    {
-        outfile2 << "v " << pointss(0, index) << " " <<
-        pointss(1, index) << " " << pointss(2, index) << std::endl;
-    }
-
-}
 
 
 
 int main()
 {
 
-    create_nurbs_fit_2();
+    create_nurbs_fit_1();
     return 0;
 }
 
