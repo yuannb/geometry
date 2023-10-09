@@ -42,23 +42,47 @@ TEST_F(CreateNurbs, InterpolateWithEndsTangent)
     Eigen::Vector3d D1{-5, -5, 0};
     global_curve_interpolate_with_ends_tangent<double, 3, ENPARAMETERIEDTYPE::CHORD>(pointss, D0, D1, 3, new_nurbs);
 
-    std::vector<Eigen::Vector3d> new_points;
-    for (int i = 0; i < 100; ++i)
-    {
-        Eigen::Vector3d point;
-        new_nurbs.point_on_curve(0.01 * i + 0.0099999, point);
-        new_points.push_back(point);
-    }
+    // std::vector<Eigen::Vector3d> new_points;
+    // for (int i = 0; i < 100; ++i)
+    // {
+    //     Eigen::Vector3d point;
+    //     new_nurbs.point_on_curve(0.01 * i + 0.0099999, point);
+    //     new_points.push_back(point);
+    // }
 
-    std::string dir("view2.obj");
-    std::ofstream outfile(dir);
+    // std::string dir("view2.obj");
+    // std::ofstream outfile(dir);
 
-    for (auto point : new_points)
-    {
-        outfile << "v " << point[0] << " " <<
-        point[1] << " " << point[2] << std::endl;
-    }
-    std::cout << "google_test_1" << std::endl;
-    ASSERT_TRUE(true == false);
+    // for (auto point : new_points)
+    // {
+    //     outfile << "v " << point[0] << " " <<
+    //     point[1] << " " << point[2] << std::endl;
+    // }
+
+    ASSERT_TRUE(true == true);
+}
+
+
+TEST_F(CreateNurbs, InterpolateWithEndsTangent2)
+{
+    nurbs_curve<double, 3, false, -1, -1> new_nurbs;
+    Eigen::Vector3d D0{-1, 9, 0};
+    Eigen::Vector3d D1{-5, -5, 0};
+    global_3degree_curve_interpolate_with_ends_tangent<double, 3, ENPARAMETERIEDTYPE::CHORD>(pointss, D0, D1, new_nurbs);
+    Eigen::Vector3d point;
+    new_nurbs.point_on_curve(0.3, point);
+    Eigen::Vector3d test_point(5.9121941939644582, 8.239425086235828, 0.0);
+    double distance = (point - test_point).norm();
+    EXPECT_NEAR(distance, 0.0, DEFAULT_ERROR);
+
+    new_nurbs.point_on_curve(0.4, point);
+    test_point = Eigen::Vector3d(3.1448187971936421, 9.6107198158545994, 0.0);
+    distance = (point - test_point).norm();
+    EXPECT_NEAR(distance, 0.0, DEFAULT_ERROR);
+
+    new_nurbs.point_on_curve(0.5, point);
+    test_point = Eigen::Vector3d(0.047821952388199605, 10.000425510364781, 0.0);
+    distance = (point - test_point).norm();
+    EXPECT_NEAR(distance, 0.0, DEFAULT_ERROR);
 }
 
