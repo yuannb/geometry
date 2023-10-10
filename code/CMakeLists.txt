@@ -50,13 +50,20 @@ aux_source_directory(. SOURCES)
 
 
 add_executable(GWB nurbs_test.cpp)
+add_executable(GWB1 test2.cpp)
 
 target_link_libraries(GWB PUBLIC ${EXTRA_LIBS})
+target_link_libraries(GWB1 PUBLIC ${EXTRA_LIBS})
 
 target_include_directories(GWB PUBLIC "${PROJECT_SOURCE_DIR}"
                                         ${EXTRA_INCLUDES})
 
+target_include_directories(GWB1 PUBLIC "${PROJECT_SOURCE_DIR}"
+${EXTRA_INCLUDES})
+
 target_include_directories(GWB PUBLIC "${PROJECT_INIT_PATH}/3rd/googletest/googletest/include")
+target_include_directories(GWB1 PUBLIC "${PROJECT_INIT_PATH}/3rd/googletest/googletest/include")
+
 
 add_test(NAME nurbs_test COMMAND GWB)
 

@@ -8,7 +8,56 @@
 
 namespace tnurbs
 {
-    using namespace tnurbs;
+    // using namespace tnurbs;
+    
+    template<typename T, int dim>
+    ENUM_NURBS make_params_by_chord(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, int degree, std::vector<T> &params)
+    {
+        params.clear();
+        int points_count = points.cols();
+        params.resize(points_count);
+
+        T d = 0.0;
+        std::vector<T> vec_norm(points_count - 1);
+        for (int index = 1; index < points_count; ++index)
+        {
+            vec_norm[index - 1] = (points.col(index) - points.col(index - 1)).norm();
+            d += vec_norm[index - 1];
+        }
+        
+        params[0] = 0.0;
+        //可以优化以下参数的取值范围?
+        params[points_count - 1] = 1.0;
+        for (int index = 1; index < points_count - 1; ++index)
+        {
+            params[index] = params[index - 1] + vec_norm[index - 1] / d;
+        }
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    template<typename T, int dim>
+    ENUM_NURBS make_params_by_center(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, int degree, std::vector<T> &params)
+    {
+        params.clear();
+        int points_count = points.cols();
+        params.resize(points_count);
+        T d = 0.0;
+        std::vector<T> vec_norm(points - 1);
+        for (int index = 1; index < points_count; ++index)
+        {
+            vec_norm[index - 1] = std::sqrt((points.col(index) - points.col(index - 1)).norm());
+            d += vec_norm[index - 1];
+        }
+        
+        params[0] = 0.0;
+        //可以优化以下参数的取值范围?
+        params[points_count - 1] = 1.0;
+        for (int index = 1; index < points_count - 1; ++index)
+            params[index] = params[index - 1] + vec_norm[index - 1] / d;
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+
     enum ENPARAMETERIEDTYPE
     {
         CHORD = 0,
@@ -73,42 +122,15 @@ namespace tnurbs
     ENUM_NURBS global_curve_interpolate(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, int degree, 
             nurbs_curve<T, dim, false, -1, -1> &nurbs)
     {
-        int points_count = points.cols();
-        std::vector<T> params(points_count);
+        std::vector<T> params;
         if constexpr (parameteried_type == ENPARAMETERIEDTYPE::CHORD)
         {
-            T d = 0.0;
-            std::vector<T> vec_norm(points_count - 1);
-            for (int index = 1; index < points_count; ++index)
-            {
-                vec_norm[index - 1] = (points.col(index) - points.col(index - 1)).norm();
-                d += vec_norm[index - 1];
-            }
-            
-            params[0] = 0.0;
-            //可以优化以下参数的取值范围?
-            params[points_count - 1] = 1.0;
-            for (int index = 1; index < points_count - 1; ++index)
-            {
-                params[index] = params[index - 1] + vec_norm[index - 1] / d;
-            }
+            make_params_by_chord<T, dim>(points, degree, params);
                 
         }
         else if constexpr(parameteried_type == ENPARAMETERIEDTYPE::CENTRIPETAL)
         {
-            T d = 0.0;
-            std::vector<T> vec_norm(points - 1);
-            for (int index = 1; index < points_count; ++index)
-            {
-                vec_norm[index - 1] = std::sqrt((points.col(index) - points.col(index - 1)).norm());
-                d += vec_norm[index - 1];
-            }
-            
-            params[0] = 0.0;
-            //可以优化以下参数的取值范围?
-            params[points_count - 1] = 1.0;
-            for (int index = 1; index < points_count - 1; ++index)
-                params[index] = params[index - 1] + vec_norm[index - 1] / d;
+            make_params_by_center<T, dim>(points, degree, params);
         }
         else
         {
@@ -197,42 +219,15 @@ namespace tnurbs
     ENUM_NURBS global_curve_interpolate_with_ends_tangent(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, const Eigen::Vector<T, dim> &D0, 
         const Eigen::Vector<T, dim> &D1, int degree,  nurbs_curve<T, dim, false, -1, -1> &nurbs)
     {
-        int points_count = points.cols();
-        std::vector<T> params(points_count);
+        std::vector<T> params;
         if constexpr (parameteried_type == ENPARAMETERIEDTYPE::CHORD)
         {
-            T d = 0.0;
-            std::vector<T> vec_norm(points_count - 1);
-            for (int index = 1; index < points_count; ++index)
-            {
-                vec_norm[index - 1] = (points.col(index) - points.col(index - 1)).norm();
-                d += vec_norm[index - 1];
-            }
-            
-            params[0] = 0.0;
-            //可以优化以下参数的取值范围?
-            params[points_count - 1] = 1.0;
-            for (int index = 1; index < points_count - 1; ++index)
-            {
-                params[index] = params[index - 1] + vec_norm[index - 1] / d;
-            }
+            make_params_by_chord<T, dim>(points, degree, params);
                 
         }
         else if constexpr(parameteried_type == ENPARAMETERIEDTYPE::CENTRIPETAL)
         {
-            T d = 0.0;
-            std::vector<T> vec_norm(points - 1);
-            for (int index = 1; index < points_count; ++index)
-            {
-                vec_norm[index - 1] = std::sqrt((points.col(index) - points.col(index - 1)).norm());
-                d += vec_norm[index - 1];
-            }
-            
-            params[0] = 0.0;
-            //可以优化以下参数的取值范围?
-            params[points_count - 1] = 1.0;
-            for (int index = 1; index < points_count - 1; ++index)
-                params[index] = params[index - 1] + vec_norm[index - 1] / d;
+            make_params_by_center<T, dim>(points, degree, params);
         }
         else
         {
@@ -278,43 +273,14 @@ namespace tnurbs
     ENUM_NURBS global_3degree_curve_interpolate_with_ends_tangent(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, const Eigen::Vector<T, dim> &D0, 
         const Eigen::Vector<T, dim> &D1, nurbs_curve<T, dim, false, -1, -1> &nurbs)
     {
-        
-        int points_count = points.cols();
-        std::vector<T> params(points_count);
+        std::vector<T> params;
         if constexpr (parameteried_type == ENPARAMETERIEDTYPE::CHORD)
         {
-            T d = 0.0;
-            std::vector<T> vec_norm(points_count - 1);
-            for (int index = 1; index < points_count; ++index)
-            {
-                vec_norm[index - 1] = (points.col(index) - points.col(index - 1)).norm();
-                d += vec_norm[index - 1];
-            }
-            
-            params[0] = 0.0;
-            //可以优化以下参数的取值范围?
-            params[points_count - 1] = 1.0;
-            for (int index = 1; index < points_count - 1; ++index)
-            {
-                params[index] = params[index - 1] + vec_norm[index - 1] / d;
-            }
-                
+            make_params_by_chord<T, dim>(points, 3, params);           
         }
         else if constexpr(parameteried_type == ENPARAMETERIEDTYPE::CENTRIPETAL)
         {
-            T d = 0.0;
-            std::vector<T> vec_norm(points - 1);
-            for (int index = 1; index < points_count; ++index)
-            {
-                vec_norm[index - 1] = std::sqrt((points.col(index) - points.col(index - 1)).norm());
-                d += vec_norm[index - 1];
-            }
-            
-            params[0] = 0.0;
-            //可以优化以下参数的取值范围?
-            params[points_count - 1] = 1.0;
-            for (int index = 1; index < points_count - 1; ++index)
-                params[index] = params[index - 1] + vec_norm[index - 1] / d;
+            make_params_by_center<T, dim>(points, 3, params);
         }
         else
         {
@@ -322,6 +288,106 @@ namespace tnurbs
         }
 
         return global_3degree_curve_interpolate_with_ends_tangent<T, dim>(points, D0, D1, params, nurbs);
+    }
+
+    template<typename T, int dim, int degree>
+    ENUM_NURBS global_2or3degree_hermite_curve(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, const Eigen::Matrix<T, dim, Eigen::Dynamic> &ders, 
+        const std::vector<T> &params, nurbs_curve<T, dim, false, -1, -1> &nurbs)
+    {
+        static_assert((degree == 2 || degree == 3), "the degree of interpolater curve is not 2 or three");
+        int points_count = points.cols();
+        int params_count = params.size();
+        int ders_count = ders.cols();
+        if (points_count != params_count || params_count != ders_count)
+        {
+            return ENUM_NURBS::NURBS_ERROR;
+        }
+
+        int knots_vector_size = 2 * points_count + degree + 1;
+        Eigen::VectorX<T> knots_vector(knots_vector_size);
+
+        if constexpr (degree == 2)
+        {
+            knots_vector.template block<2, 1>(0, 0).setConstant(0.0);
+            knots_vector.template block<3, 1>(knots_vector_size - 3, 0).setConstant(1.0);
+            int count = points_count - 1;
+            for (int index = 0; index < count; ++index)
+            {
+                knots_vector[2 + index * 2] = params[index];
+                knots_vector[3 + index * 2] = (params[index] + params[index + 1]) / 2.0;
+            }
+        }
+        else if constexpr (degree == 3)
+        {
+            knots_vector.template block<4, 1>(0, 0).setConstant(0.0);
+            knots_vector[4] = params[1] / 2.0;
+            knots_vector.template block<4, 1>(knots_vector_size - 4, 0).setConstant(1.0);
+            int count = points_count - 2;
+            knots_vector[knots_vector_size - 5] = (params[count] + 1.0) / 2.0;
+            
+            for (int index = 1; index < count; ++index)
+            {
+                knots_vector[3 + index * 2] = (2 * params[index] + params[index + 1]) / 3.0;
+                knots_vector[4 + index * 2] = (params[index] + 2 * params[index + 1]) / 3.0;
+            }
+        }
+
+        int matrix_size = 2 * points_count;
+        Eigen::SparseMatrix<T> mat(matrix_size, matrix_size);
+        mat.reserve(Eigen::VectorXi::Constant(matrix_size, degree + 1));
+
+        Eigen::Matrix<T, Eigen::Dynamic, dim> Q_and_D(matrix_size, dim);
+        for (int row = 0; row < points_count; ++row)
+        {
+            int index = -1;
+            find_span<T, degree>(params[row], knots_vector, index);
+            Eigen::Matrix<T, degree + 1, 2> point_and_tangent;
+            ders_basis_funs<T, degree, 1>(index, params[row], knots_vector, point_and_tangent);
+
+            for (int i = 0; i <= degree; ++i)
+            {
+                mat.insert(row * 2, index + i - degree) = point_and_tangent(i, 0);
+                mat.insert(row * 2 + 1, index + i - degree) = point_and_tangent(i, 1);
+            }
+            Q_and_D.row(row * 2) = points.col(row).transpose();
+            Q_and_D.row(row * 2 + 1) = ders.col(row).transpose();
+        }
+        mat.makeCompressed();
+        Eigen::SparseLU<Eigen::SparseMatrix<T>> solver;
+        solver.compute(mat);
+        if (solver.info() != Eigen::Success)
+            return ENUM_NURBS::NURBS_ERROR;
+        Eigen::Matrix<T, Eigen::Dynamic, dim> control_points = solver.solve(Q_and_D);
+        if (solver.info() != Eigen::Success)
+            return ENUM_NURBS::NURBS_ERROR;
+        Eigen::Matrix<T, dim, Eigen::Dynamic> transpose_points = control_points.transpose();
+
+        nurbs.set_control_points(transpose_points);
+        nurbs.set_knots_vector(knots_vector);
+        nurbs.set_degree(degree);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    template<typename T, int dim, int degree, int parameteried_type>
+    ENUM_NURBS global_2or3degree_hermite_curve(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, const Eigen::Matrix<T, dim, Eigen::Dynamic> &ders,
+        nurbs_curve<T, dim, false, -1, -1> &nurbs)
+    {
+        static_assert((degree == 2 || degree == 3), "the degree of interpolater curve is not 2 or three");
+        std::vector<T> params;
+        if constexpr (parameteried_type == ENPARAMETERIEDTYPE::CHORD)
+        {
+            make_params_by_chord<T, dim>(points, degree, params);           
+        }
+        else if constexpr(parameteried_type == ENPARAMETERIEDTYPE::CENTRIPETAL)
+        {
+            make_params_by_center<T, dim>(points, degree, params);
+        }
+        else
+        {
+            return ENUM_NURBS::NURBS_ERROR;
+        }
+
+        return global_2or3degree_hermite_curve<T, dim, degree>(points, ders, params, nurbs);
     }
 
 

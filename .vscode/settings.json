@@ -65,7 +65,14 @@
         "cinttypes": "cpp",
         "svd": "cpp",
         "sparse": "cpp",
-        "forward_list": "cpp"
+        "forward_list": "cpp",
+        "any": "cpp",
+        "condition_variable": "cpp",
+        "optional": "cpp",
+        "iomanip": "cpp",
+        "mutex": "cpp",
+        "span": "cpp",
+        "variant": "cpp"
     },
     "cmake.enabledOutputParsers": [],
     "cmake.exportCompileCommandsFile": true,
