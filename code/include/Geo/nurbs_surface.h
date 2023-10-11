@@ -1906,6 +1906,65 @@ namespace tnurbs
         }
 
 
+        /// @brief 提取等参线(还没有测试)
+        /// @tparam direction  direction = ENUM_DIRECTION::U_DIRECTION表示等u线; direction = ENUM_DIRECTION::V_DIRECTION表示等v线
+        /// @param param S(direction = param)
+        /// @return 错误码
+        template<int direction> 
+        ENUM_NURBS get_isoparameter_curve(T param, nurbs_curve<T, dim, is_rational, -1, -1> &nurbs) const
+        {
+            if constexpr (direction == ENUM_DIRECTION::U_DIRECTION)
+            {
+                int span = -1;
+                find_span<T>(param, m_u_knots_vector, span);
+                int cols = m_control_points.rows();
+                Eigen::Matrix<T, point_size, Eigen::Dynamic> new_control_points(point_size, cols);
+                Eigen::VectorX<T> nu(m_u_degree + 1);
+                basis_functions<T>(span, param, m_u_knots_vector, nu);
+                for (int index = 0; index < cols; ++index)
+                { 
+                    new_control_points.col(index) = m_control_points[index].block(0, span - m_u_degree, point_size, m_u_degree + 1) * nu;
+                }
+                nurbs.set_control_points(new_control_points);
+                nurbs.set_knots_vector(m_v_knots_vector);
+                nurbs.set_degree(m_v_degree);
+                return ENUM_NURBS::NURBS_SUCCESS;
+            }
+            else if constexpr (direction == ENUM_DIRECTION::V_DIRECTION)
+            {
+                //reverse_uv
+                int rows = m_control_points.rows();
+                int cols = m_control_points[0].cols();
+                Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> reverse_control_points;
+                reverse_control_points.resize(cols);
+                for (int col_index = 0; col_index < cols; ++col_index)
+                {
+                    reverse_control_points[col_index].resize(point_size, rows);
+                    for (int row_index = 0; row_index < rows; ++row_index)
+                    {
+                        reverse_control_points[col_index].col(row_index) = m_control_points[row_index].col(col_index);
+                    }
+                }
+                
+                int span = -1;
+                find_span<T>(param, m_v_knots_vector, span);
+                Eigen::Matrix<T, point_size, Eigen::Dynamic> new_control_points(point_size, cols);
+                Eigen::VectorX<T> nv(m_v_degree + 1);
+                basis_functions<T>(span, param, m_v_knots_vector, nv);
+                for (int index = 0; index < cols; ++index)
+                {
+                    new_control_points.col(index) = new_control_points[index].block(0, span - m_v_degree, point_size, m_v_degree + 1) * nv;
+                }
+                nurbs.set_control_points(new_control_points);
+                nurbs.set_knots_vector(m_u_knots_vector);
+                nurbs.set_degree(m_u_degree);
+                return ENUM_NURBS::NURBS_SUCCESS;
+            }
+            //else
+            return ENUM_NURBS::NURBS_ERROR;
+        }
+
+
     };
 
     template<typename T, int dim, bool is_rational>

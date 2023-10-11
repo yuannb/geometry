@@ -8,7 +8,7 @@
 #include "gtest/gtest.h"
 using namespace tnurbs;
 
-class CreateNurbs : public testing::Test
+class CreateNurbsCurve : public testing::Test
 {
 protected:
     void SetUp() override
@@ -38,7 +38,68 @@ protected:
 };
 
 
-TEST_F(CreateNurbs, InterpolateWithEndsTangent)
+class CreateNurbsSurface : public testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        Eigen::VectorX<double> u_knots_vector(7);
+        u_knots_vector<< 0, 0, 0, 2.5, 5, 5, 5;
+        Eigen::VectorX<double> v_knots_vector(7);
+        v_knots_vector << 0, 0, 0, 1.5, 3, 3, 3;
+        Eigen::Matrix<double, 4, Eigen::Dynamic> points1(4, 4);
+        points1 << 0, 0, 0, 0,
+                2, 6, 2, 8,
+                5, 4, 0, 2,
+                1, 2, 1, 2;
+
+        Eigen::Matrix<double, 4, Eigen::Dynamic> points2(4, 4);
+        points2 << 4, 12, 4, 8,
+                6, 24, 10, 28,
+                8, 12, 0, 0,
+                2, 6,  2, 4;
+
+        Eigen::Matrix<double, 4, Eigen::Dynamic> points3(4, 4);
+        points3 << 4, 8, 4, 12,
+                2, 6, 4, 12,
+                4, 4, 0, -3,
+                1, 2, 1, 3;
+
+        Eigen::Matrix<double, 4, Eigen::Dynamic> points4(4, 4);
+        points4 << 4, 8, 4, 12,
+                2, 6, 4, 12,
+                4, 8, 4, 12,
+                1, 2, 1, 3;
+
+        Eigen::VectorX<Eigen::Matrix<double, 4, Eigen::Dynamic>> control_points(4);
+        control_points(0) = points1;
+        control_points(1) = points2;
+        control_points(2) = points3;
+        control_points(3) = points4;
+        test_surface =  nurbs_surface<double, 3, -1, -1, -1, -1, true>(u_knots_vector, v_knots_vector, control_points);
+        points.resize(5);
+        ders.resize(5);
+        for (int i = 0; i < 5; ++i)
+        {
+            points[i].resize(3, 5);
+            ders[i].resize(3, 5);
+            for (int j = 0; j < 5; ++j)
+            {
+                Eigen::Matrix<Eigen::Vector<double, 3>, 2, 2> ders_points;
+                test_surface.derivative_on_surface<1>(i * 1.0, j * 0.6, ders_points);
+                points[i].col(j) = ders_points(0, 0);
+                ders[i].col(j) = ders_points(1, 0);
+            }
+        }
+    }
+
+    nurbs_surface<double, 3, -1, -1, -1, -1, true> test_surface;
+    Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> points;
+    Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> ders;
+};
+
+
+TEST_F(CreateNurbsCurve, InterpolateWithEndsTangent)
 {
     nurbs_curve<double, 3, false, -1, -1> new_nurbs;
     Eigen::Vector3d D0{-1, 9, 0};
@@ -49,7 +110,7 @@ TEST_F(CreateNurbs, InterpolateWithEndsTangent)
 }
 
 
-TEST_F(CreateNurbs, InterpolateWithEndsTangent2)
+TEST_F(CreateNurbsCurve, InterpolateWithEndsTangent2)
 {
     nurbs_curve<double, 3, false, -1, -1> new_nurbs;
     Eigen::Vector3d D0{-1, 9, 0};
@@ -72,7 +133,7 @@ TEST_F(CreateNurbs, InterpolateWithEndsTangent2)
     EXPECT_NEAR(distance, 0.0, DEFAULT_ERROR);
 }
 
-TEST_F(CreateNurbs, InterpolateHermite)
+TEST_F(CreateNurbsCurve, InterpolateHermite)
 {
     nurbs_curve<double, 3, false, -1, -1> new_nurbs;
     global_2or3degree_hermite_curve<double, 3, 3, ENPARAMETERIEDTYPE::CHORD>(pointss, ders, new_nurbs);
@@ -94,5 +155,31 @@ TEST_F(CreateNurbs, InterpolateHermite)
         EXPECT_NEAR(distance, 0.0, DEFAULT_ERROR);
     }
 
+}
+
+
+TEST_F(CreateNurbsSurface, InterpolateSurface)
+{
+    nurbs_surface<double, 3, -1, -1, -1, -1, false> new_nurbs;
+
+    global_surface_interpolate<double, 3, ENPARAMETERIEDTYPE::CHORD>(points, 3, 4, new_nurbs);
+
+    std::vector<Eigen::Vector3d> pss;
+
+    for (int i = 0; i < 5; ++i)
+    {
+        for (int j = 0; j < 5; ++j)
+        {
+            Eigen::Vector3d point;
+            double u, v;
+            Eigen::Vector3d p;
+            ENUM_NURBS flag = new_nurbs.find_nearst_point_on_surface(points[i].col(j), u, v, p);
+            ASSERT_EQ(ENUM_NURBS::NURBS_SUCCESS, flag);
+            new_nurbs.point_on_surface(u, v, point);
+
+            double distance = (point - points[i].col(j)).norm();
+            EXPECT_NEAR(distance, 0.0, DEFAULT_ERROR);
+        }
+    }
 }
 

@@ -8,7 +8,7 @@
 #include <fstream>
 
 // #define KNOTS_VECTOR_EPS    1e-8
-#define KNOTS_VECTOR_ERROR     1e-8
+#define KNOTS_VECTOR_ERROR     1e-10
 #define DEFAULT_ERROR     1e-4
 #define ANGLE_ERROR       1e-3
 #define MAX_ITERATE_DEEP 1e5
@@ -48,7 +48,8 @@ namespace tnurbs
         NUBRS_CANNOT_INSERT_KNOTS = 4,
         NUBRS_WIEGHT_IS_NONPOSITIVE = 5,
         NURBS_POINT_IS_ON_CURVE = 6,
-        NURBS_POINT_IS_NOT_ON_CURVE = 7
+        NURBS_POINT_IS_NOT_ON_CURVE = 7,
+        NURBS_CHORD_IS_ZERO = 8
     };
 
     /// @brief 查找节点矢量有几个不一样的数

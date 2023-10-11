@@ -8,8 +8,7 @@
 
 namespace tnurbs
 {
-    // using namespace tnurbs;
-    
+
     template<typename T, int dim>
     ENUM_NURBS make_params_by_chord(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, int degree, std::vector<T> &params)
     {
@@ -24,6 +23,10 @@ namespace tnurbs
             vec_norm[index - 1] = (points.col(index) - points.col(index - 1)).norm();
             d += vec_norm[index - 1];
         }
+        if (d < DEFAULT_ERROR)
+        {
+            return ENUM_NURBS::NURBS_CHORD_IS_ZERO;
+        }
         
         params[0] = 0.0;
         //可以优化以下参数的取值范围?
@@ -34,6 +37,7 @@ namespace tnurbs
         }
         return ENUM_NURBS::NURBS_SUCCESS;
     }
+
 
     template<typename T, int dim>
     ENUM_NURBS make_params_by_center(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, int degree, std::vector<T> &params)
@@ -48,7 +52,10 @@ namespace tnurbs
             vec_norm[index - 1] = std::sqrt((points.col(index) - points.col(index - 1)).norm());
             d += vec_norm[index - 1];
         }
-        
+        if (d < DEFAULT_ERROR)
+        {
+            return ENUM_NURBS::NURBS_CHORD_IS_ZERO;
+        }
         params[0] = 0.0;
         //可以优化以下参数的取值范围?
         params[points_count - 1] = 1.0;
@@ -63,6 +70,111 @@ namespace tnurbs
         CHORD = 0,
         CENTRIPETAL
     };
+
+
+    template<typename T, int dim, int parameteried_type>
+    ENUM_NURBS make_surface_params(const Eigen::Vector<Eigen::Matrix<T, dim, Eigen::Dynamic>, Eigen::Dynamic> &points, int u_degree, int v_degree, 
+        std::vector<T> &u_params, std::vector<T> &v_params)
+    {
+        int u_valid_num = points[0].cols();
+        int u_count = u_valid_num;
+        int v_valid_num = points.rows();
+        int v_count = v_valid_num;
+        
+        u_params.resize(u_count, 0.0);
+        v_params.resize(v_count, 0.0);
+
+        for (int v_index = 0; v_index < v_count; ++v_index)
+        {
+            std::vector<T> u_temp_params;
+            if constexpr (parameteried_type == ENPARAMETERIEDTYPE::CHORD)
+            {
+                ENUM_NURBS flag = make_params_by_chord(points[v_index], u_degree, u_temp_params);
+                if (flag == ENUM_NURBS::NURBS_CHORD_IS_ZERO)
+                    v_valid_num -= 1;
+                else
+                {
+                    if (u_temp_params.size() != static_cast<size_t> (u_count))
+                        return ENUM_NURBS::NURBS_ERROR;
+                }
+            }
+            else if constexpr (parameteried_type == ENPARAMETERIEDTYPE::CENTRIPETAL)
+            {
+                ENUM_NURBS flag = make_params_by_center(points[v_index], u_degree, u_temp_params);
+                if (flag == ENUM_NURBS::NURBS_CHORD_IS_ZERO)
+                    v_valid_num -= 1;
+                else
+                {
+                    if (u_temp_params.size() != static_cast<size_t> (u_count))
+                        return ENUM_NURBS::NURBS_ERROR;
+                }
+            }
+            else
+            {
+                return ENUM_NURBS::NURBS_ERROR;
+            }
+            
+            for (int index = 0; index < u_count; ++index)
+                u_params[index] += u_temp_params[index];
+        }
+        if (v_valid_num == 0)
+            return ENUM_NURBS::NURBS_ERROR;
+        for (int index = 0; index < u_count; ++index)
+            u_params[index] /= static_cast<T>(v_valid_num);
+
+        //reverse matrix
+        Eigen::VectorX<Eigen::Matrix<T, dim, Eigen::Dynamic>> new_control_points;
+        new_control_points.resize(u_count);
+        for (int col_index = 0; col_index < u_count; ++col_index)
+        {
+            new_control_points[col_index].resize(dim, v_count);
+            for (int row_index = 0; row_index < v_count; ++row_index)
+            {
+                new_control_points[col_index].col(row_index) = points[row_index].col(col_index);
+            }
+        }
+
+        for (int u_index = 0; u_index < u_count; ++u_index)
+        {
+            std::vector<T> v_temp_params;
+            if constexpr (parameteried_type == ENPARAMETERIEDTYPE::CHORD)
+            {
+                ENUM_NURBS flag = make_params_by_chord(new_control_points[u_index], v_degree, v_temp_params);
+                if (flag == ENUM_NURBS::NURBS_CHORD_IS_ZERO)
+                    u_valid_num -= 1;
+                else
+                {
+                    if (v_temp_params.size() != static_cast<size_t> (v_count))
+                        return ENUM_NURBS::NURBS_ERROR;
+                }
+            }
+            else if constexpr (parameteried_type == ENPARAMETERIEDTYPE::CENTRIPETAL)
+            {
+                ENUM_NURBS flag = make_params_by_center(new_control_points[u_index], v_degree, v_temp_params);
+                if (flag == ENUM_NURBS::NURBS_CHORD_IS_ZERO)
+                    u_valid_num -= 1;
+                else
+                {
+                    if (v_temp_params.size() != static_cast<size_t> (v_count))
+                        return ENUM_NURBS::NURBS_ERROR;
+                }
+            }
+            else
+            {
+                return ENUM_NURBS::NURBS_ERROR;
+            }
+            for (int index = 0; index < v_count; ++index)
+                v_params[index] += v_temp_params[index];
+        }
+        if (v_valid_num == 0)
+            return ENUM_NURBS::NURBS_ERROR;
+        for (int index = 0; index < v_count; ++index)
+            v_params[index] /= static_cast<T>(u_valid_num);
+
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+
     template<typename T, int dim>
     ENUM_NURBS global_curve_interpolate(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, int degree, 
         const std::vector<T> &params, nurbs_curve<T, dim, false, -1, -1> &nurbs)
@@ -388,6 +500,90 @@ namespace tnurbs
         }
 
         return global_2or3degree_hermite_curve<T, dim, degree>(points, ders, params, nurbs);
+    }
+
+
+    template<typename T, int dim>
+    ENUM_NURBS global_surface_interpolate(const Eigen::Vector<Eigen::Matrix<T, dim, Eigen::Dynamic>, Eigen::Dynamic> &points, int u_degree, int v_degree, 
+        const std::vector<T> &u_params, const std::vector<T> &v_params, nurbs_surface<T, dim, -1, -1, -1, -1, false> &nurbs)
+    {
+        int u_params_size = static_cast<int> (u_params.size());
+        int v_params_size = static_cast<int> (v_params.size());
+
+
+        Eigen::VectorX<T> u_knots_vector(u_params_size + u_degree + 1);
+        Eigen::VectorX<T> v_knots_vector(v_params_size + v_degree + 1);
+        u_knots_vector.block(0, 0, u_degree + 1, 1).setConstant(0.0);
+        v_knots_vector.block(0, 0, v_degree + 1, 1).setConstant(0.0);
+        u_knots_vector.block(u_params_size, 0, u_degree + 1, 1).setConstant(1.0);
+        v_knots_vector.block(v_params_size, 0, v_degree + 1, 1).setConstant(1.0);
+        int u_internel_knots_count = u_params_size - u_degree - 1;
+        int v_internel_knots_count = v_params_size - v_degree - 1;
+        T u_inverse_degree = 1.0 / static_cast<T>(u_degree);
+        T v_inverse_degree = 1.0 / static_cast<T>(v_degree);
+        
+        auto u_it = u_params.begin() + 1;
+        for (int j = 1; j <= u_internel_knots_count; ++j)
+        {
+            //求和可以优化
+            u_knots_vector[u_degree + j] = std::accumulate(u_it, u_it + u_degree, 0.0) * u_inverse_degree;
+            ++u_it;
+        }
+
+        auto v_it = v_params.begin() + 1;
+        for (int j = 1; j <= v_internel_knots_count; ++j)
+        {
+            //求和可以优化
+            v_knots_vector[v_degree + j] = std::accumulate(v_it, v_it + v_degree, 0.0) * v_inverse_degree;
+            ++v_it;
+        }
+
+        Eigen::VectorX<Eigen::Matrix<T, dim, Eigen::Dynamic>> R(u_params_size);
+        Eigen::VectorX<Eigen::Matrix<T, dim, Eigen::Dynamic>> new_control_points(v_params_size);
+        for (int index = 0; index < u_params_size; ++index)
+        {
+            R[index].resize(dim, v_params_size);
+        }
+
+        for (int index = 0; index < v_params_size; ++index)
+        {
+            new_control_points[index].resize(dim, u_params_size);
+        }
+
+        for (int v_index = 0; v_index < v_params_size; ++v_index)
+        {
+            nurbs_curve<T, dim, false, -1, -1> temp_nurbs;
+            global_curve_interpolate<T, dim>(points[v_index], u_degree, u_params, temp_nurbs);
+            Eigen::Matrix<T, dim, Eigen::Dynamic> control_points = temp_nurbs.get_control_points();
+            for (int index = 0; index < u_params_size; ++index)
+            {
+                R[index].col(v_index) = control_points.col(index);
+            }
+        }
+        for (int u_index = 0; u_index < u_params_size; ++u_index)
+        {
+            nurbs_curve<T, dim, false, -1, -1> temp_nurbs;
+            global_curve_interpolate<T, dim>(R[u_index], v_degree, v_params, temp_nurbs);
+            Eigen::Matrix<T, dim, Eigen::Dynamic> control_points = temp_nurbs.get_control_points();
+            for (int index = 0; index < v_params_size; ++index)
+            {
+                new_control_points[index].col(u_index) = control_points.col(index);
+            }
+        }
+
+        nurbs.set_control_points(new_control_points);
+        nurbs.set_uv_knots(u_knots_vector, v_knots_vector);
+        nurbs.set_uv_degree(u_degree, v_degree);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    template<typename T, int dim, int parameteried_type>
+    ENUM_NURBS global_surface_interpolate(const Eigen::Vector<Eigen::Matrix<T, dim, Eigen::Dynamic>, Eigen::Dynamic> &points, int u_degree, int v_degree, 
+            nurbs_surface<T, dim, -1, -1, -1, -1, false> &nurbs)
+    {
+        std::vector<T> u_params, v_params;
+        make_surface_params<T, dim, parameteried_type>(points, u_degree, v_degree, u_params, v_params);
+        return global_surface_interpolate<T, dim>(points, u_degree, v_degree, u_params, v_params, nurbs);
     }
 
 
