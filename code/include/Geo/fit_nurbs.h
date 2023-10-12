@@ -587,7 +587,367 @@ namespace tnurbs
     }
 
 
+    //tangent里面的向量都三单位向量
+    //flag = true表示保留角点; flag = false表示不保留角点
+    template<typename T, int dim, bool flag>
+    ENUM_NURBS make_tangent_by_5points(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, Eigen::Matrix<T, dim, Eigen::Dynamic> &tangent)
+    {
+        int points_count = points.cols();
+        int coeff_count = points_count + 3;
+        Eigen::Matrix<T, dim, Eigen::Dynamic> Q(dim, coeff_count);
+        Q.block(0, 2, dim, points_count - 1) = points.block(0, 1, dim, points_count - 1) - points.block(0, 0, dim, points_count - 1);
+        Q.col(1) = 2.0 * Q.col(2) - Q.col(3);
+        Q.col(0) = 2.0 * Q.col(1) - Q.col(2);
 
+        tangent.resize(dim, points_count);
+
+        T coeff1 = (Q.col(0).cross(Q.col(1))).norm();
+        for (int index = 1; index <= points_count; ++index)
+        {
+            T alpha;
+            T coeff2 = Q.col(index + 1).cross(Q.col(index + 2)).squaredNorm();
+            if (coeff1 < DEFAULT_ERROR && coeff2 < DEFAULT_ERROR)
+            {
+                if constexpr (flag == true)
+                {
+                    alpha = 1.0;
+                }
+                else
+                {
+                    alpha = 0.5;
+                }
+            }
+            else
+            {
+                alpha = coeff1 / (coeff1 + coeff2);
+            }
+
+            tangent.col(index - 1) = (1.0 - alpha) * Q.col(index - 1) + alpha * Q.col(index);
+            coeff1 = coeff2;
+        }
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    //false 表示无理插值, true表示有理插值; 此函数仅在二次nurbs插值中使用
+    template<typename T, int dim, bool is_rational = false>
+    ENUM_NURBS evaluate_intersct_point(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, const Eigen::Matrix<T, dim, Eigen::Dynamic> &tangents, 
+        std::vector<Eigen::Vector<T, dim>> &new_interpolate_points, Eigen::Matrix<T, dim, Eigen::Dynamic> &control_points)
+    {
+        int points_count = points.cols();
+        int tangents_count = tangents.cols();
+        if (points_count != tangents_count)
+        {
+            return ENUM_NURBS::NURBS_ERROR;
+        }
+
+        //一次分配足够的空间(最差会浪费一半的内存)
+        std::vector<Eigen::Vector<T, dim>> temp_control_points;
+        temp_control_points.reserve(2 * points_count);
+        new_interpolate_points.reserve(2 * points_count);
+        temp_control_points.push_back(points.col(0));
+        new_interpolate_points.push_back(points.col(0));
+        for (int index = 0; index <= points_count - 2; ++index)
+        {
+            Eigen::Vector<T, 2> intersect_params;
+            ENUM_NURBS flag = tow_line_intersect<T, dim>(points.col(index), tangents.col(index), points.col(index + 1), tangents.col(index + 1), intersect_params);
+            if (flag == ENUM_NURBS::NURBS_SUCCESS)
+            {
+                if (intersect_params[0] > 0.0 && intersect_params[1] < 0.0)
+                {
+                    Eigen::Vector<T, dim> intersetc_point = (points.col(index) + intersect_params[0] * tangents.col(index) + points.col(index + 1) + \
+                                                            intersect_params[1] * tangents.col(index + 1)) / 2.0;
+                    temp_control_points.push_back(std::move(intersetc_point));
+                    new_interpolate_points.push_back(points.col(index + 1));
+                }
+                else
+                {
+                    Eigen::Vector<T, dim> t1 = tangents.col(index);
+                    Eigen::Vector<T, dim> t2 = tangents.col(index + 1);
+                    Eigen::Vector<T, dim> q = points.col(index) - points.col(index + 1);
+                    T len = q.norm();
+                    t1.normalize();
+                    t2.normalize();
+                    q.normalize();
+                    T costheta1 = std::abs(t1.dot(q));
+                    T costheta2 = std::abs(t2.dot(q));
+                    T num;
+                    if constexpr (is_rational == false)
+                        num = 0.75 * len;
+                    else
+                        num = 1.5 * len;
+                    T gamma1 = num / (2 * costheta2 + costheta1);
+                    T gamma2 = num / (2 * costheta1 + costheta2);
+
+                    Eigen::Vector<T, dim> R1 = points.col(index) + gamma1 * t1;
+                    Eigen::Vector<T, dim> R2 = points.col(index + 1) - gamma2 * t2;
+                    Eigen::Vector<T, dim> Q = (gamma2 * R1 + gamma1 * R2) / (gamma1 + gamma2);
+                    temp_control_points.push_back(std::move(R1));
+                    temp_control_points.push_back(std::move(R2));
+
+                    new_interpolate_points.push_back(std::move(Q));
+                    new_interpolate_points.push_back(points.col(index + 1));
+                }
+            }
+            else
+            {
+                Eigen::Vector<T, dim> t1 = tangents.col(index);
+                Eigen::Vector<T, dim> t2 = tangents.col(index + 1);
+                Eigen::Vector<T, dim> q = points.col(index) - points.col(index + 1);
+                t1.normalize();
+                t2.normalize();
+                q.normalize();
+                if (t1.cross(q).squaredNorm() < DEFAULT_ERROR * DEFAULT_ERROR && t2.cross(q).squaredNorm() < DEFAULT_ERROR * DEFAULT_ERROR)
+                {
+                    Eigen::Vector<T, dim> R = (points.col(index) + points.col(index + 1)) / 2.0;
+                    temp_control_points.push_back(std::move(R));
+                    new_interpolate_points.push_back(points.col(index + 1));
+                }
+                else if (t1.cross(t2).squaredNorm() < DEFAULT_ERROR * DEFAULT_ERROR)
+                {
+                    T gamma = ((points.col(index) - points.col(index + 1)) / 2.0).norm();
+                    if (gamma < DEFAULT_ERROR)
+                        return ENUM_NURBS::NURBS_ERROR;
+
+                    Eigen::Vector<T, dim> R1 = points.col(index) + gamma * t1;
+                    Eigen::Vector<T, dim> R2 = points.col(index + 1) - gamma * t2;
+                    Eigen::Vector<T, dim> Q = (gamma * R1 + gamma * R2) / (gamma + gamma);
+                    temp_control_points.push_back(std::move(R1));
+                    temp_control_points.push_back(std::move(R2));
+                    
+                    new_interpolate_points.push_back(std::move(Q));
+                    new_interpolate_points.push_back(points.col(index + 1));
+                }
+                else
+                {
+                    return ENUM_NURBS::NURBS_ERROR;
+                }
+            }
+        }
+        temp_control_points.push_back(points.col(points_count - 1));
+        int control_points_count = temp_control_points.size();
+        control_points.resize(dim, control_points_count);
+        for (int index = 0; index < control_points_count; ++index)
+        {
+            control_points.col(index) = temp_control_points[index];
+        }
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    //此函数仅在二次nurbs插值中使用
+    template<typename T, int dim>
+    ENUM_NURBS local_2degree_make_params(const std::vector<Eigen::Vector<T, dim>> &new_interpolate_points, const Eigen::Matrix<T, dim, Eigen::Dynamic> &control_points, 
+        const Eigen::VectorX<T> &weight, Eigen::VectorX<T> &knots_vector)
+    {
+        int points_count = new_interpolate_points.size();
+        int control_points_count = control_points.cols();
+        if (points_count != control_points_count - 1)
+            return ENUM_NURBS::NURBS_ERROR;
+        knots_vector.resize(points_count + 4);
+        knots_vector.template block<3, 1>(0, 0).setConstant(0.0);
+        knots_vector.template block<3, 1>(points_count + 1, 0).setConstant(1.0);
+        knots_vector[3] = 1.0;
+        for (int index = 4; index <= points_count; ++index)
+        {
+            T len1 = (control_points.col(index - 2) - new_interpolate_points[index - 3]).norm();
+            T len2 = (new_interpolate_points[index - 3] - control_points.col(index - 3)).norm();
+            knots_vector[index] = knots_vector[index - 1] + (knots_vector[index - 1] - knots_vector[index - 2]) * len1 * weight[index - 2] / (len2 * weight[index - 3]) ;
+        }
+
+        T len1 = (control_points.col(points_count - 1) - new_interpolate_points[points_count - 2]).norm();
+        T len2 = (new_interpolate_points[points_count - 2] - control_points.col(points_count - 2)).norm();
+        T un = knots_vector[points_count] + (knots_vector[points_count] - knots_vector[points_count - 1]) * len1 * weight[points_count - 1] / (len2 * weight[points_count - 2]);
+        knots_vector.block(3, 0, points_count - 2, 1) /= un;
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    //此函数仅在二次nurbs插值中使用
+    template<typename T, int dim>
+    ENUM_NURBS local_2degree_make_params(const std::vector<Eigen::Vector<T, dim>> &new_interpolate_points, const Eigen::Matrix<T, dim, Eigen::Dynamic> &control_points, Eigen::VectorX<T> &knots_vector)
+    {
+        int points_count = new_interpolate_points.size();
+        int control_points_count = control_points.cols();
+        if (points_count != control_points_count - 1)
+            return ENUM_NURBS::NURBS_ERROR;
+        knots_vector.resize(points_count + 4);
+        knots_vector.template block<3, 1>(0, 0).setConstant(0.0);
+        knots_vector.template block<3, 1>(points_count + 1, 0).setConstant(1.0);
+        knots_vector[3] = 1.0;
+        for (int index = 4; index <= points_count; ++index)
+        {
+            T len1 = (control_points.col(index - 2) - new_interpolate_points[index - 3]).norm();
+            T len2 = (new_interpolate_points[index - 3] - control_points.col(index - 3)).norm();
+            knots_vector[index] = knots_vector[index - 1] + (knots_vector[index - 1] - knots_vector[index - 2]) * len1 / len2;
+        }
+
+        T len1 = (control_points.col(points_count - 1) - new_interpolate_points[points_count - 2]).norm();
+        T len2 = (new_interpolate_points[points_count - 2] - control_points.col(points_count - 2)).norm();
+        T un = knots_vector[points_count] + (knots_vector[points_count] - knots_vector[points_count - 1]) * len1 / len2;
+        knots_vector.block(3, 0, points_count - 2, 1) /= un;
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    /// @brief 平面上的点的非有理, 二次曲线的局部插值;推荐dim = 2时使用, 当dim > 2时, 需要保证所有的点全部在某个平面上
+    /// @tparam T double float int...
+    /// @tparam dim 点所在的欧式空间的维数
+    /// @tparam flag 是否保留角点
+    /// @param points 插值点
+    /// @param nurbs 插值生成的nurbs曲线
+    /// @return 错误码
+    template<typename T, int dim>
+    ENUM_NURBS local_2degree_parabola_interpolate(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, const Eigen::Matrix<T, dim, Eigen::Dynamic> &tangents,
+             nurbs_curve<T, dim, false, -1, -1> &nurbs)
+    {
+        Eigen::Matrix<T, dim, Eigen::Dynamic> control_points;
+        std::vector<Eigen::Vector<T, dim>> new_interpolate_points;
+        ENUM_NURBS flag = evaluate_intersct_point<T, dim>(points, tangents, new_interpolate_points, control_points);
+
+        if (flag != ENUM_NURBS::NURBS_SUCCESS)
+            return flag;
+
+         //计算节点
+        Eigen::VectorX<T> knots_vector;
+        local_2degree_make_params<T, dim>(new_interpolate_points, control_points, knots_vector);
+        nurbs.set_control_points(control_points);
+        nurbs.set_knots_vector(knots_vector);
+        nurbs.set_degree(2);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    /// @brief 平面上的点的非有理, 二次曲线的局部插值;推荐dim = 2时使用, 当dim > 2时, 需要保证所有的点全部在某个平面上
+    /// @tparam T double float int...
+    /// @tparam dim 点所在的欧式空间的维数
+    /// @tparam flag 是否保留角点
+    /// @param points 插值点
+    /// @param nurbs 插值生成的nurbs曲线
+    /// @return 错误码
+    template<typename T, int dim, bool flag>
+    ENUM_NURBS local_2degree_parabola_interpolate(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, nurbs_curve<T, dim, false, -1, -1> &nurbs)
+    {
+        Eigen::Matrix<T, dim, Eigen::Dynamic> tangents;
+        make_tangent_by_5points<T, dim, flag>(points, tangents);
+        return local_2degree_parabola_interpolate<T, dim>(points, tangents, nurbs);
+    }
+
+    /// @brief 平面上的点的圆弧曲线的局部插值;推荐dim = 2时使用, 当dim > 2时, 需要保证所有的点全部在某个平面上
+    /// @tparam T double float int...
+    /// @tparam dim 点所在的欧式空间的维数
+    /// @tparam flag 是否保留角点
+    /// @param points 插值点
+    /// @param nurbs 插值生成的nurbs曲线
+    /// @return 错误码
+    template<typename T, int dim>
+    ENUM_NURBS local_2degree_arc_interpolate(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, const Eigen::Matrix<T, dim, Eigen::Dynamic> &tangents,
+             nurbs_curve<T, dim, true, -1, -1> &nurbs)
+    {
+        Eigen::Matrix<T, dim, Eigen::Dynamic> control_points;
+        std::vector<Eigen::Vector<T, dim>> new_interpolate_points;
+        ENUM_NURBS flag = evaluate_intersct_point<T, dim, true>(points, tangents, new_interpolate_points, control_points);
+
+        if (flag != ENUM_NURBS::NURBS_SUCCESS)
+            return flag;
+
+         //计算节点
+        Eigen::VectorX<T> knots_vector;
+        
+
+
+        //计算权重
+        int new_interpolate_points_count = new_interpolate_points.size();
+        // std::string dir("view2.obj");
+        // std::ofstream outfile(dir);
+        // for (int index = 0; index < new_interpolate_points_count; ++index)
+        // {
+        //     Eigen::Vector3d point = new_interpolate_points[index];
+        //     outfile << "v " << point[0] << " " <<
+        //     point[1] << " " << point[2] << std::endl;    
+        // }
+        // outfile.close();
+
+        Eigen::Vector<T, Eigen::Dynamic> weight(new_interpolate_points_count + 1);
+        weight[0] = 1.0;
+        weight[new_interpolate_points_count] = 1.0;
+        for (int index = 1; index < new_interpolate_points_count; ++index)
+        {
+            Eigen::Vector<T, dim> v1 = control_points.col(index) - new_interpolate_points[index - 1];
+            Eigen::Vector<T, dim> v2 = control_points.col(index) - new_interpolate_points[index];
+            T len1 = v1.squaredNorm();
+            T len2 = v2.squaredNorm();
+            if (v1.cross(v2).squaredNorm() < DEFAULT_ERROR * DEFAULT_ERROR)
+            {
+                weight[index] = 1.0;
+            }
+            else if (std::abs(len1 - len2) < DEFAULT_ERROR * DEFAULT_ERROR)
+            {
+                Eigen::Vector<T, dim> v3 = new_interpolate_points[index] - new_interpolate_points[index - 1];
+                v1.normalize();
+                v3.normalize();
+                T w = v1.dot(v3);
+                if (w < 0.0)
+                    return ENUM_NURBS::NURBS_ERROR;
+                weight[index] = w;
+            }
+            else
+            {
+                Eigen::Vector<T, dim> v3 = new_interpolate_points[index] - new_interpolate_points[index - 1];
+                Eigen::Vector<T, dim> M = 0.5 * (new_interpolate_points[index] + new_interpolate_points[index - 1]);
+                Eigen::Vector<T, dim> mr = control_points.col(index) - M;
+                v1.normalize();
+                v2.normalize();
+                v3.normalize();
+                Eigen::Vector<T, dim> dir1 = (v1 + v3) / 2.0;
+                Eigen::Vector<T, dim> dir2 = (v2 - v3) / 2.0;
+                Eigen::Vector<T, 2> interset_params;
+                ENUM_NURBS flag = tow_line_intersect<T, dim>(new_interpolate_points[index - 1], dir1, M, mr, interset_params);
+                if (flag != ENUM_NURBS::NURBS_SUCCESS)
+                {
+                    return flag;
+                }
+                Eigen::Vector<T, dim> s1 = (interset_params[0] * dir1 + new_interpolate_points[index - 1] + interset_params[1] * mr + M) / 2.0;
+
+                flag = tow_line_intersect<T, dim>(new_interpolate_points[index], dir2, M, mr, interset_params);
+                if (flag != ENUM_NURBS::NURBS_SUCCESS)
+                {
+                    return flag;
+                }
+                Eigen::Vector<T, dim> s2 = (interset_params[0] * dir2 + new_interpolate_points[index] + interset_params[1] * mr + M) / 2.0;
+                Eigen::Vector<T, dim> s = (s1 + s2) / 2.0;
+                T sw = (s - M).norm() / mr.norm();
+                if (sw < DEFAULT_ERROR || (1.0 - sw) < DEFAULT_ERROR)
+                    return ENUM_NURBS::NURBS_ERROR;
+                weight[index] = sw / (1.0 - sw);
+            }
+        }
+        weight[new_interpolate_points_count] = 1.0;
+
+
+        local_2degree_make_params<T, dim>(new_interpolate_points, control_points, weight, knots_vector);
+
+        std::cout << knots_vector << std::endl;
+        std::cout << control_points << std::endl;
+        std::cout << weight << std::endl;
+        nurbs.set_control_points(control_points, weight);
+        //重新参数化, 修改权重
+        nurbs.set_knots_vector(knots_vector);
+        nurbs.set_degree(2);
+        Eigen::Matrix<T, dim + 1, Eigen::Dynamic> tempppppp = nurbs.get_control_points();
+        std::cout << tempppppp << std::endl;
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    /// @brief 平面上的点的圆弧曲线的局部插值;推荐dim = 2时使用, 当dim > 2时, 需要保证所有的点全部在某个平面上
+    /// @tparam T double float int...
+    /// @tparam dim 点所在的欧式空间的维数
+    /// @tparam flag 是否保留角点
+    /// @param points 插值点
+    /// @param nurbs 插值生成的nurbs曲线
+    /// @return 错误码
+    template<typename T, int dim, bool flag>
+    ENUM_NURBS local_2degree_arc_interpolate(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, nurbs_curve<T, dim, true, -1, -1> &nurbs)
+    {
+        Eigen::Matrix<T, dim, Eigen::Dynamic> tangents;
+        make_tangent_by_5points<T, dim, flag>(points, tangents);
+        return local_2degree_arc_interpolate<T, dim>(points, tangents, nurbs);
+    }
 
 }
 

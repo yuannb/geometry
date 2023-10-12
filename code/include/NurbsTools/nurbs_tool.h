@@ -4008,6 +4008,29 @@ namespace tnurbs
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
+    template<typename T, int dim>
+    ENUM_NURBS tow_line_intersect(const Eigen::Vector<T, dim> &p1, const Eigen::Vector<T, dim> &v1, const Eigen::Vector<T, dim> &p2, 
+                const Eigen::Vector<T, dim> &v2, Eigen::Vector<T, 2> &intersect_params)
+    {
+        Eigen::Matrix<T, dim, 2> mat;
+        mat << v1, -v2;
+        Eigen::Vector<T, dim> vec = p2 - p1;
+        Eigen::Matrix<T, dim, 3> externMat;
+        externMat << v1, -v2, vec;
+        Eigen::JacobiSVD<Eigen::MatrixXd, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(mat);
+        Eigen::JacobiSVD<Eigen::MatrixXd, Eigen::ComputeThinU | Eigen::ComputeThinV> externMatSvd(externMat);
+        int rankMat = matSvd.rank();
+        int rankExternMat = externMatSvd.rank();
+        if (rankMat != 2 && rankExternMat != 2)
+        {
+            return ENUM_NURBS::NURBS_ERROR;
+        }
+        intersect_params = matSvd.solve(vec);
+        if (matSvd.info() !=  Eigen::Success)
+            return ENUM_NURBS::NURBS_ERROR;
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
 
 }
 

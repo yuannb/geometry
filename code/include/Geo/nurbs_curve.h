@@ -3,6 +3,7 @@
 #include "bezier_curve.h"
 #include <array>
 #include "curve.h"
+#include <concepts>
 // #include "ThreadPool.h"
 namespace tnurbs
 {
@@ -47,6 +48,7 @@ namespace tnurbs
             nurbs_curve<T, dim, is_rational, -1, -1> &new_nurbs) const;
         Eigen::Matrix<T, rows, Eigen::Dynamic> get_control_points() const;
         ENUM_NURBS get_weight(int index, T &w) const;
+        ENUM_NURBS set_nonhome_control_points(const Eigen::Matrix<T, dim, points_count> &control_points);
         
         
         
@@ -1066,7 +1068,32 @@ namespace tnurbs
         }
 
 
+        ENUM_NURBS set_control_points(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, const Eigen::VectorX<T> &weights)
+        {
+            static_assert(is_rational == true, "cannot set weight of non-rational b-nurbs");
+            int points_count = points.cols();
+            int weights_count = weights.rows();
+            if (points_count != weights_count)
+                return ENUM_NURBS::NURBS_ERROR;
+            m_control_points.resize(rows, points_count);
+            for (int index = 0; index < points_count; ++index)
+            {
+                m_control_points.block(0, index, dim, 1) = points.col(index) * weights[index];
+                m_control_points(dim, index) = weights[index];
+            }
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+
         ENUM_NURBS set_control_points(const Eigen::Matrix<T, rows, Eigen::Dynamic> &points) { m_control_points = points; return ENUM_NURBS::NURBS_SUCCESS; }
+
+
+        ENUM_NURBS set_nonhome_control_points(const Eigen::Matrix<T, dim, Eigen::Dynamic> &control_points)
+        {
+            int cols = control_points.cols();
+            m_control_points.resize(rows, cols);
+            m_control_points.block(dim, cols, 0, 0) = control_points;
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
 
         ENUM_NURBS set_knots_vector(const Eigen::VectorX<T> &knots_vector) { m_knots_vector = knots_vector; return ENUM_NURBS::NURBS_SUCCESS; }
 
