@@ -153,11 +153,11 @@ namespace tnurbs
         /// @param u 曲线参数
         /// @param result out_put_pram, result[i]为nurbs曲线的第n次导数
         /// @return ENUM_NURBS错误码
-        template<int n>
+        template<int n, ENUM_LIMITDIRECTION flag = ENUM_LIMITDIRECTION::RIGHT>
         ENUM_NURBS derivative_on_curve(T u, Eigen::Vector<Eigen::Vector<T, dim>, n + 1> &result) const
         {
             int index = -1;
-            find_span<T, points_count, degree>(u, m_knots_vector, index);
+            find_span<T, points_count, degree, flag>(u, m_knots_vector, index);
             Eigen::Matrix<T, degree + 1, n + 1> ders(degree + 1, n + 1);
             ders_basis_funs<T, degree, points_count, n>(index, u, m_knots_vector, ders);
 
@@ -1137,10 +1137,11 @@ namespace tnurbs
         /// @param n 求(0, 1, 2 ... n)右导数
         /// @param result out_put_pram, result[i]为nurbs曲线的第n次导数
         /// @return ENUM_NURBS错误码
+        template<ENUM_LIMITDIRECTION flag = ENUM_LIMITDIRECTION::RIGHT>
         ENUM_NURBS derivative_on_curve(T u, int n, Eigen::Vector<Eigen::Vector<T, dim>, Eigen::Dynamic> &result) const
         {
             int index = -1;
-            find_span<T>(u, m_degree, m_knots_vector, index);
+            find_span<T, flag>(u, m_degree, m_knots_vector, index);
             Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> ders(m_degree + 1, n + 1);
             ders_basis_funs<T>(index, n, m_degree, u, m_knots_vector, ders);
             Eigen::VectorX<Eigen::Vector<T, rows>> temp(n + 1);
@@ -1160,11 +1161,11 @@ namespace tnurbs
         /// @param u 曲线参数
         /// @param result out_put_pram, result[i]为nurbs曲线的第n次导数
         /// @return ENUM_NURBS错误码
-        template<int n>
+        template<int n, ENUM_LIMITDIRECTION flag = ENUM_LIMITDIRECTION::RIGHT>
         ENUM_NURBS derivative_on_curve(T u, Eigen::Vector<Eigen::Vector<T, dim>, n + 1> &result) const
         {
             int index = -1;
-            find_span<T>(u, m_degree, m_knots_vector, index);
+            find_span<T, flag>(u, m_degree, m_knots_vector, index);
             Eigen::Matrix<T, Eigen::Dynamic, n + 1> ders(m_degree + 1, n + 1);
             ders_basis_funs<T, n>(index, m_degree, u, m_knots_vector, ders);
             Eigen::Vector<Eigen::Vector<T, rows>, n + 1> temp;
@@ -2116,29 +2117,6 @@ namespace tnurbs
         using point_type = typename  Eigen::Vector<T, dim> ;
     };
 
-
-    template<typename T, int dim, bool is_rational>
-    ENUM_NURBS save_obj(const nurbs_curve<T, dim, is_rational, -1, -1> &nurbs_cur, const std::string &path)
-    {
-        std::array<T, 2> end_konts;
-        nurbs_cur.get_ends_knots(end_konts); 
-        T step = (end_konts[1] - end_konts[0]) / 100.0;
-        std::vector<Eigen::Vector<T, dim>> points;
-        for (int u_index = 0; u_index < 100; ++u_index)
-        {
-            Eigen::Vector<T, dim> point;
-            nurbs_cur.point_on_curve(u_index * step + end_konts[0], point);
-            points.push_back(point);
-        }
-        std::ofstream outfile2(path);
-        for (auto point : points)
-        {
-            outfile2 << "v " << point[0] << " " <<
-            point[1] << " " << point[2] << std::endl;
-        }
-        outfile2.close();
-        return ENUM_NURBS::NURBS_SUCCESS;
-    }
 
 
 }

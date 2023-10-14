@@ -1967,39 +1967,6 @@ namespace tnurbs
 
     };
 
-    template<typename T, int dim, bool is_rational>
-    ENUM_NURBS save_obj(const nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> &surf, const std::string &path)
-    {
-        Eigen::VectorX<T> u_knots_vector = surf.get_u_knots();
-        Eigen::VectorX<T> v_knots_vector = surf.get_v_knots();;
-        int u_knots_size = u_knots_vector.size();
-        int v_knots_size = v_knots_vector.size();
-        T u_high = u_knots_vector[u_knots_size - 1];
-        T u_low = u_knots_vector[0];
-        T v_high = v_knots_vector[v_knots_size - 1];
-        T v_low = v_knots_vector[0];
-        T u_step = (u_high - u_low) / 100.0;
-        T v_step = (v_high - v_low) / 100.0;
-        std::vector<Eigen::Vector<T, dim>> points;
-        for (int u_index = 0; u_index < 100; ++u_index)
-        {
-            for (int v_index = 0; v_index < 100; ++v_index)
-            {
-                Eigen::Vector<T, dim> point;
-                surf.point_on_surface(u_index * u_step + u_low, v_index * v_step + v_low, point);
-                points.push_back(point);
-            }
-        }
-        std::ofstream outfile2(path);
-        for (auto point : points)
-        {
-            outfile2 << "v " << point[0] << " " <<
-            point[1] << " " << point[2] << std::endl;
-        }
-        outfile2.close();
-        return ENUM_NURBS::NURBS_SUCCESS;
-    }
-
     template<typename T, int dim, int rows, int cols, int u_degree, int v_degree, bool is_rational>
     struct geo_traits<nurbs_surface<T, dim, rows, cols, u_degree, v_degree, is_rational> >
     {

@@ -36,6 +36,12 @@ namespace tnurbs
         V_DIRECTION = 1
     };
 
+    enum ENUM_LIMITDIRECTION
+    {
+        LEFT = 0,
+        RIGHT = 1
+    };
+
     // #define U_DIRECTION = 0
     // #define V_DIRECTION = 1
 
@@ -746,31 +752,54 @@ namespace tnurbs
     /// @tparam T double float int...
     /// @tparam points_count 控制点个数
     /// @tparam degree nurbs的阶数
+    /// @tparam flag flag = 1表示计算右极限, flag = 0表所计算左极限
     /// @param u 参数
     /// @param knots_vector nurbs的节点矢量
     /// @param index out_put_param u \in [u_index, u_(index + 1))
     /// @return ENUM_NURBS错误码
-    template<typename T, int points_count, int degree>
+    template<typename T, int points_count, int degree, bool flag = ENUM_LIMITDIRECTION::RIGHT>
     ENUM_NURBS find_span(T u, Eigen::Vector<T, degree + 1 + points_count> const  &knots_vector, int &index)
     {
+        static_assert(flag == ENUM_LIMITDIRECTION::RIGHT || flag == ENUM_LIMITDIRECTION::LEFT, "find_span : flag have to equal RIGHT or LEFT");
         if (u > knots_vector[points_count] || u < knots_vector[0])
             return ENUM_NURBS::NURBS_PARAM_IS_OUT_OF_DOMAIN;
-        if (u == knots_vector[points_count])
-        {
-            index = points_count - 1;
-            return ENUM_NURBS::NURBS_SUCCESS;
-        }
         int mid = (degree + points_count) / 2;
         int low = degree;
         int high = points_count;
-        while (u < knots_vector[mid] || u >= knots_vector[mid + 1])
+        if constexpr (flag == ENUM_LIMITDIRECTION::RIGHT)
         {
-            if (u < knots_vector[mid])
-                high = mid;
-            else
-                low = mid;
-            mid = (low + high) / 2;
+            if (u == knots_vector[points_count])
+            {
+                index = points_count - 1;
+                return ENUM_NURBS::NURBS_SUCCESS;
+            }
+            while (u < knots_vector[mid] || u >= knots_vector[mid + 1])
+            {
+                if (u < knots_vector[mid])
+                    high = mid;
+                else
+                    low = mid;
+                mid = (low + high) / 2;
+            }
         }
+        else
+        {
+            if (u == knots_vector[0])
+            {
+                index = degree;
+                return ENUM_NURBS::NURBS_SUCCESS;
+            }
+
+            while (u <= knots_vector[mid] || u > knots_vector[mid + 1])
+            {
+                if (u <= knots_vector[mid])
+                    high = mid;
+                else
+                    low = mid;
+                mid = (low + high) / 2;
+            }
+        }
+
         index = mid;
         return ENUM_NURBS::NURBS_SUCCESS;
     }
@@ -784,28 +813,50 @@ namespace tnurbs
     /// @param knots_vector nurbs的节点矢量
     /// @param index out_put_param u \in [u_index, u_(index + 1))
     /// @return ENUM_NURBS错误码
-    template<typename T, int degree>
+    template<typename T, int degree, bool flag = ENUM_LIMITDIRECTION::RIGHT>
     ENUM_NURBS find_span(T u, Eigen::Vector<T, Eigen::Dynamic> const &knots_vector, int &index)
     {
+        static_assert(flag == ENUM_LIMITDIRECTION::RIGHT || flag == ENUM_LIMITDIRECTION::LEFT, "find_span : flag have to equal RIGHT or LEFT");
         int points_count = knots_vector.size() - degree - 1;
         if (u > knots_vector[points_count] || u < knots_vector[0])
             return ENUM_NURBS::NURBS_PARAM_IS_OUT_OF_DOMAIN;
-        if (u == knots_vector[points_count])
-        {
-            index = points_count - 1;
-            return ENUM_NURBS::NURBS_SUCCESS;
-        }
         int mid = (degree + points_count) / 2;
         int low = degree;
         int high = points_count;
-        while (u < knots_vector[mid] || u >= knots_vector[mid + 1])
+        if constexpr (flag == ENUM_LIMITDIRECTION::RIGHT)
         {
-            if (u < knots_vector[mid])
-                high = mid;
-            else
-                low = mid;
-            mid = (low + high) / 2;
+            if (u == knots_vector[points_count])
+            {
+                index = points_count - 1;
+                return ENUM_NURBS::NURBS_SUCCESS;
+            }
+            while (u < knots_vector[mid] || u >= knots_vector[mid + 1])
+            {
+                if (u < knots_vector[mid])
+                    high = mid;
+                else
+                    low = mid;
+                mid = (low + high) / 2;
+            }
         }
+        else
+        {
+            if (u == knots_vector[0])
+            {
+                index = degree;
+                return ENUM_NURBS::NURBS_SUCCESS;
+            }
+
+            while (u <= knots_vector[mid] || u > knots_vector[mid + 1])
+            {
+                if (u <= knots_vector[mid])
+                    high = mid;
+                else
+                    low = mid;
+                mid = (low + high) / 2;
+            }
+        }
+
         index = mid;
         return ENUM_NURBS::NURBS_SUCCESS;
     }
@@ -818,28 +869,50 @@ namespace tnurbs
     /// @param knots_vector nurbs的节点矢量
     /// @param index out_put_param u \in [u_index, u_(index + 1))
     /// @return ENUM_NURBS错误码
-    template<typename T>
+    template<typename T, bool flag = ENUM_LIMITDIRECTION::RIGHT>
     ENUM_NURBS find_span(T u, int degree, Eigen::Vector<T, Eigen::Dynamic> const &knots_vector, int &index)
     {
+        static_assert(flag == ENUM_LIMITDIRECTION::RIGHT || flag == ENUM_LIMITDIRECTION::LEFT, "find_span : flag have to equal RIGHT or LEFT");
         int points_count = knots_vector.size() - degree - 1;
         if (u > knots_vector[points_count] || u < knots_vector[0])
             return ENUM_NURBS::NURBS_PARAM_IS_OUT_OF_DOMAIN;
-        if (u == knots_vector[points_count])
-        {
-            index = points_count - 1;
-            return ENUM_NURBS::NURBS_SUCCESS;
-        }
         int mid = (degree + points_count) / 2;
         int low = degree;
         int high = points_count;
-        while (u < knots_vector[mid] || u >= knots_vector[mid + 1])
+        if constexpr (flag == ENUM_LIMITDIRECTION::RIGHT)
         {
-            if (u < knots_vector[mid])
-                high = mid;
-            else
-                low = mid;
-            mid = (low + high) / 2;
+            if (u == knots_vector[points_count])
+            {
+                index = points_count - 1;
+                return ENUM_NURBS::NURBS_SUCCESS;
+            }
+            while (u < knots_vector[mid] || u >= knots_vector[mid + 1])
+            {
+                if (u < knots_vector[mid])
+                    high = mid;
+                else
+                    low = mid;
+                mid = (low + high) / 2;
+            }
         }
+        else
+        {
+            if (u == knots_vector[0])
+            {
+                index = degree;
+                return ENUM_NURBS::NURBS_SUCCESS;
+            }
+
+            while (u <= knots_vector[mid] || u > knots_vector[mid + 1])
+            {
+                if (u <= knots_vector[mid])
+                    high = mid;
+                else
+                    low = mid;
+                mid = (low + high) / 2;
+            }
+        }
+
         index = mid;
         return ENUM_NURBS::NURBS_SUCCESS;
     }

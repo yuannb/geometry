@@ -846,23 +846,8 @@ namespace tnurbs
         if (flag != ENUM_NURBS::NURBS_SUCCESS)
             return flag;
 
-         //计算节点
-        Eigen::VectorX<T> knots_vector;
-        
-
-
         //计算权重
         int new_interpolate_points_count = new_interpolate_points.size();
-        // std::string dir("view2.obj");
-        // std::ofstream outfile(dir);
-        // for (int index = 0; index < new_interpolate_points_count; ++index)
-        // {
-        //     Eigen::Vector3d point = new_interpolate_points[index];
-        //     outfile << "v " << point[0] << " " <<
-        //     point[1] << " " << point[2] << std::endl;    
-        // }
-        // outfile.close();
-
         Eigen::Vector<T, Eigen::Dynamic> weight(new_interpolate_points_count + 1);
         weight[0] = 1.0;
         weight[new_interpolate_points_count] = 1.0;
@@ -919,18 +904,14 @@ namespace tnurbs
         }
         weight[new_interpolate_points_count] = 1.0;
 
-
+         //计算节点
+        Eigen::VectorX<T> knots_vector;
         local_2degree_make_params<T, dim>(new_interpolate_points, control_points, weight, knots_vector);
 
-        std::cout << knots_vector << std::endl;
-        std::cout << control_points << std::endl;
-        std::cout << weight << std::endl;
         nurbs.set_control_points(control_points, weight);
-        //重新参数化, 修改权重
         nurbs.set_knots_vector(knots_vector);
         nurbs.set_degree(2);
         Eigen::Matrix<T, dim + 1, Eigen::Dynamic> tempppppp = nurbs.get_control_points();
-        std::cout << tempppppp << std::endl;
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
@@ -941,13 +922,94 @@ namespace tnurbs
     /// @param points 插值点
     /// @param nurbs 插值生成的nurbs曲线
     /// @return 错误码
-    template<typename T, int dim, bool flag>
+    template<typename T, int dim, bool flag = false>
     ENUM_NURBS local_2degree_arc_interpolate(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, nurbs_curve<T, dim, true, -1, -1> &nurbs)
     {
         Eigen::Matrix<T, dim, Eigen::Dynamic> tangents;
         make_tangent_by_5points<T, dim, flag>(points, tangents);
         return local_2degree_arc_interpolate<T, dim>(points, tangents, nurbs);
     }
+
+    /// @brief 局部三次杨条插值
+    /// @tparam T double float int ...
+    /// @tparam dim 点所在的欧式空间的维数
+    /// @param points 插值点
+    /// @param tangents_dir 插值点的切向(切方向, 不是切向量)
+    /// @param nurbs 插值生成的nurbs曲线
+    /// @return 错误码
+    template<typename T, int dim>
+    ENUM_NURBS local_3degree_interpolate(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, const Eigen::Matrix<T, dim, Eigen::Dynamic> &tangents_dir, 
+        nurbs_curve<T, dim, false, -1, -1> &nurbs)
+    {
+        int points_count = points.cols();
+        int tangents_count = points.cols();
+        if (points_count != tangents_count)
+            return ENUM_NURBS::NURBS_ERROR;
+        
+        //计算控制点
+        int control_points_count = 2 * points_count;
+        Eigen::Matrix<T, dim, Eigen::Dynamic> control_points(dim, control_points_count);
+        control_points.col(0) = points.col(0);
+        for (int index = 1; index < points_count; ++index)
+        {
+            //TODO: 判断单位化有没有成功
+            Eigen::Vector<T, dim> T0 = tangents_dir.col(index - 1).normalized();
+            Eigen::Vector<T, dim> T3 = tangents_dir.col(index).normalized();
+            Eigen::Vector<T, dim> T03 = T0 + T3;
+
+            Eigen::Vector<T, dim> P30 = points.col(index) - points.col(index - 1);
+            T a = 16.0 - T03.squaredNorm();
+            T b = 12.0 * T03.dot(P30);
+            T c = -36.0 * P30.squaredNorm();
+
+            T delta = b * b - 4.0 * a * c;
+            if (delta < DEFAULT_ERROR * DEFAULT_ERROR)
+                return ENUM_NURBS::NURBS_ERROR;
+            T sqr_delta = std::sqrt(delta);
+            T x1 = ((-1.0) * b - sqr_delta) / (2.0 * a);
+            T x2 = ((-1.0) * b + sqr_delta) / (2.0 * a);
+            T alpha = x1 > 0.0 ? x1 : x2;
+            control_points.col(2 * index - 1) = points.col(index - 1) + (alpha / 3.0) * T0;
+            control_points.col(2 * index) = points.col(index) - (alpha / 3.0) * T3;
+        }
+        control_points.col(control_points_count - 1) = points.col(points_count - 1);
+
+        //计算节点矢量
+        int konts_count = control_points_count + 4;
+        Eigen::VectorX<T> knots_vector(konts_count);
+        knots_vector.template block<6, 1>(0, 0).setConstant(0.0);
+        knots_vector.template block<4, 1>(konts_count - 4, 0).setConstant(1.0);
+
+        T u = 0.0;
+        for (int index = 1; index <= points_count - 2; ++index)
+        {
+            u += 3.0 * (control_points.col(2 * index - 1) - points.col(index - 1)).norm();
+            knots_vector[2 + index * 2] = knots_vector[3 + index * 2] = u;
+        }
+        u += 3.0 * (control_points.col(2 * (points_count - 1) - 1) - points.col(points_count - 2)).norm();
+        knots_vector.block(4, 0, konts_count - 8, 1) /= u;
+        
+        nurbs.set_control_points(control_points);
+        nurbs.set_knots_vector(knots_vector);
+        nurbs.set_degree(3);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+
+    /// @brief 局部三次杨条插值
+    /// @tparam T double float int ...
+    /// @tparam dim 点所在的欧式空间的维数
+    /// @param points 插值点
+    /// @param nurbs 插值生成的nurbs曲线
+    /// @return 错误码
+    template<typename T, int dim, bool flag = false>
+    ENUM_NURBS local_3degree_interpolate(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, nurbs_curve<T, dim, false, -1, -1> &nurbs)
+    {
+        Eigen::Matrix<T, dim, Eigen::Dynamic> tangents;
+        make_tangent_by_5points<T, dim, flag>(points, tangents);
+        return local_3degree_interpolate<T, dim>(points, tangents, nurbs);
+    }
+
 
 }
 

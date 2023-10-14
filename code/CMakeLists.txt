@@ -49,7 +49,7 @@ list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/include/NurbsTools")
 aux_source_directory(. SOURCES)
 
 
-add_executable(GWB nurbs_test.cpp)
+add_executable(GWB nurbs_test.cpp debug_used.cpp)
 add_executable(GWB1 test2.cpp)
 
 target_link_libraries(GWB PUBLIC ${EXTRA_LIBS})

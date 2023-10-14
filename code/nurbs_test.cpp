@@ -6,6 +6,8 @@
 #include "contruct_primitive_nurbs_surface.h"
 #include "fit_nurbs.h"
 #include "gtest/gtest.h"
+
+#include "debug_used.h"
 using namespace tnurbs;
 
 class CreateNurbsCurve : public testing::Test
@@ -169,42 +171,6 @@ TEST_F(CreateNurbsCurve, local_2degree_interpolate)
         new_nurbs.point_on_curve(0.01 * i, point);
         pointss1.push_back(point);
     }
-    std::string dir2("view.obj");
-    std::ofstream outfile2(dir2);
-    for (auto point : pointss1)
-    {
-        outfile2 << "v " << point[0] << " " <<
-        point[1] << " " << point[2] << std::endl;
-    }
-    outfile2.close();
-
-    std::string dir("view2.obj");
-    std::ofstream outfile(dir);
-    for (int index = 0; index < 5; ++index)
-    {
-        Eigen::Vector3d point = pointss.col(index);
-        outfile << "v " << point[0] << " " <<
-        point[1] << " " << point[2] << std::endl;    
-    }
-    outfile.close();
-
-    // Eigen::Vector3d point;
-    // for (int index = 0; index < 5; ++index)
-    // {
-    //     Eigen::Vector<Eigen::Vector3d, 2> point;
-    //     double u;
-    //     Eigen::Vector3d p;
-    //     ENUM_NURBS flag = new_nurbs.find_nearst_point_on_curve(pointss.col(index), u, p);
-    //     ASSERT_EQ(ENUM_NURBS::NURBS_SUCCESS, flag);
-    //     new_nurbs.derivative_on_curve<1>(u, point);
-
-    //     double distance = (point[0] - pointss.col(index)).norm();
-    //     EXPECT_NEAR(distance, 0.0, DEFAULT_ERROR);
-
-    //     distance = (point[1] - ders.col(index)).norm();
-    //     EXPECT_NEAR(distance, 0.0, DEFAULT_ERROR);
-    // }
-
 }
 
 TEST_F(CreateNurbsCurve, local_arc_interpolate)
@@ -212,99 +178,98 @@ TEST_F(CreateNurbsCurve, local_arc_interpolate)
     nurbs_curve<double, 3, true, -1, -1> new_nurbs;
     local_2degree_arc_interpolate<double, 3>(pointss, ders, new_nurbs);
 
-    std::vector<Eigen::Vector3d> pointss1;
-    for (int i = 0; i < 100; ++i)
-    {
-        Eigen::Vector3d point;   
-        new_nurbs.point_on_curve(0.01 * i, point);
-        pointss1.push_back(point);
-    }
-    std::string dir2("view.obj");
-    std::ofstream outfile2(dir2);
-    for (auto point : pointss1)
-    {
-        outfile2 << "v " << point[0] << " " <<
-        point[1] << " " << point[2] << std::endl;
-    }
-    outfile2.close();
-
-    std::string dir("view2.obj");
-    std::ofstream outfile(dir);
-    for (int index = 0; index < 5; ++index)
-    {
-        Eigen::Vector3d point = pointss.col(index);
-        outfile << "v " << point[0] << " " <<
-        point[1] << " " << point[2] << std::endl;    
-    }
-    outfile.close();
-
-    // Eigen::Vector3d point;
-    // for (int index = 0; index < 5; ++index)
-    // {
-    //     Eigen::Vector<Eigen::Vector3d, 2> point;
-    //     double u;
-    //     Eigen::Vector3d p;
-    //     ENUM_NURBS flag = new_nurbs.find_nearst_point_on_curve(pointss.col(index), u, p);
-    //     ASSERT_EQ(ENUM_NURBS::NURBS_SUCCESS, flag);
-    //     new_nurbs.derivative_on_curve<1>(u, point);
-
-    //     double distance = (point[0] - pointss.col(index)).norm();
-    //     EXPECT_NEAR(distance, 0.0, DEFAULT_ERROR);
-
-    //     distance = (point[1] - ders.col(index)).norm();
-    //     EXPECT_NEAR(distance, 0.0, DEFAULT_ERROR);
-    // }
-
 }
 
 TEST_F(CreateNurbsCurve, local_arc_interpolate2)
 {
     nurbs_curve<double, 3, true, -1, -1> new_nurbs;
     local_2degree_arc_interpolate<double, 3, true>(pointss, new_nurbs);
+}
 
-    std::vector<Eigen::Vector3d> pointss1;
-    for (int i = 0; i < 100; ++i)
+TEST_F(CreateNurbsCurve, local_3degree_interpolate1)
+{
+    nurbs_curve<double, 3, false, -1, -1> new_nurbs;
+    local_3degree_interpolate<double, 3>(pointss, ders, new_nurbs);
+
+    const Eigen::VectorX<double> knots_vector = new_nurbs.get_knots_vector();
+    int knots_count = knots_vector.size();
+    std::vector<double> params;
+    params.push_back(knots_vector[0]);
+    for (int index = 1; index < knots_count; ++index)
     {
-        Eigen::Vector3d point;   
-        new_nurbs.point_on_curve(0.01 * i, point);
-        pointss1.push_back(point);
+        if (knots_vector[index] != params.back())
+        {
+            params.push_back(knots_vector[index]);
+        }
     }
-    std::string dir2("view.obj");
-    std::ofstream outfile2(dir2);
-    for (auto point : pointss1)
+    int params_count = params.size();
+    std::vector<double> mid_params(params_count - 1);
+    for (int index = 1; index < params_count; ++index)
     {
-        outfile2 << "v " << point[0] << " " <<
-        point[1] << " " << point[2] << std::endl;
+        mid_params[index - 1] = (params[index] + params[index - 1]) / 2.0;
     }
-    outfile2.close();
-
-    std::string dir("view2.obj");
-    std::ofstream outfile(dir);
-    for (int index = 0; index < 5; ++index)
+    Eigen::Vector<Eigen::Vector<double, 3>, 2> n_ders;
+    new_nurbs.derivative_on_curve<1>(params[0], n_ders);
+    double tangent_norm = n_ders[1].norm();
+    for (int index = 1; index < params_count; ++index)
     {
-        Eigen::Vector3d point = pointss.col(index);
-        outfile << "v " << point[0] << " " <<
-        point[1] << " " << point[2] << std::endl;    
+        new_nurbs.derivative_on_curve<1>(params[index], n_ders);
+        double t1 = n_ders[1].norm();
+        EXPECT_NEAR(t1, tangent_norm, DEFAULT_ERROR);
+
+        Eigen::Vector<Eigen::Vector<double, 3>, 2> n_ders2;
+        new_nurbs.derivative_on_curve<1, ENUM_LIMITDIRECTION::LEFT>(params[index], n_ders2);
+        double t = (n_ders2[1] - n_ders[1]).norm();
+        EXPECT_NEAR(t, 0.0, DEFAULT_ERROR);
+
+        new_nurbs.derivative_on_curve<1>(mid_params[index - 1], n_ders);
+        double t2 = n_ders[1].norm();
+        EXPECT_NEAR(t2, tangent_norm, DEFAULT_ERROR);
+        
     }
-    outfile.close();
+}
 
-    // Eigen::Vector3d point;
-    // for (int index = 0; index < 5; ++index)
-    // {
-    //     Eigen::Vector<Eigen::Vector3d, 2> point;
-    //     double u;
-    //     Eigen::Vector3d p;
-    //     ENUM_NURBS flag = new_nurbs.find_nearst_point_on_curve(pointss.col(index), u, p);
-    //     ASSERT_EQ(ENUM_NURBS::NURBS_SUCCESS, flag);
-    //     new_nurbs.derivative_on_curve<1>(u, point);
+TEST_F(CreateNurbsCurve, local_3degree_interpolate2)
+{
+    nurbs_curve<double, 3, false, -1, -1> new_nurbs;
+    local_3degree_interpolate<double, 3>(pointss, new_nurbs);
 
-    //     double distance = (point[0] - pointss.col(index)).norm();
-    //     EXPECT_NEAR(distance, 0.0, DEFAULT_ERROR);
+    const Eigen::VectorX<double> knots_vector = new_nurbs.get_knots_vector();
+    int knots_count = knots_vector.size();
+    std::vector<double> params;
+    params.push_back(knots_vector[0]);
+    for (int index = 1; index < knots_count; ++index)
+    {
+        if (knots_vector[index] != params.back())
+        {
+            params.push_back(knots_vector[index]);
+        }
+    }
+    int params_count = params.size();
+    std::vector<double> mid_params(params_count - 1);
+    for (int index = 1; index < params_count; ++index)
+    {
+        mid_params[index - 1] = (params[index] + params[index - 1]) / 2.0;
+    }
+    Eigen::Vector<Eigen::Vector<double, 3>, 2> n_ders;
+    new_nurbs.derivative_on_curve<1>(params[0], n_ders);
+    double tangent_norm = n_ders[1].norm();
+    for (int index = 1; index < params_count; ++index)
+    {
+        new_nurbs.derivative_on_curve<1>(params[index], n_ders);
+        double t1 = n_ders[1].norm();
+        EXPECT_NEAR(t1, tangent_norm, DEFAULT_ERROR);
 
-    //     distance = (point[1] - ders.col(index)).norm();
-    //     EXPECT_NEAR(distance, 0.0, DEFAULT_ERROR);
-    // }
+        Eigen::Vector<Eigen::Vector<double, 3>, 2> n_ders2;
+        new_nurbs.derivative_on_curve<1, ENUM_LIMITDIRECTION::LEFT>(params[index], n_ders2);
+        double t = (n_ders2[1] - n_ders[1]).norm();
+        EXPECT_NEAR(t, 0.0, DEFAULT_ERROR);
 
+        new_nurbs.derivative_on_curve<1>(mid_params[index - 1], n_ders);
+        double t2 = n_ders[1].norm();
+        EXPECT_NEAR(t2, tangent_norm, DEFAULT_ERROR);
+        
+    }
 }
 
 
