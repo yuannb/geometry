@@ -55,7 +55,8 @@ namespace tnurbs
         NUBRS_WIEGHT_IS_NONPOSITIVE = 5,
         NURBS_POINT_IS_ON_CURVE = 6,
         NURBS_POINT_IS_NOT_ON_CURVE = 7,
-        NURBS_CHORD_IS_ZERO = 8
+        NURBS_CHORD_IS_ZERO = 8,
+        NURBS_PARAM_IS_INVALID = 9
     };
 
     /// @brief 查找节点矢量有几个不一样的数

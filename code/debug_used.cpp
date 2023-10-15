@@ -7,6 +7,24 @@ namespace tnurbs
         std::cout << vec << std::endl;
     }
 
+    void save_obj(const Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> &mat, const char *path)
+    {
+        int rows = mat.rows();
+        int cols = mat[0].cols();
+        std::ofstream outfile2(path);
+
+        for (int i = 0; i < rows; ++i)
+        {
+            for (int j = 0; j < cols; ++j)
+            {
+                Eigen::Vector3d point = mat[i].col(j);
+                outfile2 << "v " << point[0] << " " <<
+                point[1] << " " << point[2] << std::endl;
+            }
+        }
+        outfile2.close();
+    }
+
     void printEigenMatrix(const Eigen::Matrix<double, 2, Eigen::Dynamic> &mat)
     {
         std::cout << mat << std::endl;
@@ -15,6 +33,18 @@ namespace tnurbs
     void printEigenMatrix(const Eigen::Matrix<double, 3, Eigen::Dynamic> &mat)
     {
         std::cout << mat << std::endl;
+    }
+
+    void printEigenMatrix(const Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> &mat)
+    {
+        int cols = mat.rows();
+        for (int index = 0; index < cols; ++index)
+        {
+            std::cout << "********" << std::endl;
+            std::cout << mat[index] << std::endl;
+            std::cout << "********" << std::endl;
+        }
+        
     }
 
     void printEigenMatrix(const Eigen::Matrix<double, 4, Eigen::Dynamic> &mat)

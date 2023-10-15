@@ -5,12 +5,13 @@
 #include "nurbs_surface.h"
 #include "create_nurbs_arc.h"
 #include <Eigen/Sparse>
+#include <array>
 
 namespace tnurbs
 {
 
     template<typename T, int dim>
-    ENUM_NURBS make_params_by_chord(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, int degree, std::vector<T> &params)
+    ENUM_NURBS make_params_by_chord(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, std::vector<T> &params)
     {
         params.clear();
         int points_count = points.cols();
@@ -40,7 +41,7 @@ namespace tnurbs
 
 
     template<typename T, int dim>
-    ENUM_NURBS make_params_by_center(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, int degree, std::vector<T> &params)
+    ENUM_NURBS make_params_by_center(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, std::vector<T> &params)
     {
         params.clear();
         int points_count = points.cols();
@@ -72,8 +73,8 @@ namespace tnurbs
     };
 
 
-    template<typename T, int dim, int parameteried_type>
-    ENUM_NURBS make_surface_params(const Eigen::Vector<Eigen::Matrix<T, dim, Eigen::Dynamic>, Eigen::Dynamic> &points, int u_degree, int v_degree, 
+    template<typename T, int dim, ENPARAMETERIEDTYPE parameteried_type>
+    ENUM_NURBS make_surface_params(const Eigen::Vector<Eigen::Matrix<T, dim, Eigen::Dynamic>, Eigen::Dynamic> &points, 
         std::vector<T> &u_params, std::vector<T> &v_params)
     {
         int u_valid_num = points[0].cols();
@@ -89,7 +90,7 @@ namespace tnurbs
             std::vector<T> u_temp_params;
             if constexpr (parameteried_type == ENPARAMETERIEDTYPE::CHORD)
             {
-                ENUM_NURBS flag = make_params_by_chord(points[v_index], u_degree, u_temp_params);
+                ENUM_NURBS flag = make_params_by_chord(points[v_index], u_temp_params);
                 if (flag == ENUM_NURBS::NURBS_CHORD_IS_ZERO)
                     v_valid_num -= 1;
                 else
@@ -100,7 +101,7 @@ namespace tnurbs
             }
             else if constexpr (parameteried_type == ENPARAMETERIEDTYPE::CENTRIPETAL)
             {
-                ENUM_NURBS flag = make_params_by_center(points[v_index], u_degree, u_temp_params);
+                ENUM_NURBS flag = make_params_by_center(points[v_index], u_temp_params);
                 if (flag == ENUM_NURBS::NURBS_CHORD_IS_ZERO)
                     v_valid_num -= 1;
                 else
@@ -139,7 +140,7 @@ namespace tnurbs
             std::vector<T> v_temp_params;
             if constexpr (parameteried_type == ENPARAMETERIEDTYPE::CHORD)
             {
-                ENUM_NURBS flag = make_params_by_chord(new_control_points[u_index], v_degree, v_temp_params);
+                ENUM_NURBS flag = make_params_by_chord(new_control_points[u_index], v_temp_params);
                 if (flag == ENUM_NURBS::NURBS_CHORD_IS_ZERO)
                     u_valid_num -= 1;
                 else
@@ -150,7 +151,7 @@ namespace tnurbs
             }
             else if constexpr (parameteried_type == ENPARAMETERIEDTYPE::CENTRIPETAL)
             {
-                ENUM_NURBS flag = make_params_by_center(new_control_points[u_index], v_degree, v_temp_params);
+                ENUM_NURBS flag = make_params_by_center(new_control_points[u_index], v_temp_params);
                 if (flag == ENUM_NURBS::NURBS_CHORD_IS_ZERO)
                     u_valid_num -= 1;
                 else
@@ -230,19 +231,19 @@ namespace tnurbs
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
-    template<typename T, int dim, int parameteried_type>
+    template<typename T, int dim, ENPARAMETERIEDTYPE parameteried_type>
     ENUM_NURBS global_curve_interpolate(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, int degree, 
             nurbs_curve<T, dim, false, -1, -1> &nurbs)
     {
         std::vector<T> params;
         if constexpr (parameteried_type == ENPARAMETERIEDTYPE::CHORD)
         {
-            make_params_by_chord<T, dim>(points, degree, params);
+            make_params_by_chord<T, dim>(points, params);
                 
         }
         else if constexpr(parameteried_type == ENPARAMETERIEDTYPE::CENTRIPETAL)
         {
-            make_params_by_center<T, dim>(points, degree, params);
+            make_params_by_center<T, dim>(points, params);
         }
         else
         {
@@ -327,19 +328,19 @@ namespace tnurbs
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
-    template<typename T, int dim, int parameteried_type>
+    template<typename T, int dim, ENPARAMETERIEDTYPE parameteried_type>
     ENUM_NURBS global_curve_interpolate_with_ends_tangent(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, const Eigen::Vector<T, dim> &D0, 
         const Eigen::Vector<T, dim> &D1, int degree,  nurbs_curve<T, dim, false, -1, -1> &nurbs)
     {
         std::vector<T> params;
         if constexpr (parameteried_type == ENPARAMETERIEDTYPE::CHORD)
         {
-            make_params_by_chord<T, dim>(points, degree, params);
+            make_params_by_chord<T, dim>(points, params);
                 
         }
         else if constexpr(parameteried_type == ENPARAMETERIEDTYPE::CENTRIPETAL)
         {
-            make_params_by_center<T, dim>(points, degree, params);
+            make_params_by_center<T, dim>(points, params);
         }
         else
         {
@@ -381,18 +382,18 @@ namespace tnurbs
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
-    template<typename T, int dim, int parameteried_type>
+    template<typename T, int dim, ENPARAMETERIEDTYPE parameteried_type>
     ENUM_NURBS global_3degree_curve_interpolate_with_ends_tangent(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, const Eigen::Vector<T, dim> &D0, 
         const Eigen::Vector<T, dim> &D1, nurbs_curve<T, dim, false, -1, -1> &nurbs)
     {
         std::vector<T> params;
         if constexpr (parameteried_type == ENPARAMETERIEDTYPE::CHORD)
         {
-            make_params_by_chord<T, dim>(points, 3, params);           
+            make_params_by_chord<T, dim>(points, params);           
         }
         else if constexpr(parameteried_type == ENPARAMETERIEDTYPE::CENTRIPETAL)
         {
-            make_params_by_center<T, dim>(points, 3, params);
+            make_params_by_center<T, dim>(points, params);
         }
         else
         {
@@ -480,7 +481,7 @@ namespace tnurbs
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
-    template<typename T, int dim, int degree, int parameteried_type>
+    template<typename T, int dim, int degree, ENPARAMETERIEDTYPE parameteried_type>
     ENUM_NURBS global_2or3degree_hermite_curve(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, const Eigen::Matrix<T, dim, Eigen::Dynamic> &ders,
         nurbs_curve<T, dim, false, -1, -1> &nurbs)
     {
@@ -488,11 +489,11 @@ namespace tnurbs
         std::vector<T> params;
         if constexpr (parameteried_type == ENPARAMETERIEDTYPE::CHORD)
         {
-            make_params_by_chord<T, dim>(points, degree, params);           
+            make_params_by_chord<T, dim>(points, params);           
         }
         else if constexpr(parameteried_type == ENPARAMETERIEDTYPE::CENTRIPETAL)
         {
-            make_params_by_center<T, dim>(points, degree, params);
+            make_params_by_center<T, dim>(points, params);
         }
         else
         {
@@ -577,12 +578,12 @@ namespace tnurbs
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
-    template<typename T, int dim, int parameteried_type>
+    template<typename T, int dim, ENPARAMETERIEDTYPE parameteried_type>
     ENUM_NURBS global_surface_interpolate(const Eigen::Vector<Eigen::Matrix<T, dim, Eigen::Dynamic>, Eigen::Dynamic> &points, int u_degree, int v_degree, 
             nurbs_surface<T, dim, -1, -1, -1, -1, false> &nurbs)
     {
         std::vector<T> u_params, v_params;
-        make_surface_params<T, dim, parameteried_type>(points, u_degree, v_degree, u_params, v_params);
+        make_surface_params<T, dim, parameteried_type>(points, u_params, v_params);
         return global_surface_interpolate<T, dim>(points, u_degree, v_degree, u_params, v_params, nurbs);
     }
 
@@ -1009,6 +1010,270 @@ namespace tnurbs
         make_tangent_by_5points<T, dim, flag>(points, tangents);
         return local_3degree_interpolate<T, dim>(points, tangents, nurbs);
     }
+
+
+    /// @brief 局部三次杨条插值(内部使用, 因为要保证切向和参数的合法性)
+    /// @tparam T double float int ...
+    /// @tparam dim 点所在的欧式空间的维数
+    /// @param points 插值点
+    /// @param u_tangents_dir 插值点的u切向(切方向, 不是切向量)
+    /// @param v_tangents_dir 插值点的v切向(切方向, 不是切向量)
+    /// @param u_params 插值点的参数
+    /// @param v_params 插值点的参数
+    /// @param nurbs 插值生成的nurbs曲线
+    /// @return 错误码
+    template<typename T, int dim>
+    ENUM_NURBS local_bi3degree_interpolate(const Eigen::VectorX<Eigen::Matrix<T, dim, Eigen::Dynamic>> &points, const Eigen::MatrixX<Eigen::Vector<T, dim>> &u_tangents_dir,
+        const Eigen::MatrixX<Eigen::Vector<T, dim>> &v_tangents_dir, const std::vector<T> &u_params, const std::vector<T> &v_params, nurbs_surface<T, dim, -1, -1, -1, -1, false> &nurbs)
+    {
+        int v_points_count = points.rows();
+        int u_points_count = points[0].cols();
+
+        int u_tangents_u_count = u_tangents_dir.cols();
+        int u_tangents_v_count = u_tangents_dir.rows();
+        int v_tangents_u_count = v_tangents_dir.cols();
+        int v_tangents_v_count = v_tangents_dir.rows();
+        int u_params_count = u_params.size();
+        int v_params_count = v_params.size();
+
+        if (v_points_count != u_tangents_v_count || v_points_count != v_tangents_v_count || v_points_count != v_params_count)
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+        if (u_points_count != u_tangents_u_count || u_points_count != v_tangents_u_count || u_points_count != u_params_count)
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+        
+        //计算u向和v向的总弦长(下面的代码可以优化, 一次循环即可)
+        std::vector<T> u_chord_lens(v_points_count);
+        std::vector<T> v_chord_lens(u_points_count);
+        for (int v_index = 0; v_index < v_points_count; ++v_index)
+        {
+            T len = 0.0;
+            for (int u_index = 1; u_index < u_points_count; ++u_index)
+            {
+                len += (points[v_index].col(u_index) - points[v_index].col(u_index - 1)).norm();
+            }
+            u_chord_lens[v_index] = len;
+        }
+
+        for (int u_index = 0; u_index < u_points_count; ++u_index)
+        {
+            T len = 0.0;
+            for (int v_index = 1; v_index < v_points_count; ++v_index)
+            {
+                len += (points[v_index].col(u_index) - points[v_index - 1].col(u_index)).norm();
+            }
+            v_chord_lens[u_index] = len;
+        }
+
+        std::vector<T> alpha_k(u_points_count - 1);
+        std::vector<T> beta_l(v_points_count - 1);
+        for (int index = 0; index < u_points_count - 2; ++index)
+        {
+            alpha_k[index] = (u_params[index + 1] - u_params[index]) / (u_params[index + 2] - u_params[index]);
+        }
+        T temp = u_params[u_points_count - 1] - u_params[u_points_count - 2];
+        alpha_k[u_points_count - 2] = temp / (temp + (u_params[1] - u_params[0]));
+        for (int index = 0; index < v_points_count - 2; ++index)
+        {
+            beta_l[index] = (v_params[index + 1] - v_params[index]) / (v_params[index + 2] - v_params[index]);
+        }
+        temp = v_params[v_points_count - 1] - v_params[v_points_count - 2];
+        beta_l[v_points_count - 2] = temp / (temp + (v_params[1] - v_params[0]));
+
+        Eigen::MatrixX<Eigen::Vector<T, dim>> Duv(v_points_count, u_points_count);
+        for (int v_index = 1; v_index < v_points_count; ++v_index)
+        {
+            for (int u_index = 1; u_index < u_points_count; ++u_index)
+            {
+                int last_v_index = v_index + 1 == v_points_count ? 1 : v_index + 1;
+                int last_u_index = u_index + 1 == u_points_count ? 1 : u_index + 1;
+                Eigen::Vector<T, dim> first_u_dir = u_chord_lens[v_index - 1] * u_tangents_dir(v_index - 1, u_index).normalized();
+                Eigen::Vector<T, dim> second_u_dir = u_chord_lens[v_index] * u_tangents_dir(v_index, u_index).normalized();
+                Eigen::Vector<T, dim> third_u_dir = u_chord_lens[last_v_index] * u_tangents_dir(last_v_index, u_index).normalized();
+
+                Eigen::Vector<T, dim> first_v_dir = v_chord_lens[u_index - 1] * v_tangents_dir(u_index - 1, v_index).normalized();
+                Eigen::Vector<T, dim> second_v_dir = v_chord_lens[u_index] * v_tangents_dir(u_index, v_index).normalized();
+                Eigen::Vector<T, dim> third_v_dir = v_chord_lens[last_u_index] * v_tangents_dir(last_u_index, v_index).normalized();
+
+                Eigen::Vector<T, dim> duv = ((1.0 - beta_l[v_index - 1]) / (v_params[v_index] - v_params[v_index - 1])) * (second_u_dir - first_u_dir) + \
+                                            (beta_l[v_index - 1] / (v_params[v_index + 1] - v_params[v_index])) * (third_u_dir - second_u_dir);
+                Eigen::Vector<T, dim> dvu = ((1.0 - alpha_k[u_index - 1]) / (u_params[u_index] - u_params[u_index - 1])) * (second_v_dir - first_v_dir) + \
+                                            (alpha_k[u_index - 1] / (u_params[u_index + 1] - u_params[u_index])) * (third_v_dir - second_v_dir);
+                Duv(v_index, u_index) = (alpha_k[u_index - 1] * duv + beta_l[v_index - 1] * dvu) / (alpha_k[u_index - 1] + beta_l[v_index - 1]);
+            }
+        }
+
+        //将一半边界处的Duv设置为另一半边界的Duv
+        Duv(0, 0) = Duv(v_points_count - 1, u_points_count - 1);
+        for (int index = 1; index < u_points_count; ++index)
+        {
+            Duv(0, index) = Duv(v_points_count - 1, index);
+        }
+        for (int index = 1; index < v_points_count; ++index)
+        {
+            Duv(index, 0) = Duv(index, u_points_count - 1);
+        }
+
+        Eigen::VectorX<Eigen::Matrix<T, dim, Eigen::Dynamic>> control_points(2 * v_points_count);
+        control_points[0].resize(dim, 2 * u_points_count);
+        control_points[2 * v_points_count - 1].resize(dim, 2 * u_points_count);
+        control_points[0].col(0) = points[0].col(0);
+        control_points[0].col(2 * u_points_count - 1) = points[0].col(u_points_count - 1);
+        control_points[2 * v_points_count - 1].col(0) = points[v_points_count - 1].col(0);
+        control_points[2 * v_points_count - 1].col(2 * u_points_count - 1) = points[v_points_count - 1].col(u_points_count - 1);
+
+        Eigen::MatrixX<Eigen::Vector<T, dim>> u_temp_control_points(v_points_count, 2 * u_points_count - 2);
+        for (int v_index = 0; v_index < v_points_count; ++v_index)
+        {
+            for (int u_index = 0; u_index < u_points_count - 1; ++u_index)
+            {
+                T a = u_chord_lens[v_index] * (u_params[u_index + 1] - u_params[u_index]) / 3.0;
+                u_temp_control_points(v_index, u_index * 2) = points[v_index].col(u_index) + a * u_tangents_dir(v_index, u_index).normalized();
+                u_temp_control_points(v_index, u_index * 2 + 1) = points[v_index].col(u_index + 1) - a * u_tangents_dir(v_index, u_index + 1).normalized();
+            }
+        }
+
+        Eigen::MatrixX<Eigen::Vector<T, dim>> v_temp_control_points(v_points_count * 2 - 2, u_points_count);
+        for (int u_index = 0; u_index < u_points_count; ++u_index)
+        {
+            for (int v_index = 0; v_index < v_points_count - 1; ++v_index)
+            {
+                T a = v_chord_lens[u_index] * (v_params[v_index + 1] - v_params[v_index]) / 3.0;
+                v_temp_control_points(v_index * 2, u_index) = points[v_index].col(u_index) + a * v_tangents_dir(v_index, u_index).normalized();
+                v_temp_control_points(v_index * 2 + 1, u_index) = points[v_index + 1].col(u_index) - a * v_tangents_dir(v_index + 1, u_index).normalized();
+            }
+        }
+        //中间的控制点
+        for (int v_index = 1; v_index < v_points_count; ++v_index)
+        {
+            control_points[v_index * 2 - 1].resize(dim, 2 * u_points_count);
+            control_points[v_index * 2].resize(dim, 2 * u_points_count);
+            T delta_l = v_params[v_index] - v_params[v_index - 1];
+            for (int u_index = 1; u_index < u_points_count; ++u_index)
+            {
+                T delta_k = u_params[u_index] - u_params[u_index - 1];
+                T gamma = (delta_k * delta_l) / 9.0;
+                control_points[v_index * 2 - 1].col(u_index * 2 - 1) = gamma * Duv(v_index - 1, u_index - 1) - points[v_index - 1].col(u_index - 1) + \
+                                u_temp_control_points(v_index - 1, 2 * (u_index - 1)) + v_temp_control_points(2 * (v_index - 1), u_index - 1);
+                control_points[v_index * 2 - 1].col(u_index * 2) = (-1 * gamma) * Duv(v_index - 1, u_index) - points[v_index - 1].col(u_index) + \
+                                u_temp_control_points(v_index - 1, 2 * u_index - 1) + v_temp_control_points(2 * (v_index - 1), u_index);
+                control_points[v_index * 2].col(u_index * 2 - 1) = (-1 * gamma) * Duv(v_index, u_index - 1) - points[v_index].col(u_index - 1) + \
+                                u_temp_control_points(v_index , 2 * (u_index - 1)) + v_temp_control_points(2 * v_index - 1, u_index - 1);
+                control_points[v_index * 2].col(u_index * 2) = gamma * Duv(v_index, u_index) - points[v_index].col(u_index) + \
+                                u_temp_control_points(v_index, 2 * u_index - 1) + v_temp_control_points(2 * v_index - 1, u_index);
+
+            }
+        }
+        //第一行和最后一行控制点
+        for (int index = 1; index < u_points_count; ++index)
+        {
+            control_points[0].col(index * 2 - 1) = u_temp_control_points(0, 2 * (index - 1));
+            control_points[0].col(index * 2) = u_temp_control_points(0, 2 * index - 1);
+            control_points[2 * v_points_count - 1].col(index * 2 - 1) = u_temp_control_points(v_points_count - 1, 2 * (index - 1));
+            control_points[2 * v_points_count - 1].col(index * 2) = u_temp_control_points(v_points_count - 1, 2 * index - 1);
+        }
+        
+        //第一列和最后一列控制点
+        for (int index = 1; index < v_points_count; ++index)
+        {
+            control_points[index * 2 - 1].col(0) = v_temp_control_points(2 * (index - 1), 0);
+            control_points[index * 2].col(0) = v_temp_control_points(2 * index - 1, 0);
+            control_points[index * 2 - 1].col(2 * v_points_count - 1) = v_temp_control_points(2 * (index - 1), u_points_count - 1);
+            control_points[index * 2].col(2 * v_points_count - 1) = v_temp_control_points(2 * index - 1, u_points_count - 1);
+        }
+
+        Eigen::VectorX<T> u_knots(4 + u_params_count * 2), v_knots(4 + v_params_count * 2);
+        u_knots.template block<4, 1>(0, 0).setConstant(u_params[0]);
+        u_knots.template block<4, 1>(2 * u_params_count, 0).setConstant(u_params[u_params_count - 1]);
+        for (int index = 1; index <= u_params_count - 2; ++index)
+        {
+            u_knots[2 * index + 2] = u_params[index];
+            u_knots[2 * index + 3] = u_params[index];
+        }
+
+        v_knots.template block<4, 1>(0, 0).setConstant(v_params[0]);
+        v_knots.template block<4, 1>(2 * v_params_count, 0).setConstant(v_params[v_params_count - 1]);
+        for (int index = 1; index <= v_params_count - 2; ++index)
+        {
+            v_knots[2 * index + 2] = v_params[index];
+            v_knots[2 * index + 3] = v_params[index];
+        }
+        nurbs.set_control_points(control_points);
+        nurbs.set_uv_degree(3, 3);
+        nurbs.set_uv_knots(u_knots, v_knots);
+
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    /// @brief 局部三次杨条插值
+    /// @tparam T double float int ...
+    /// @tparam dim 点所在的欧式空间的维数
+    /// @param points 插值点
+    /// @param u_params 插值点的参数
+    /// @param v_params 插值点的参数
+    /// @param nurbs 插值生成的nurbs曲线
+    /// @return 错误码
+    template<typename T, int dim>
+    ENUM_NURBS local_bi3degree_interpolate(const Eigen::VectorX<Eigen::Matrix<T, dim, Eigen::Dynamic>> &points, const std::vector<T> &u_params, const std::vector<T> &v_params, nurbs_surface<T, dim, -1, -1, -1, -1, false> &nurbs)
+    {
+        int u_points_count = u_params.size();
+        int v_points_count = v_params.size();
+        if (u_points_count != points[0].cols())
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+        if (v_points_count != points.rows())
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+
+        Eigen::MatrixX<Eigen::Vector<T, dim>> u_tangents_dir(v_points_count, u_points_count);
+        Eigen::MatrixX<Eigen::Vector<T, dim>> v_tangents_dir(v_points_count, u_points_count);
+
+        for (int v_index = 0; v_index < v_points_count; ++v_index)
+        {
+            for (int u_index = 1; u_index < u_points_count - 1; ++u_index)
+            {
+                T delta_k = u_params[u_index] - u_params[u_index - 1];
+                T next_delta_k = u_params[u_index + 1] - u_params[u_index];
+                Eigen::Vector<T, dim> dk = (points[v_index].col(u_index) - points[v_index].col(u_index - 1)) / delta_k;
+                Eigen::Vector<T, dim> dk1 = (points[v_index].col(u_index + 1) - points[v_index].col(u_index)) / next_delta_k;
+                T alpha = delta_k / (next_delta_k + delta_k);
+                u_tangents_dir(v_index, u_index) = (1.0 - alpha) * dk + alpha * dk1;
+            }
+            u_tangents_dir(v_index, 0) = (2.0 / (u_params[1] - u_params[0])) * (points[v_index].col(1) - points[v_index].col(0)) - u_tangents_dir(v_index, 1);
+            u_tangents_dir(v_index, u_points_count - 1) = 2.0 / (u_params[u_points_count - 1] - u_params[u_points_count - 2]) * \
+                    (points[v_index].col(u_points_count - 1) - points[v_index].col(u_points_count - 2)) - u_tangents_dir(v_index, u_points_count - 2);
+        }
+
+        for (int u_index = 0; u_index < u_points_count; ++u_index)
+        {
+            for (int v_index = 1; v_index < v_points_count - 1; ++v_index)
+            {
+                T delta_k = v_params[v_index] - v_params[v_index - 1];
+                T next_delta_k = v_params[v_index + 1] - v_params[v_index];
+                Eigen::Vector<T, dim> dk = (points[v_index].col(u_index) - points[v_index - 1].col(u_index)) / delta_k;
+                Eigen::Vector<T, dim> dk1 = (points[v_index + 1].col(u_index) - points[v_index].col(u_index)) / next_delta_k;
+                T alpha = delta_k / (next_delta_k + delta_k);
+                v_tangents_dir(v_index, u_index) = (1.0 - alpha) * dk + alpha * dk1;
+            }
+            v_tangents_dir(0, u_index) = (2.0 / (v_params[1] - v_params[0])) * (points[1].col(u_index) - points[0].col(u_index)) - v_tangents_dir(1, u_index);
+            v_tangents_dir(v_points_count - 1, u_index) = (2.0 / (v_params[v_points_count - 1] - v_params[v_points_count - 2]) ) * \
+                (points[v_points_count - 1].col(u_index) - points[v_points_count - 2].col(u_index)) - v_tangents_dir(v_points_count - 2, u_index);
+        }
+
+        return local_bi3degree_interpolate<T, dim>(points, u_tangents_dir, v_tangents_dir, u_params, v_params, nurbs);
+    }
+
+    /// @brief 局部三次杨条插值
+    /// @tparam T double float int ...
+    /// @tparam dim 点所在的欧式空间的维数
+    /// @param points 插值点
+    /// @param nurbs 插值生成的nurbs曲线
+    /// @return 错误码
+    template<typename T, int dim,  ENPARAMETERIEDTYPE parameteried_type>
+    ENUM_NURBS local_bi3degree_interpolate(const Eigen::VectorX<Eigen::Matrix<T, dim, Eigen::Dynamic>> &points, nurbs_surface<T, dim, -1, -1, -1, -1, false> &nurbs)
+    {
+        std::vector<T> u_params, v_params;
+        make_surface_params<T, dim, parameteried_type>(points, u_params, v_params);
+        return local_bi3degree_interpolate<T, dim>(points, u_params, v_params, nurbs);
+    }
+
 
 
 }

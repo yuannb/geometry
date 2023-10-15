@@ -159,7 +159,7 @@ TEST_F(CreateNurbsCurve, InterpolateHermite)
 
 }
 
-TEST_F(CreateNurbsCurve, local_2degree_interpolate)
+TEST_F(CreateNurbsCurve, Local2degreeInterpolate)
 {
     nurbs_curve<double, 3, false, -1, -1> new_nurbs;
     local_2degree_parabola_interpolate<double, 3, true>(pointss, new_nurbs);
@@ -173,20 +173,20 @@ TEST_F(CreateNurbsCurve, local_2degree_interpolate)
     }
 }
 
-TEST_F(CreateNurbsCurve, local_arc_interpolate)
+TEST_F(CreateNurbsCurve, LocalArcInterpolate)
 {
     nurbs_curve<double, 3, true, -1, -1> new_nurbs;
     local_2degree_arc_interpolate<double, 3>(pointss, ders, new_nurbs);
 
 }
 
-TEST_F(CreateNurbsCurve, local_arc_interpolate2)
+TEST_F(CreateNurbsCurve, LocalArcInterpolate2)
 {
     nurbs_curve<double, 3, true, -1, -1> new_nurbs;
     local_2degree_arc_interpolate<double, 3, true>(pointss, new_nurbs);
 }
 
-TEST_F(CreateNurbsCurve, local_3degree_interpolate1)
+TEST_F(CreateNurbsCurve, Local3degreeInterpolate1)
 {
     nurbs_curve<double, 3, false, -1, -1> new_nurbs;
     local_3degree_interpolate<double, 3>(pointss, ders, new_nurbs);
@@ -229,7 +229,7 @@ TEST_F(CreateNurbsCurve, local_3degree_interpolate1)
     }
 }
 
-TEST_F(CreateNurbsCurve, local_3degree_interpolate2)
+TEST_F(CreateNurbsCurve, Local3degreeInterpolate2)
 {
     nurbs_curve<double, 3, false, -1, -1> new_nurbs;
     local_3degree_interpolate<double, 3>(pointss, new_nurbs);
@@ -272,14 +272,36 @@ TEST_F(CreateNurbsCurve, local_3degree_interpolate2)
     }
 }
 
+TEST_F(CreateNurbsSurface, LoacalInterpolateSurface)
+{
+    nurbs_surface<double, 3, -1, -1, -1, -1, false> new_nurbs;
+
+    local_bi3degree_interpolate<double, 3, ENPARAMETERIEDTYPE::CHORD>(points, new_nurbs);
+    for (int i = 0; i < 5; ++i)
+    {
+        for (int j = 0; j < 5; ++j)
+        {
+            Eigen::Vector3d point;
+            double u, v;
+            Eigen::Vector3d p;
+            ENUM_NURBS flag = new_nurbs.find_nearst_point_on_surface(points[i].col(j), u, v, p);
+            ASSERT_EQ(ENUM_NURBS::NURBS_SUCCESS, flag);
+            new_nurbs.point_on_surface(u, v, point);
+
+            double distance = (point - points[i].col(j)).norm();
+            EXPECT_NEAR(distance, 0.0, DEFAULT_ERROR);
+        }
+    }
+
+}
+
+
 
 TEST_F(CreateNurbsSurface, InterpolateSurface)
 {
     nurbs_surface<double, 3, -1, -1, -1, -1, false> new_nurbs;
 
     global_surface_interpolate<double, 3, ENPARAMETERIEDTYPE::CHORD>(points, 3, 4, new_nurbs);
-
-    std::vector<Eigen::Vector3d> pss;
 
     for (int i = 0; i < 5; ++i)
     {
