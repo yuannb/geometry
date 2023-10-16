@@ -272,6 +272,29 @@ TEST_F(CreateNurbsCurve, Local3degreeInterpolate2)
     }
 }
 
+TEST_F(CreateNurbsCurve, globalLeastSquaresCurveApproximation1)
+{
+    nurbs_curve<double, 3, false, -1, -1> new_nurbs;
+    global_least_squares_curve_approximation<double, 3, ENPARAMETERIEDTYPE::CHORD>(pointss, 3, 4, new_nurbs);
+
+    double u = 0.2;
+    Eigen::Vector3d pos;
+    new_nurbs.point_on_curve(u, pos);
+    Eigen::Vector3d expect_pos(8.1336662545570189, 6.2001553478557714, 0);
+    double distance = (pos - expect_pos).norm();
+    EXPECT_NEAR(distance, 0.0, DEFAULT_ERROR);
+
+    u += 0.2;
+    new_nurbs.point_on_curve(u, pos);
+    Eigen::Vector3d expect_pos2(3.0951955345688122, 9.304855647197515, 0);
+    distance = (pos - expect_pos2).norm();
+    EXPECT_NEAR(distance, 0.0, DEFAULT_ERROR);
+}
+
+
+
+
+
 TEST_F(CreateNurbsSurface, LoacalInterpolateSurface)
 {
     nurbs_surface<double, 3, -1, -1, -1, -1, false> new_nurbs;

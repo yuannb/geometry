@@ -1012,7 +1012,7 @@ namespace tnurbs
     }
 
 
-    /// @brief 局部三次杨条插值(内部使用, 因为要保证切向和参数的合法性)
+    /// @brief 局部三次杨条插值
     /// @tparam T double float int ...
     /// @tparam dim 点所在的欧式空间的维数
     /// @param points 插值点
@@ -1272,6 +1272,110 @@ namespace tnurbs
         std::vector<T> u_params, v_params;
         make_surface_params<T, dim, parameteried_type>(points, u_params, v_params);
         return local_bi3degree_interpolate<T, dim>(points, u_params, v_params, nurbs);
+    }
+
+    template<typename T, int dim, ENPARAMETERIEDTYPE parameteried_type>
+    ENUM_NURBS global_least_squares_curve_approximation(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, int degree, int control_points_count, nurbs_curve<T, dim, false, -1, -1> &nurbs)
+    {
+        int points_count = points.cols();
+        if (points_count <= control_points_count || degree >= control_points_count)
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+       
+        std::vector<T> params;
+        if constexpr (parameteried_type == ENPARAMETERIEDTYPE::CHORD)
+        {
+            make_params_by_chord<T, dim>(points, params);
+        }
+        else
+        {
+            make_params_by_center<T, dim>(points, params);
+        }
+
+        T d = static_cast<T>(points_count) / static_cast<T>(control_points_count - degree);
+        Eigen::VectorX<T> knots(degree + control_points_count + 1);
+        knots.block(0, 0, degree + 1, 1).setConstant(0.0);
+        knots.block(control_points_count, 0, degree + 1, 1).setConstant(1.0);
+        for (int index = 1; index <= control_points_count - 1 - degree; ++index)
+        {
+            int i = std::floor(index * d);
+            T alpha = index * d - static_cast<T>(i);
+            knots[degree + index] = (1.0 - alpha) * params[i - 1] + alpha * params[i];
+        }
+
+        Eigen::MatrixX<T> R(points_count - 2, dim);
+
+        Eigen::SparseMatrix<T> N(control_points_count - 2, points_count - 2);
+        int Nrows = std::min(degree + 1, control_points_count - 2);
+        N.reserve(Eigen::VectorXi::Constant(points_count - 2, Nrows));
+
+        for (int col = 0; col < points_count - 2; ++col)
+        {
+            int index = -1;
+            find_span<T>(params[col + 1], degree, knots, index);
+            Eigen::VectorX<T> basis;
+            basis_functions<T>(index, params[col + 1], degree, knots, basis);
+
+            if (index == degree && index == control_points_count -1)
+            {
+                R.block(col, 0, 1, dim) = (points.col(col + 1) - basis[0] * points.col(0) -  basis[degree] * points.col(points_count - 1)).transpose();
+                for (int i = 0; i < Nrows; ++i)
+                {
+                    N.insert(index + i - degree, col) = basis[i + 1];
+                }
+            }
+            else if (index == degree)
+            {
+                R.block(col, 0, 1, dim) = (points.col(col + 1) - basis[0] * points.col(0)).transpose();
+                for (int i = 0; i < Nrows; ++i)
+                {
+                    if (i + 1 > degree)
+                        N.insert(index - degree + i, col) = 0.0;
+                    else
+                        N.insert(index - degree + i, col) = basis[i + 1];
+                }
+            }
+            else if (index == control_points_count - 1)
+            {
+                R.block(col, 0, 1, dim) = (points.col(col + 1) - basis[degree] * points.col(points_count - 1)).transpose();
+                for (int i = 0; i < Nrows; ++index)
+                {
+                    if (index - degree + i == control_points_count - 2)
+                        N.insert(control_points_count - 2 - Nrows, col) = 0.0;
+                    else
+                        N.insert(index - degree + i, col) = basis[index];
+                }
+
+            }
+            else
+            {
+                R.block(col, 0, 1, dim) = (points.col(col + 1)).transpose();
+                for (int i = 0; i < Nrows; ++i)
+                {
+                    N.insert(index, col) = basis[index];
+                }
+            }
+
+        }
+        Eigen::SparseMatrix<T> mat =  N * Eigen::SparseMatrix<T, Eigen::ColMajor>(N.transpose());
+        Eigen::MatrixX<T> Rs = N * R;
+
+        mat.makeCompressed();
+        Eigen::SimplicialLDLT<Eigen::SparseMatrix<T>> solver;
+        solver.compute(mat);
+        if (solver.info() != Eigen::Success)
+            return ENUM_NURBS::NURBS_ERROR;
+        Eigen::Matrix<T, Eigen::Dynamic, dim> control_points = solver.solve(Rs);
+        if (solver.info() != Eigen::Success)
+            return ENUM_NURBS::NURBS_ERROR;
+        Eigen::Matrix<T, dim, Eigen::Dynamic> new_control_points(dim, control_points_count);
+        new_control_points.col(0) = points.col(0);
+        new_control_points.col(control_points_count - 1) = points.col(points_count - 1);
+        new_control_points.block(0, 1, dim, control_points_count - 2) = control_points.transpose();
+        nurbs.set_control_points(new_control_points);
+        nurbs.set_knots_vector(knots);
+        nurbs.set_degree(degree);
+
+        return ENUM_NURBS::NURBS_SUCCESS;
     }
 
 

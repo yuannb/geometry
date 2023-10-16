@@ -11,6 +11,7 @@ namespace tnurbs
     void printEigenMatrix(const Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> &mat);
 
     void save_obj(const Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> &mat, const char *path);
+    void save_obj(Eigen::Matrix<double, 3, Eigen::Dynamic> &mat, const char *path);
 
     void printEigenMatrix(const Eigen::Matrix<double, 2, Eigen::Dynamic> &mat);
 

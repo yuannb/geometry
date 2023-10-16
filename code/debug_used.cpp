@@ -6,7 +6,19 @@ namespace tnurbs
     {
         std::cout << vec << std::endl;
     }
+    void save_obj(Eigen::Matrix<double, 3, Eigen::Dynamic> &mat, const char *path)
+    {
+        int cols = mat.cols();
+        std::ofstream outfile2(path);
 
+        for (int j = 0; j < cols; ++j)
+        {
+            Eigen::Vector3d point = mat.col(j);
+            outfile2 << "v " << point[0] << " " <<
+            point[1] << " " << point[2] << std::endl;
+        }
+        outfile2.close();
+    }
     void save_obj(const Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> &mat, const char *path)
     {
         int rows = mat.rows();
