@@ -4091,8 +4091,8 @@ namespace tnurbs
         Eigen::Vector<T, dim> vec = p2 - p1;
         Eigen::Matrix<T, dim, 3> externMat;
         externMat << v1, -v2, vec;
-        Eigen::JacobiSVD<Eigen::MatrixXd, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(mat);
-        Eigen::JacobiSVD<Eigen::MatrixXd, Eigen::ComputeThinU | Eigen::ComputeThinV> externMatSvd(externMat);
+        Eigen::JacobiSVD<Eigen::MatrixX<T>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(mat);
+        Eigen::JacobiSVD<Eigen::MatrixX<T>, Eigen::ComputeThinU | Eigen::ComputeThinV> externMatSvd(externMat);
         int rankMat = matSvd.rank();
         int rankExternMat = externMatSvd.rank();
         if (rankMat != 2 && rankExternMat != 2)

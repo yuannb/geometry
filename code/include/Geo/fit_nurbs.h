@@ -6,6 +6,7 @@
 #include "create_nurbs_arc.h"
 #include <Eigen/Sparse>
 #include <array>
+#include <set>
 
 namespace tnurbs
 {
@@ -308,6 +309,8 @@ namespace tnurbs
 
         Eigen::Matrix<T, Eigen::Dynamic, dim> new_points(params_size + 2, dim);
         new_points.template block<1, dim>(0, 0) = (points.col(0)).transpose();
+        Eigen::Vector3d ve;
+        ve.transpose();
         new_points.template block<1, dim>(1, 0) = D0.transpose() * (knots_vector[degree + 1] * inverse_degree);
         new_points.template block(2, 0, params_size - 2, dim) = (points.block(0, 1, dim, params_size - 2)).transpose();
         new_points.template block<1, dim>(params_size, 0) = D1.transpose() * ((1.0 - knots_vector[params_size + 1]) * inverse_degree);
@@ -1171,7 +1174,6 @@ namespace tnurbs
             control_points[2 * v_points_count - 1].col(index * 2 - 1) = u_temp_control_points(v_points_count - 1, 2 * (index - 1));
             control_points[2 * v_points_count - 1].col(index * 2) = u_temp_control_points(v_points_count - 1, 2 * index - 1);
         }
-        
         //第一列和最后一列控制点
         for (int index = 1; index < v_points_count; ++index)
         {
@@ -1379,6 +1381,185 @@ namespace tnurbs
     }
 
 
+    template<typename T, int dim, ENPARAMETERIEDTYPE parameteried_type>
+    ENUM_NURBS global_wc_least_squares_curve_approximation(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, const std::vector<T> &W, const Eigen::Matrix<T, dim, Eigen::Dynamic> &Ders,
+        const std::vector<int> &Index, const std::vector<T> &Wd, int degree, int control_points_count, nurbs_curve<T, dim, false, -1, -1> &nurbs)
+    {
+        int points_count = points.cols();
+        int w_count = W.size();
+        if (points_count != w_count)
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+        int Wd_count = Wd.size();
+        int index_count = Index.size();
+        int ders_count = Ders.cols();
+        if (Wd_count != index_count || Wd_count != ders_count)
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+        if (points_count < ders_count)
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+
+        std::vector<T> params;
+        if constexpr (parameteried_type == ENPARAMETERIEDTYPE::CHORD)
+        {
+            make_params_by_chord<T, dim>(points, params);
+        }
+        else
+        {
+            make_params_by_center<T, dim>(points, params);
+        }
+
+        Eigen::VectorX<T> knots(control_points_count + degree + 1);
+        knots.block(0, 0, degree + 1, 1).setConstant(0.0);
+        knots.block(control_points_count, 0, degree + 1, 1).setConstant(1.0);
+        T d = static_cast<T>(points_count) / static_cast<T>(control_points_count - degree);
+        for (int index = 1; index <= control_points_count - 1 - degree; ++index)
+        {
+            int i = std::floor(index * d);
+            T alpha = index * d - static_cast<T>(i);
+            knots[degree + index] = (1.0 - alpha) * params[i - 1] + alpha * params[i];
+        }
+
+        //简单起见, 此算法不使用稀疏矩阵; 有空优化一下
+        std::vector<T> positive_w;
+        std::set<int> constrain_index;
+        std::set<int> unconstrain_index;
+        positive_w.reserve(w_count);
+        for (int index = 0; index < w_count; ++index)
+        {
+            if(W[index] < 0.0)
+            {
+                constrain_index.insert(index);
+            }
+            else
+            {
+                positive_w.push_back(W[index]);
+                unconstrain_index.insert(index);
+            }
+        }
+        
+        std::set<int> ders_constrain_index;
+        std::set<int> ders_unconstrain_index;
+        std::vector<T> positive_Wd;
+        positive_Wd.reserve(Wd_count);
+        for (int index = 0; index < Wd_count; ++index)
+        {
+            if (Wd[index] < 0.0)
+            {
+                ders_constrain_index.insert(index);
+            }
+            else
+            {
+                positive_Wd.push_back(Wd[index]);
+                ders_unconstrain_index.insert(index);
+            }
+        }
+
+        int point_constrian_count = constrain_index.size();
+        int ders_constrian_count = ders_constrain_index.size();
+        int point_unconstrain_count = positive_w.size();
+        int ders_unconstrain_count = positive_Wd.size();
+
+        if (point_constrian_count + ders_constrian_count >= points_count)
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+        if (point_constrian_count + ders_constrian_count + points_count > point_unconstrain_count + ders_unconstrain_count)
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+
+        Eigen::MatrixX<T> WM(point_unconstrain_count + ders_unconstrain_count, point_unconstrain_count + ders_unconstrain_count);
+        WM.setConstant(0.0);
+        for (int index = 0; index < point_unconstrain_count; ++index)
+            WM(index, index) = positive_w[index];
+        for (int index = 0; index < ders_unconstrain_count; ++index)
+            WM(index + point_unconstrain_count, index + point_unconstrain_count) = positive_Wd[index];
+
+        //下面的代码可以优化
+        Eigen::MatrixX<T> MD(point_constrian_count + ders_constrian_count, control_points_count);
+        Eigen::Matrix<T, Eigen::Dynamic, dim> TD(point_constrian_count + ders_constrian_count, dim);
+        MD.setConstant(0.0);
+        int index = 0;
+        for (auto it = constrain_index.begin(); it != constrain_index.end(); ++it)
+        {
+            int point_index = *it;
+            int span = -1;
+            find_span<T>(params[point_index], degree, knots, span);
+            Eigen::VectorX<T> basis;
+            basis_functions<T>(span, params[point_index], degree, knots, basis);
+            MD.block(index, span - degree, 1, degree + 1) = basis.transpose();
+            TD.row(index) = points.col(point_index).transpose();
+            ++index;
+        }
+        index = 0;
+        for (auto it = ders_constrain_index.begin(); it != ders_constrain_index.end(); ++it)
+        {
+            int point_index = *it;
+            int span = -1;
+            T u = params[Index[point_index]];
+            find_span<T>(u, degree, knots, span);
+            Eigen::Matrix<T, Eigen::Dynamic, 2> ders_basis(degree + 1, 2);
+            ders_basis_funs<T, 1>(span, degree,  u, knots, ders_basis);
+            MD.block(index + point_constrian_count, span - degree, 1, degree + 1) = ders_basis.col(1).transpose();
+            TD.row(index + point_constrian_count) = Ders.col(point_index).transpose();
+            ++index;
+        }
+
+        Eigen::MatrixX<T> ND(point_unconstrain_count + ders_unconstrain_count, control_points_count);
+        Eigen::Matrix<T, Eigen::Dynamic, dim> SD(point_unconstrain_count + ders_unconstrain_count, dim);
+        ND.setConstant(0.0);
+        index = 0;
+        for (auto it = unconstrain_index.begin(); it != unconstrain_index.end(); ++it)
+        {
+            int point_index = *it;
+            int span = -1;
+            find_span<T>(params[point_index], degree, knots, span);
+            Eigen::VectorX<T> basis;
+            basis_functions<T>(span, params[point_index], degree, knots, basis);
+            ND.block(index, span - degree, 1, degree + 1) = basis.transpose();
+            SD.row(index) = points.col(point_index).transpose();
+            ++index;
+        }
+
+        index = 0;
+        for (auto it = ders_unconstrain_index.begin(); it != ders_unconstrain_index.end(); ++it)
+        {
+            int point_index = *it;
+            int span = -1;
+            T u = params[Index[point_index]];
+            find_span<T>(u, degree, knots, span);
+            Eigen::Matrix<T, Eigen::Dynamic, 2> ders_basis(degree + 1, 2);
+            ders_basis_funs<T, 1>(span, degree, u, knots, ders_basis);
+            ND.block(index + point_unconstrain_count, span - degree, 1, degree + 1) = ders_basis.col(1).transpose();
+            std::cout << ders_basis.col(1) << std::endl;
+            SD.row(index + point_unconstrain_count) = Ders.col(point_index).transpose();
+            ++index;
+        }
+
+
+        int mat_count = control_points_count + ders_constrian_count + point_constrian_count;
+        Eigen::MatrixX<T> mat(mat_count, mat_count);
+        mat.setConstant(0.0);
+        mat.block(0, 0, control_points_count, control_points_count) = ND.transpose() * WM * ND;
+        mat.block(control_points_count, 0, point_constrian_count + ders_constrian_count, control_points_count) = MD;
+        mat.block(0, control_points_count, control_points_count, point_constrian_count + ders_constrian_count) = MD.transpose();
+
+        Eigen::Matrix<T, Eigen::Dynamic, dim> V(point_constrian_count + ders_constrian_count + control_points_count, dim);
+        V.block(0, 0, control_points_count, dim) = ND.transpose() * WM * SD;
+        V.block(control_points_count, 0, point_constrian_count + ders_constrian_count, dim) = TD;
+
+        Eigen::BDCSVD<Eigen::MatrixX<T>,  Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(mat);
+        Eigen::MatrixX<T> PA = matSvd.solve(V);
+        if (matSvd.info() !=  Eigen::Success)
+            return ENUM_NURBS::NURBS_ERROR;
+
+        Eigen::MatrixX<T> check_mat = mat * PA - V;
+        typename Eigen::MatrixX<T>::Index max_row, max_col;
+        T max_elem = check_mat.maxCoeff(&max_row, &max_col);
+        if (max_elem > DEFAULT_ERROR)
+            return ENUM_NURBS::NURBS_ERROR;
+        Eigen::Matrix<T, dim, Eigen::Dynamic> control_points = PA.block(0, 0, control_points_count, dim).transpose();
+        nurbs.set_control_points(control_points);
+        nurbs.set_knots_vector(knots);
+        nurbs.set_degree(degree);
+        return ENUM_NURBS::NURBS_SUCCESS;
+
+    }
 
 }
 

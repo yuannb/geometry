@@ -1626,7 +1626,7 @@ namespace tnurbs
                             //退化矩阵, break
                             break;
                         }
-                        Eigen::JacobiSVD<Eigen::Matrix<T, 2, 2>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(J);
+                        Eigen::JacobiSVD<Eigen::MatrixX<T>,  Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(J);
                         Eigen::Vector<T, 2> delta_param = matSvd.solve(K);
                         
                         // TODO ：根据曲线弧长和区间长度放缩delta_param
@@ -1698,7 +1698,7 @@ namespace tnurbs
             M(1, 1) = ders_vec(0, 1).squaredNorm();
             vec[0] = ders_vec(1, 0).dot(point);
             vec[1] = ders_vec(0, 1).dot(point);
-            Eigen::JacobiSVD<Eigen::Matrix<T, 2, 2>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(M);
+            Eigen::JacobiSVD<Eigen::MatrixX<T>,  Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(M);
             tangent_on_param_space = matSvd.solve(vec);
             return ENUM_NURBS::NURBS_SUCCESS;
         }

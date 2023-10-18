@@ -32,11 +32,22 @@ protected:
             pointss.col(i) = point[0];
             ders.col(i) = point[1];
         }
+        many_points.resize(3, 20);
+        many_ders.resize(3, 20);
+        for (int i = 0; i < 20; ++i)
+        {
+            Eigen::Vector<Eigen::Vector3d, 2> point;   
+            nurbs.derivative_on_curve<1>(0.05 * i, point);
+            many_points.col(i) = point[0];
+            many_ders.col(i) = point[1];
+        }
     }
 
     // nurbs_curve<double, 3, false, -1, -1> new_nurbs;
     Eigen::Matrix<double, 3, Eigen::Dynamic> pointss;
     Eigen::Matrix<double, 3, Eigen::Dynamic> ders;
+    Eigen::Matrix<double, 3, Eigen::Dynamic> many_points;
+    Eigen::Matrix<double, 3, Eigen::Dynamic> many_ders;
 };
 
 
@@ -291,6 +302,18 @@ TEST_F(CreateNurbsCurve, globalLeastSquaresCurveApproximation1)
     EXPECT_NEAR(distance, 0.0, DEFAULT_ERROR);
 }
 
+TEST_F(CreateNurbsCurve, globalLeastSquaresCurveApproximation2)
+{
+    nurbs_curve<double, 3, false, -1, -1> new_nurbs;
+
+    std::vector<double> w{-1, 100, 100, -1, 1, 1, -3, 4, 2, 1, 3, -2, 1, 1, 1, 1, 1, 2, 3, -3};
+    std::vector<int> index_set;
+    for (int index = 0; index < 20; ++index)
+        index_set.push_back(index);
+    std::vector<double> wd{-1, 2, 4, 1, 1, 1, 3, 4, 2, 1, 3, 2, 1, 1, 1, 1, 1, 2, 3, -3};
+    ENUM_NURBS flag = global_wc_least_squares_curve_approximation<double, 3, ENPARAMETERIEDTYPE::CHORD>(many_points, w, many_ders, index_set, wd, 3, 9, new_nurbs);
+
+}
 
 
 
