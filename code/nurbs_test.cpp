@@ -312,7 +312,58 @@ TEST_F(CreateNurbsCurve, globalLeastSquaresCurveApproximation2)
         index_set.push_back(index);
     std::vector<double> wd{-1, 2, 4, 1, 1, 1, 3, 4, 2, 1, 3, 2, 1, 1, 1, 1, 1, 2, 3, -3};
     ENUM_NURBS flag = global_wc_least_squares_curve_approximation<double, 3, ENPARAMETERIEDTYPE::CHORD>(many_points, w, many_ders, index_set, wd, 3, 9, new_nurbs);
+    EXPECT_EQ(flag, ENUM_NURBS::NURBS_SUCCESS);
+    Eigen::Vector2<Eigen::Vector3d> point;
+    new_nurbs.derivative_on_curve<1>(0.0, point);
+    double d1 = (point[0] - many_points.col(0)).norm();
+    double d2 = (point[1] - many_ders.col(0)).norm();
+    EXPECT_NEAR(d1, 0.0, DEFAULT_ERROR);
+    EXPECT_NEAR(d2, 0.0, DEFAULT_ERROR);
 
+    new_nurbs.derivative_on_curve<1>(0.3, point);
+    Eigen::Vector3d t1(4.344122821982781, 8.9977669582779232, 0.0), t2(-33.048646954648341, 16.473034652625508, 0.0);
+    d1 = (point[0] - t1).norm();
+    d2 = (point[1] - t2).norm();
+    EXPECT_NEAR(d1, 0.0, DEFAULT_ERROR);
+    EXPECT_NEAR(d2, 0.0, DEFAULT_ERROR);
+
+    new_nurbs.derivative_on_curve<1>(1.0, point);
+    d1 = (point[0] - many_points.col(19)).norm();
+    d2 = (point[1] - many_ders.col(19)).norm();
+    EXPECT_NEAR(d1, 0.0, DEFAULT_ERROR);
+    EXPECT_NEAR(d2, 0.0, DEFAULT_ERROR);
+
+}
+
+TEST_F(CreateNurbsSurface, globalLeastSquaresSurfaceApproximation1)
+{
+    nurbs_surface<double, 3, -1, -1, -1, -1, false> new_nurbs;
+
+    ENUM_NURBS flag = global_surface_approximation<double, 3, ENPARAMETERIEDTYPE::CHORD>(points, 3, 2, 4, 4, new_nurbs);
+
+    EXPECT_EQ(flag, ENUM_NURBS::NURBS_SUCCESS);
+    Eigen::Vector3d point;
+    new_nurbs.point_on_surface(0.0, 0.0, point);
+    double d = (point - points[0].col(0)).norm();
+    EXPECT_NEAR(d, 0.0, DEFAULT_ERROR);
+
+    new_nurbs.point_on_surface(1.0, 0.0, point);
+    d = (point - points[0].col(4)).norm();
+    EXPECT_NEAR(d, 0.0, DEFAULT_ERROR);
+
+    new_nurbs.point_on_surface(0.0, 1.0, point);
+    d = (point - points[4].col(0)).norm();
+    EXPECT_NEAR(d, 0.0, DEFAULT_ERROR);
+    
+    new_nurbs.point_on_surface(1.0, 1.0, point);
+    d = (point - points[4].col(4)).norm();
+    EXPECT_NEAR(d, 0.0, DEFAULT_ERROR);
+
+    Eigen::Vector3d test(0.64504075572135855, 3.484104533792812, 1.4768769670319279);
+    
+    new_nurbs.point_on_surface(0.2, 0.7, point);
+    d = (point - test).norm();
+    EXPECT_NEAR(d, 0.0, DEFAULT_ERROR);
 }
 
 

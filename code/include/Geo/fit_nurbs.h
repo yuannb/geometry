@@ -1276,22 +1276,16 @@ namespace tnurbs
         return local_bi3degree_interpolate<T, dim>(points, u_params, v_params, nurbs);
     }
 
-    template<typename T, int dim, ENPARAMETERIEDTYPE parameteried_type>
-    ENUM_NURBS global_least_squares_curve_approximation(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, int degree, int control_points_count, nurbs_curve<T, dim, false, -1, -1> &nurbs)
+    template<typename T, int dim>
+    ENUM_NURBS global_least_squares_curve_approximation(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, const std::vector<T> &params, int degree, 
+            int control_points_count, nurbs_curve<T, dim, false, -1, -1> &nurbs)
     {
+        int params_count = params.size();
         int points_count = points.cols();
+        if (params_count != points_count)
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
         if (points_count <= control_points_count || degree >= control_points_count)
             return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
-       
-        std::vector<T> params;
-        if constexpr (parameteried_type == ENPARAMETERIEDTYPE::CHORD)
-        {
-            make_params_by_chord<T, dim>(points, params);
-        }
-        else
-        {
-            make_params_by_center<T, dim>(points, params);
-        }
 
         T d = static_cast<T>(points_count) / static_cast<T>(control_points_count - degree);
         Eigen::VectorX<T> knots(degree + control_points_count + 1);
@@ -1339,12 +1333,12 @@ namespace tnurbs
             else if (index == control_points_count - 1)
             {
                 R.block(col, 0, 1, dim) = (points.col(col + 1) - basis[degree] * points.col(points_count - 1)).transpose();
-                for (int i = 0; i < Nrows; ++index)
+                for (int i = 0; i < Nrows; ++i)
                 {
-                    if (index - degree + i == control_points_count - 2)
+                    if (index - degree + i - 1 == control_points_count - 2)
                         N.insert(control_points_count - 2 - Nrows, col) = 0.0;
                     else
-                        N.insert(index - degree + i, col) = basis[index];
+                        N.insert(index - degree + i - 1, col) = basis[i];
                 }
 
             }
@@ -1353,7 +1347,7 @@ namespace tnurbs
                 R.block(col, 0, 1, dim) = (points.col(col + 1)).transpose();
                 for (int i = 0; i < Nrows; ++i)
                 {
-                    N.insert(index, col) = basis[index];
+                    N.insert(index - degree + i - 1, col) = basis[i];
                 }
             }
 
@@ -1378,6 +1372,26 @@ namespace tnurbs
         nurbs.set_degree(degree);
 
         return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+
+    template<typename T, int dim, ENPARAMETERIEDTYPE parameteried_type>
+    ENUM_NURBS global_least_squares_curve_approximation(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, int degree, int control_points_count, nurbs_curve<T, dim, false, -1, -1> &nurbs)
+    {
+        int points_count = points.cols();
+        if (points_count <= control_points_count || degree >= control_points_count)
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+       
+        std::vector<T> params;
+        if constexpr (parameteried_type == ENPARAMETERIEDTYPE::CHORD)
+        {
+            make_params_by_chord<T, dim>(points, params);
+        }
+        else
+        {
+            make_params_by_center<T, dim>(points, params);
+        }
+        return global_least_squares_curve_approximation<T, dim>(points, params, degree, control_points_count, nurbs);
     }
 
 
@@ -1526,7 +1540,6 @@ namespace tnurbs
             Eigen::Matrix<T, Eigen::Dynamic, 2> ders_basis(degree + 1, 2);
             ders_basis_funs<T, 1>(span, degree, u, knots, ders_basis);
             ND.block(index + point_unconstrain_count, span - degree, 1, degree + 1) = ders_basis.col(1).transpose();
-            std::cout << ders_basis.col(1) << std::endl;
             SD.row(index + point_unconstrain_count) = Ders.col(point_index).transpose();
             ++index;
         }
@@ -1549,9 +1562,11 @@ namespace tnurbs
             return ENUM_NURBS::NURBS_ERROR;
 
         Eigen::MatrixX<T> check_mat = mat * PA - V;
-        typename Eigen::MatrixX<T>::Index max_row, max_col;
-        T max_elem = check_mat.maxCoeff(&max_row, &max_col);
+        T max_elem = check_mat.maxCoeff();
         if (max_elem > DEFAULT_ERROR)
+            return ENUM_NURBS::NURBS_ERROR;
+        T min_elem = check_mat.minCoeff();
+        if (min_elem < -1 * DEFAULT_ERROR)
             return ENUM_NURBS::NURBS_ERROR;
         Eigen::Matrix<T, dim, Eigen::Dynamic> control_points = PA.block(0, 0, control_points_count, dim).transpose();
         nurbs.set_control_points(control_points);
@@ -1559,6 +1574,72 @@ namespace tnurbs
         nurbs.set_degree(degree);
         return ENUM_NURBS::NURBS_SUCCESS;
 
+    }
+
+    template<typename T, int dim, ENPARAMETERIEDTYPE parameteried_type>
+    ENUM_NURBS global_surface_approximation(const Eigen::VectorX<Eigen::Matrix<T, dim, Eigen::Dynamic>> &points, int u_degree, int v_degree, int u_control_points_count,
+        int v_control_points_count, nurbs_surface<T, dim, -1, -1, -1, -1, false> &nurbs)
+    {
+        int v_points_count = points.rows();
+        int u_points_count = points[0].cols();
+        if (u_points_count <= u_control_points_count || u_degree >= u_control_points_count)
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+        if (v_points_count <= v_control_points_count || v_degree >= v_control_points_count)
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+        std::vector<T> u_params, v_params;
+        make_surface_params<T, dim, parameteried_type>(points, u_params, v_params);
+        std::vector<Eigen::MatrixX<T>> temp_control_points;
+        temp_control_points.reserve(v_points_count);
+        for (int index = 0; index < v_points_count; ++index)
+        {
+            nurbs_curve<T, dim, false, -1, -1> u_nurbs;
+            global_least_squares_curve_approximation<T, dim>(points[index], u_params, u_degree, u_control_points_count, u_nurbs);
+            Eigen::Matrix<T, dim, Eigen::Dynamic> u_control_points = u_nurbs.get_control_points();
+            temp_control_points.push_back(std::move(u_control_points));
+        }
+        Eigen::VectorX<Eigen::Matrix<T, dim, Eigen::Dynamic>> control_points(v_control_points_count);
+        for (int index = 0; index < v_control_points_count; ++index)
+            control_points[index].resize(dim, u_control_points_count);
+        for (int index = 0; index < u_control_points_count; ++index)
+        {
+            nurbs_curve<T, dim, false, -1, -1> v_nurbs;
+            Eigen::Matrix<T, dim, Eigen::Dynamic> v_temp_control_points(dim, v_points_count);
+            for (int i = 0; i < v_points_count; ++i)
+                v_temp_control_points.col(i) = temp_control_points[i].col(index);
+
+
+            global_least_squares_curve_approximation<T, dim>(v_temp_control_points, v_params, v_degree, v_control_points_count, v_nurbs);
+            Eigen::Matrix<T, dim, Eigen::Dynamic> v_control_points = v_nurbs.get_control_points();
+            for (int i = 0; i < v_control_points_count; ++i)
+            {
+                control_points[i].col(index) = v_control_points.col(i);
+            }
+        }
+        T d = static_cast<T>(u_points_count) / static_cast<T>(u_control_points_count - u_degree);
+        Eigen::VectorX<T> u_knots(u_degree + u_control_points_count + 1);
+        u_knots.block(0, 0, u_degree + 1, 1).setConstant(0.0);
+        u_knots.block(u_control_points_count, 0, u_degree + 1, 1).setConstant(1.0);
+        for (int index = 1; index <= u_control_points_count - 1 - u_degree; ++index)
+        {
+            int i = std::floor(index * d);
+            T alpha = index * d - static_cast<T>(i);
+            u_knots[u_degree + index] = (1.0 - alpha) * u_params[i - 1] + alpha * u_params[i];
+        }
+        d = static_cast<T>(v_points_count) / static_cast<T>(v_control_points_count - v_degree);
+        Eigen::VectorX<T> v_knots(v_degree + v_control_points_count + 1);
+        v_knots.block(0, 0, v_degree + 1, 1).setConstant(0.0);
+        v_knots.block(v_control_points_count, 0, v_degree + 1, 1).setConstant(1.0);
+        for (int index = 1; index <= v_control_points_count - 1 - v_degree; ++index)
+        {
+            int i = std::floor(index * d);
+            T alpha = index * d - static_cast<T>(i);
+            v_knots[v_degree + index] = (1.0 - alpha) * v_params[i - 1] + alpha * v_params[i];
+        }
+        nurbs.set_control_points(control_points);
+        nurbs.set_uv_degree(u_degree, v_degree);
+        nurbs.set_uv_knots(u_knots, v_knots);
+
+        return ENUM_NURBS::NURBS_SUCCESS;
     }
 
 }
