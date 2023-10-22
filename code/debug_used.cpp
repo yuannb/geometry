@@ -46,6 +46,10 @@ namespace tnurbs
     {
         std::cout << mat << std::endl;
     }
+    void printEigenMatrix(const Eigen::SparseMatrix<double> &mat)
+    {
+        std::cout << mat << std::endl;
+    }
 
     void printEigenMatrix(const Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> &mat)
     {

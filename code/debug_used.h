@@ -20,6 +20,7 @@ namespace tnurbs
     void printEigenMatrix(const Eigen::Matrix<double, 4, Eigen::Dynamic> &mat);
 
     void printEigenMatrix(const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &mat);
+    void printEigenMatrix(const Eigen::SparseMatrix<double> &mat);
 
     ENUM_NURBS save_obj(const nurbs_curve<double, 2, false, -1, -1> &nurbs_cur, const char *path);
 

@@ -6,8 +6,9 @@
 #include "contruct_primitive_nurbs_surface.h"
 #include "fit_nurbs.h"
 #include "gtest/gtest.h"
-
+#include <cmath>
 #include "debug_used.h"
+// #include <memory>
 using namespace tnurbs;
 
 class CreateNurbsCurve : public testing::Test
@@ -50,6 +51,33 @@ protected:
     Eigen::Matrix<double, 3, Eigen::Dynamic> many_ders;
 };
 
+class CreateNurbsCurve3 : public testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        Eigen::Vector<double, 3> center{0, 0, 0};
+        Eigen::Vector<double, 3> u_dir{1, 0, 0};
+        Eigen::Vector<double, 3> v_dir{0, 1, 0};
+        double radius = 10;
+        double start_angles = 0;
+        double end_angles = M_PI + 0.78;
+        nurbs_curve<double, 3, true, -1, -1> nurbs;
+        create_nurbs_circle(center, u_dir, v_dir, radius, start_angles, end_angles, nurbs);
+        many_points.resize(3, 40);
+        many_ders.resize(3, 40);
+        for (int i = 0; i < 40; ++i)
+        {
+            Eigen::Vector<Eigen::Vector3d, 2> point;   
+            nurbs.derivative_on_curve<1>(0.025 * i, point);
+            many_points.col(i) = point[0];
+            many_ders.col(i) = point[1];
+        }
+    }
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> many_points;
+    Eigen::Matrix<double, 3, Eigen::Dynamic> many_ders;
+};
 
 class CreateNurbsSurface : public testing::Test
 {
@@ -110,6 +138,59 @@ protected:
     Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> points;
     Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> ders;
 };
+
+class CreateNurbsCurve2 : public testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        Eigen::Vector<double, 3> center{0, 0, 0};
+        Eigen::Vector<double, 3> u_dir{1, 0, 0};
+        Eigen::Vector<double, 3> v_dir{0, 1, 0};
+        double radius = 10;
+        double start_angles = 0;
+        double end_angles = M_PI + 0.78;
+        nurbs_curve<double, 3, true, -1, -1> nurbs;
+        create_nurbs_circle(center, u_dir, v_dir, radius, start_angles, end_angles, nurbs);
+
+        Eigen::Matrix<double, 3, Eigen::Dynamic> pointss(3, 5);
+        for (int i = 0; i < 5; ++i)
+        {
+            Eigen::Vector3d point;   
+            nurbs.point_on_curve(0.2 * i, point);
+            pointss.col(i) = point;
+        }
+        global_curve_interpolate<double, 3, ENPARAMETERIEDTYPE::CHORD>(pointss, 3, m_nurbs);
+        Eigen::VectorX<double> insert_knots(5);
+        insert_knots << 0.2, 0.2 , 0.5, 0.7, 0.7;
+        m_nurbs.refine_knots_vector(insert_knots);
+        
+    }
+    
+    nurbs_curve<double, 3, false, -1, -1> m_nurbs;
+     
+
+};
+
+
+TEST_F(CreateNurbsCurve2, RemoveKnots1)
+{
+    std::vector<double> params(9);
+    for (int index = 1; index < 10; ++index)
+        params[index - 1] = 0.1 * index;
+    nurbs_curve<double, 3, false, -1, -1> new_nurbs;
+    std::vector<double> errors;
+    m_nurbs.remove_knots_bound_curve(params, errors, new_nurbs, 2.0);
+
+    ASSERT_TRUE(true == true);
+}
+TEST_F(CreateNurbsCurve, GlobalCurveApproximationErrBnd1)
+{
+    nurbs_curve<double, 3, false, -1, -1> new_nurbs2;
+
+    ENUM_NURBS flag = global_curve_approximation_err_bnd<double, 3, ENPARAMETERIEDTYPE::CHORD>(many_points, 5, new_nurbs2, 1);
+    int i = 0;
+}
 
 
 TEST_F(CreateNurbsCurve, InterpolateWithEndsTangent)

@@ -918,6 +918,66 @@ namespace tnurbs
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
+    /// @brief 计算N_i,degree(u)的值
+    /// @tparam T double float...
+    /// @param i 第i个基函数
+    /// @param u 参数值
+    /// @param degree 阶数
+    /// @param knots 节点矢量
+    /// @param N 基函数在参数u处的值
+    /// @return 错误码
+    template<typename T>
+    ENUM_NURBS one_basis_function(int i, T u, int degree, const Eigen::VectorX<T> &knots, T &Nip)
+    {
+        if(i == 0 && u == knots[0])
+        {
+            Nip = 1.0;
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+        int m = knots.size() - 1;
+        if (i == m - degree - 1 && u == knots[m])
+        {
+            Nip = 1.0;
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+        if (u < knots[i] || u >= knots[i + degree + 1])
+        {
+            Nip = 0.0;
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+
+        std::vector<T> N(degree + 1, 0.0);
+        for (int j = 0; j <= degree; ++j)
+        {
+            if (u >= knots[i + j] && u < knots[i + j + 1])
+                N[j] = 1.0;
+        }
+        for (int k = 1; k <= degree; ++k)
+        {
+            double saved = 0.0;
+            if (N[0] != 0.0)
+                saved = ((u - knots[i]) * N[0]) / (knots[i + k] - knots[i]);
+            for (int j = 0; j < degree - k + 1; ++j)
+            {
+                T u_left = knots[i + j + 1];
+                T u_right = knots[i + j + k + 1];
+                if (N[j + 1] == 0.0)
+                {
+                    N[j] = saved;
+                    saved = 0.0;
+                }
+                else
+                {
+                    T temp = N[j + 1] / (u_right - u_left);
+                    N[j] = saved + (u_right - u) * temp;
+                    saved = (u - u_left) * temp;
+                }
+            }
+        }
+        Nip = N[0];
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
 
     /// @brief 元模板计算n!
     /// @tparam n
@@ -2667,7 +2727,7 @@ namespace tnurbs
     {
         T TOL = -1;
         int cols = control_points.cols();
-        if (is_rational == false)
+        if constexpr (is_rational == false)
         {
             TOL = error;
         }
@@ -2747,6 +2807,92 @@ namespace tnurbs
 
         int knots_size = knots_vector.size();
         Eigen::VectorX<T> new_knots_vector(knots_size - time);
+        new_knots_vector.block(0, 0, index + 1 - time, 1) = knots_vector.block(0, 0, index + 1 - time, 1);
+        new_knots_vector.block(index + 1 - time, 0, knots_size - index - 1, 1) = knots_vector.block(index + 1, 0, knots_size - index - 1, 1);
+        knots_vector = new_knots_vector;
+
+        int j = (2 * index - repeat - degree) / 2, i = j;
+        for (int k = 1; k < time; ++k)
+        {
+            if (k % 2 == 1)
+                i += 1;
+            else
+                j -= 1;
+        }
+        int ij = i + 1 - j;
+        for (int k = i + 1; k < cols; ++k)
+        {
+            control_points.col(j) = control_points.col(k);
+            j += 1;
+        }
+
+        Eigen::Matrix<T, point_size, Eigen::Dynamic> temp_points = control_points.block(0, 0, point_size, cols - ij);
+        control_points = temp_points;
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+
+    /// @brief 去除nurbs曲线的节点(不检查误差, 内部使用)
+    /// @tparam T double float int...
+    /// @tparam point_size 控制点坐标分量的个数
+    /// @tparam is_rational 是否是有理曲线
+    /// @param index 去除节点在节点矢量列表中的下指标
+    /// @param count 期望去除的次数
+    /// @param degree nurbs曲线的阶数
+    /// @param repeat 去除节点的重复度
+    /// @param knots_vector 节点矢量
+    /// @param control_points 控制点
+    /// @param time 实际去除的次数
+    /// @param error 节点出去误差
+    /// @return ENUM_NURBS错误码
+    template<typename T, int point_size, bool is_rational>
+    ENUM_NURBS remove_curve_knots_no_check_error(int index, int count, int degree, int repeat, Eigen::VectorX<T> &knots_vector,
+        Eigen::Matrix<T, point_size, Eigen::Dynamic> &control_points)
+    {
+        int cols = control_points.cols();
+        T u = knots_vector[index];
+        int order = degree + 1;
+        int first = index - degree;
+        int last = index - repeat;
+        std::vector<Eigen::Vector<T, point_size>> temp(2 * degree + 1);
+        int time = 0;
+        for (; time < count; ++time)
+        {
+            int offset = first - 1;
+            temp[0] = control_points.col(offset);
+            temp[last + 1 - offset] = control_points.col(last + 1);
+            int i = first, j = last;
+            int ii = 1, jj = last - offset;
+            while (j - i > time)
+            {
+                T alfi = (u - knots_vector[i]) / (knots_vector[i + order + time] - knots_vector[i]);
+                T alfj = (u - knots_vector[j - time]) / (knots_vector[j + order] - knots_vector[j - time]);
+                temp[ii] = (control_points.col(i) - (1.0 - alfi) * temp[ii - 1]) / alfi;
+                temp[jj] = (control_points.col(j) - alfj * temp[jj + 1]) / (1.0 - alfj);
+                i += 1;
+                ii += 1;
+                j -= 1;
+                jj -= 1;
+            }
+
+            i = first, j = last;
+            while (j - i > time)
+            {
+                control_points.col(i) = temp[i - offset];
+                control_points.col(j) = temp[j - offset];
+                i += 1;
+                j -= 1;
+            }
+
+            first -= 1; last += 1;
+        }
+
+        if (time == 0)
+            return ENUM_NURBS::NURBS_SUCCESS;
+
+        int knots_size = knots_vector.size();
+        Eigen::VectorX<T> new_knots_vector;
+        new_knots_vector.resize(knots_size - time);
         new_knots_vector.block(0, 0, index + 1 - time, 1) = knots_vector.block(0, 0, index + 1 - time, 1);
         new_knots_vector.block(index + 1 - time, 0, knots_size - index - 1, 1) = knots_vector.block(index + 1, 0, knots_size - index - 1, 1);
         knots_vector = new_knots_vector;
@@ -4105,6 +4251,55 @@ namespace tnurbs
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
+    /// @brief 获得节点消去的误差界限(非有理)
+    /// @tparam T doule float ...
+    /// @tparam dim 点所在的欧式空间的维数
+    /// @param points 控制点
+    /// @param knots 节点矢量
+    /// @param degree 阶数
+    /// @param u 消去节点
+    /// @param r 消去节点在节点矢量中的最大最大下标
+    /// @param s 节点矢量的重复度
+    /// @param B 输出参数: 消去节点所会产生的误差
+    /// @return 错误码
+    template<typename T, int dim>
+    ENUM_NURBS get_removal_bnd_curve(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, const Eigen::VectorX<T> &knots, int degree, T u, int r, int s, T &Br)
+    {
+        if (s <= 0)
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+        int ord = degree + 1;
+        int last = r - s;
+        int first = r - degree;
+        int off = first - 1;
+        std::vector<Eigen::Vector<T, dim>> temp;
+        temp.resize(last + 2 - off);
+        temp[0] = points.col(off);
+        temp[last + 1 - off] = points.col(last + 1);
+        int i = first, j = last;
+        int ii = 1, jj = last - off;
+
+        while (j - i > 0)
+        {
+            T alphi = (u - knots[i]) / (knots[i + ord] - knots[i]);
+            T alphj = (u - knots[j]) / (knots[j + ord] - knots[j]);
+            temp[ii] = (points.col(i) - (1.0 - alphi) * temp[ii - 1]) / alphi;
+            temp[jj] = (points.col(j) - alphj * temp[jj + 1]) / (1.0 - alphj);
+            i += 1;
+            ii += 1;
+            j -= 1;
+            jj -= 1;
+        }
+        if (j - i < 0)
+        {
+            Br = (temp[ii - 1] - temp[jj + 1]).norm();
+        }
+        else
+        {
+            T alphi = (u - knots[i]) / (knots[i + ord] - knots[i]);
+            Br = (points.col(i) - alphi * temp[ii + 1] - (1.0 - alphi) * temp[ii - 1]).norm();
+        }
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
 
 }
 

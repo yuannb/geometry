@@ -1363,6 +1363,43 @@ namespace tnurbs
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
+    //内部使用
+    template<typename T, int dim>
+    ENUM_NURBS global_least_squares_curve_approximation(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, const std::vector<T> &params, 
+        const Eigen::VectorX<T> &knots, int degree, int control_points_count, nurbs_curve<T, dim, false, -1, -1> &nurbs)
+    {
+        int points_count = points.cols();
+        Eigen::MatrixX<T> R;
+        Eigen::SparseMatrix<T> N(control_points_count - 2, points_count - 2);
+        int Nrows = std::min(degree + 1, control_points_count - 2);
+        N.reserve(Eigen::VectorXi::Constant(points_count - 2, Nrows));
+        evaulate_matrix_for_approximation<T, dim>(knots, params, degree, points_count, N);
+        evaulate_R_matrix_for_approximation<T, dim>(points, knots, params, degree, points_count, R);
+
+        Eigen::SparseMatrix<T> mat =  N * Eigen::SparseMatrix<T, Eigen::ColMajor>(N.transpose());
+        Eigen::MatrixX<T> Rs = N * R;
+
+        mat.makeCompressed();
+        Eigen::SimplicialLDLT<Eigen::SparseMatrix<T>> solver;
+        solver.compute(mat);
+        if (solver.info() != Eigen::Success)
+        {
+            return ENUM_NURBS::NURBS_ERROR;
+        }
+        Eigen::Matrix<T, Eigen::Dynamic, dim> control_points = solver.solve(Rs);
+        if (solver.info() != Eigen::Success)
+            return ENUM_NURBS::NURBS_ERROR;
+        Eigen::Matrix<T, dim, Eigen::Dynamic> new_control_points(dim, control_points_count);
+        new_control_points.col(0) = points.col(0);
+        new_control_points.col(control_points_count - 1) = points.col(points_count - 1);
+        new_control_points.block(0, 1, dim, control_points_count - 2) = control_points.transpose();
+        nurbs.set_control_points(new_control_points);
+        nurbs.set_knots_vector(knots);
+        nurbs.set_degree(degree);
+
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
     template<typename T, int dim>
     ENUM_NURBS global_least_squares_curve_approximation(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, const std::vector<T> &params, int degree, 
             int control_points_count, nurbs_curve<T, dim, false, -1, -1> &nurbs)
@@ -1384,34 +1421,7 @@ namespace tnurbs
             T alpha = index * d - static_cast<T>(i);
             knots[degree + index] = (1.0 - alpha) * params[i - 1] + alpha * params[i];
         }
-
-        Eigen::MatrixX<T> R;
-        Eigen::SparseMatrix<T> N(control_points_count - 2, points_count - 2);
-        int Nrows = std::min(degree + 1, control_points_count - 2);
-        N.reserve(Eigen::VectorXi::Constant(points_count - 2, Nrows));
-        evaulate_matrix_for_approximation<T, dim>(knots, params, degree, points_count, N);
-        evaulate_R_matrix_for_approximation<T, dim>(points, knots, params, degree, points_count, R);
-
-        Eigen::SparseMatrix<T> mat =  N * Eigen::SparseMatrix<T, Eigen::ColMajor>(N.transpose());
-        Eigen::MatrixX<T> Rs = N * R;
-
-        mat.makeCompressed();
-        Eigen::SimplicialLDLT<Eigen::SparseMatrix<T>> solver;
-        solver.compute(mat);
-        if (solver.info() != Eigen::Success)
-            return ENUM_NURBS::NURBS_ERROR;
-        Eigen::Matrix<T, Eigen::Dynamic, dim> control_points = solver.solve(Rs);
-        if (solver.info() != Eigen::Success)
-            return ENUM_NURBS::NURBS_ERROR;
-        Eigen::Matrix<T, dim, Eigen::Dynamic> new_control_points(dim, control_points_count);
-        new_control_points.col(0) = points.col(0);
-        new_control_points.col(control_points_count - 1) = points.col(points_count - 1);
-        new_control_points.block(0, 1, dim, control_points_count - 2) = control_points.transpose();
-        nurbs.set_control_points(new_control_points);
-        nurbs.set_knots_vector(knots);
-        nurbs.set_degree(degree);
-
-        return ENUM_NURBS::NURBS_SUCCESS;
+        return global_least_squares_curve_approximation<T, dim>(points, params, knots, degree, control_points_count, nurbs);
     }
 
 
@@ -1720,6 +1730,108 @@ namespace tnurbs
         nurbs.set_uv_knots(u_knots, v_knots);
 
         return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+
+    template<typename T, int dim>
+    ENUM_NURBS global_curve_approximation_err_bnd(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, const std::vector<T> &params, int degree, nurbs_curve<T, dim, false, -1, -1> &nurbs, T E = DEFAULT_ERROR)
+    {
+        int params_count = params.size();
+        int points_count = points.cols();
+        if (params_count != points_count)
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+        if (degree < 1)
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+        Eigen::VectorX<T> knots(params_count + 2);
+        knots[0] = knots[1] = 0.0;
+        knots[params_count] = knots[params_count + 1] = 1.0;
+        for (int index = 1; index < params_count - 1; ++index)
+        {
+            knots[index + 1] = params[index];
+        }
+        std::vector<T> ek(params_count, 0.0);
+        std::vector<T> current_params = params;
+        nurbs_curve<T, dim, false, -1, -1> temp_nurbs(knots, points);
+        nurbs_curve<T, dim, false, -1, -1> simply_nurbs;
+        for (int current_degree = 1; current_degree <= degree; ++current_degree)
+        {
+            temp_nurbs.remove_knots_bound_curve(current_params, ek, simply_nurbs, E);
+            if (current_degree == degree)
+                break;
+            //将temp_nubrs的节点矢量的重复的提升1
+            std::vector<T> new_knots;
+            knots = simply_nurbs.get_knots_vector();
+            new_knots.push_back(knots[0]);
+            int knots_count = knots.size();
+            for (int index = 1; index < knots_count; ++index)
+            {
+                if (knots[index] != new_knots.back())
+                {
+                    new_knots.push_back(new_knots.back());
+                }
+                new_knots.push_back(knots[index]);
+            }
+            new_knots.push_back(new_knots.back());
+            knots = Eigen::Map<Eigen::VectorX<T>>(new_knots.data(), new_knots.size());
+            int temp_points_count = knots.size() - current_degree - 1;
+            //很可能不成功
+            ENUM_NURBS flag = global_least_squares_curve_approximation<T, dim>(points, current_params, knots, current_degree + 1, temp_points_count, temp_nurbs);
+            if (flag != ENUM_NURBS::NURBS_SUCCESS)
+            {
+                temp_nurbs.set_control_points(simply_nurbs.get_control_points());
+                temp_nurbs.set_knots_vector(simply_nurbs.get_knots_vector());
+                temp_nurbs.degree_elevate(1);
+                continue;
+            }
+            //寻找points的最近点(TODO: 根据反求的参数点重新排序拟合点(points))
+            for (int index = 0; index < points_count; ++index)
+            {
+                T u;
+                Eigen::Vector<T, dim> R;
+                temp_nurbs.find_nearst_point_on_curve(points.col(index), u, R);
+                ek[index] = (points.col(index) - R).norm();
+                current_params[index] = u;
+            }
+
+        }
+        Eigen::VectorX<T> temp_nurbs_knots = temp_nurbs.get_knots_vector();
+        Eigen::VectorX<T> simply_nurbs_knots = simply_nurbs.get_knots_vector();
+        if (temp_nurbs_knots.size() == simply_nurbs_knots.size())
+        {
+            nurbs.set_degree(degree);
+            nurbs.set_control_points(simply_nurbs.get_control_points());
+            nurbs.set_knots_vector(simply_nurbs.get_knots_vector());
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+        
+        ENUM_NURBS flag = global_least_squares_curve_approximation<T, dim>(points, current_params, knots, degree, knots.size() - degree - 1, temp_nurbs);
+        if (flag != ENUM_NURBS::NURBS_SUCCESS)
+        {
+            nurbs.set_degree(degree);
+            nurbs.set_control_points(temp_nurbs.get_control_points());
+            nurbs.set_knots_vector(temp_nurbs.get_knots_vector());
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+        //else
+        nurbs.set_degree(degree);
+        nurbs.set_control_points(simply_nurbs.get_control_points());
+        nurbs.set_knots_vector(simply_nurbs.get_knots_vector());
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    template<typename T, int dim, ENPARAMETERIEDTYPE parameteried_type>
+    ENUM_NURBS global_curve_approximation_err_bnd(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, int degree, nurbs_curve<T, dim, false, -1, -1> &nurbs, T E = DEFAULT_ERROR)
+    {
+        std::vector<T> params;
+        if constexpr (parameteried_type == ENPARAMETERIEDTYPE::CHORD)
+        {
+            make_params_by_chord<T, dim>(points, params);
+        }
+        else
+        {
+            make_params_by_center<T, dim>(points, params);
+        }
+        return global_curve_approximation_err_bnd<T, dim>(points, params, degree, nurbs, E);
     }
 
 }

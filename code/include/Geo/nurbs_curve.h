@@ -5,6 +5,7 @@
 #include "curve.h"
 #include <concepts>
 // #include "ThreadPool.h"
+//TODO:将knots_vector的类型将Eigen::vector换成std::vector
 namespace tnurbs
 {
     using namespace tnurbs;
@@ -39,7 +40,13 @@ namespace tnurbs
         }
 
         
-        
+        /// @brief 给定误差, 在误差范围内消去所有可以消去的节点; 此函数仅在非有理nurbs曲线是合法的(要求参数从小到大排列, 且不重复, 稍加改造应该可以使得消去误差在整个参数域都成立)
+        /// @param params 消去的曲线在参数params上误差小于给定的误差; 即(new_curve(params[i]) - curve(params[i])).norm() < E;
+        /// @param error 返回的各个点的误差(如果params为空, 则返回各个节点区间的误差)
+        /// @param new_nurbs 节点消去后新的nurbs
+        /// @param E 最大误差
+        /// @return 错误码
+        ENUM_NURBS remove_knots_bound_curve(const std::vector<T> &params, std::vector<T> &error, nurbs_curve<T, dim, false, -1, -1> &new_nurbs, T E = DEFAULT_ERROR) const;
         int get_control_points_count() const;
         ENUM_NURBS get_control_point(int index, Eigen::Vector<T, dim> &point) const;
         Eigen::VectorX<T> get_knots_vector() const;
@@ -950,6 +957,34 @@ namespace tnurbs
             return ENUM_NURBS::NURBS_SUCCESS;
         }
 
+        /// @brief 将节点矢量去重, 并且记录各个节点的重复度
+        /// @param different_knots 去重后的节点矢量
+        /// @param multiples 各个节点的重复度
+        /// @return 错误码
+        ENUM_NURBS get_different_knots(std::vector<T> &different_knots, std::vector<int> &multiples) const
+        {
+            int knots_count = m_knots_vector.size();
+            different_knots.reserve(knots_count - 2 * m_degree);
+            multiples.reserve(knots_count - 2 * m_degree);
+            int current_knots_multiple = 0;
+            T current_knots = m_knots_vector[0];
+            for (int index = 0; index < knots_count; ++index)
+            {
+                if (current_knots != m_knots_vector[index])
+                {
+                    different_knots.push_back(current_knots);
+                    multiples.push_back(current_knots_multiple);
+                    current_knots = m_knots_vector[index];
+                    current_knots_multiple = 1;
+                }
+                else
+                    current_knots_multiple += 1;
+            }
+            different_knots.push_back(current_knots);
+            multiples.push_back(current_knots_multiple);
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+
 
         ENUM_NURBS get_ends_point(std::array<Eigen::Vector<T, dim>, 2> &points) const
         {
@@ -1314,7 +1349,7 @@ namespace tnurbs
         }
 
         /// @brief 节点细化
-        /// @param insert_knots 插入节点数组 
+        /// @param insert_knots 插入节点数组(要求升序)
         /// @return ENUM_NURBS错误码
         ENUM_NURBS refine_knots_vector(const Eigen::VectorX<T> &insert_knots)
         {
@@ -2012,6 +2047,232 @@ namespace tnurbs
             m_control_points = new_control_points;
             return ENUM_NURBS::NURBS_SUCCESS;
         }
+
+        /// @brief 给定误差, 在误差范围内消去所有可以消去的节点; 此函数仅在非有理nurbs曲线是合法的(要求参数从小到大排列, 且不重复, 稍加改造应该可以使得消去误差在整个参数域都成立)
+        /// @param params 消去的曲线在参数params上误差小于给定的误差; 即(new_curve(params[i]) - curve(params[i])).norm() < E;
+        /// @param error 返回的各个点的误差(如果params为空, 则返回各个节点区间的误差)
+        /// @param new_nurbs 节点消去后新的nurbs
+        /// @param E 最大误差
+        /// @return 错误码
+        ENUM_NURBS remove_knots_bound_curve(const std::vector<T> &params, std::vector<T> &error, nurbs_curve<T, dim, false, -1, -1> &new_nurbs, T E = DEFAULT_ERROR) const
+        {
+            static_assert(is_rational == false, "rational b spline curve can not use this function");
+            if constexpr (is_rational == true)
+                return ENUM_NURBS::NURBS_ERROR;
+            int params_count = params.size();
+            for (int index = 1; index < params_count; ++index)
+            {
+                if (params[index] <= params[index - 1])
+                    return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+            }
+            
+            // T inf = -1.0;
+            std::vector<T> different_knots;
+            std::vector<int> multiple;
+            get_different_knots(different_knots, multiple);
+            if (params_count > 0)
+                if (params[0] < different_knots[0] || params[params_count - 1] > different_knots.back())
+                    return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+            int current_index = m_degree;
+            int different_knots_count = different_knots.size();
+            std::vector<T> Brs(different_knots_count - 2, 0.0);
+            //计算内节点Br的值
+            for (int index = 1; index < different_knots_count - 1; ++index)
+            {
+                int r = current_index + multiple[index];
+                T Br;
+                get_removal_bnd_curve<T, dim>(m_control_points, m_knots_vector, m_degree, different_knots[index], r, multiple[index], Br);
+                Brs[index - 1] = Br;
+                current_index = r;
+            }
+            //对每个基函数, 计算相关参数params的下标范围
+            int points_count = m_control_points.cols();
+            std::list<std::array<int, 2>> basis_params_relation;
+            int first_index = 0;
+            int last_index = m_degree + 1;
+            int params_first_index = 0;
+            int params_last_index = 0;
+            for (int index = 0; index < points_count; ++index)
+            {
+                T u_min = m_knots_vector[first_index];
+                T u_max = m_knots_vector[last_index];
+                while (params[params_first_index] < u_min && params_first_index < params_count)
+                {
+                    ++params_first_index;
+                }
+                while (params[params_last_index] < u_max && params_last_index < params_count - 1)
+                {
+                    ++params_last_index;
+                }
+                
+                if (params[params_last_index] >= u_max)
+                {
+                    --params_last_index;
+                }
+
+                if (params_first_index <= params_last_index)
+                {
+                    std::array<int , 2> index_segment{params_first_index, params_last_index};
+                    basis_params_relation.push_back(std::move(index_segment));
+                }
+                else
+                {
+                    std::array<int , 2> index_segment{-1, -1};
+                    basis_params_relation.push_back(std::move(index_segment));
+                    // params_last_index = params_first_index;
+                }
+
+                ++first_index;
+                ++last_index;
+            }
+
+            error.resize(params_count, 0.0);
+ 
+
+            Eigen::VectorX<T> new_knots_vector = m_knots_vector;
+            Eigen::Matrix<T, dim, Eigen::Dynamic> new_control_points = m_control_points;
+            while (true)
+            {
+                auto min_it = Brs.begin();
+                for (auto it = Brs.begin(); it < Brs.end(); ++it)
+                {
+                    if ((*it < *min_it && *it >= 0.0) || *min_it == -1.0)
+                        min_it = it;
+                }
+                if (*min_it == -1.0)
+                    break;
+                int r = std::accumulate(multiple.begin(), multiple.begin() + (min_it - Brs.begin() + 2), -1);
+                int &mul = multiple[min_it - Brs.begin() + 1];
+                std::vector<T> temp_error = error;
+                if ((m_degree + mul) % 2 == 0)
+                {
+                    int k = (m_degree + mul) / 2;
+                    int i = r - k;
+                    auto params_it = basis_params_relation.begin();
+                    for (int index = 0; index < i; ++index)
+                        ++params_it;
+                    std::array<int , 2> &indexs = *params_it;
+                    if (indexs[0] != -1 && indexs[1] != -1)
+                    {
+                        for (int index = indexs[0]; index <= indexs[1]; ++index)
+                        {
+                            T basis;
+                            one_basis_function<T>(i, params[index], m_degree, new_knots_vector, basis);
+                            temp_error[index] += basis * (*min_it);
+                        }
+                    }
+                }
+                else
+                {
+                    int k = (m_degree + mul + 1) / 2;
+                    int i = r - k + 1;
+                    auto params_it = basis_params_relation.begin();
+                    for (int index = 0; index < i; ++index)
+                        ++params_it;
+                    std::array<int , 2> &indexs = *params_it;
+                    if (indexs[0] != -1 && indexs[1] != -1)
+                    {
+                        T alpha = (new_knots_vector[r] - new_knots_vector[r - k + 1]) / (new_knots_vector[r - k + m_degree + 2] - new_knots_vector[r - k + 1]);
+                        for (int index = indexs[0]; index <= indexs[1]; ++index)
+                        {
+                            T basis;
+                            one_basis_function<T>(i, params[index], m_degree, new_knots_vector, basis);
+                            temp_error[index] += basis * (*min_it) * (1.0 - alpha);
+                        }
+                    }
+                }
+            
+                bool flag = true;
+                for (auto &e : temp_error)
+                {
+                    if (e > E)
+                        flag = false;
+                }
+                if (flag == true)
+                {
+                    error = temp_error;
+                    T remove_knot = new_knots_vector[r];
+                    int new_points_count = new_control_points.cols();
+                    int beg = std::max(r - m_degree, m_degree + 1);
+                    int end = std::min(r + m_degree - mul + 1, new_points_count - 1);
+
+                    remove_curve_knots_no_check_error<T, dim, false>(r, 1, m_degree, mul, new_knots_vector, new_control_points);
+                    if (new_knots_vector.size() == 2 * (m_degree + 1))
+                        break;
+                    //更新基函数对应的参数的下标
+                    auto params_it = basis_params_relation.begin();
+                    for (int index = 0; index < r - m_degree - 1; ++index)
+                        ++params_it;
+                    for (int index = r - m_degree - 1; index <= r - mul; ++index)
+                    {
+                        if ((*params_it)[0] == -1)
+                        {
+                            auto current_it = params_it++;
+                            *current_it = *(params_it);
+                        }
+                        else
+                        {
+                            auto current_it = params_it++;
+                            (*current_it)[1] = (*params_it)[1];
+                        }
+                        // ++params_it;
+                    }
+                    basis_params_relation.erase(params_it);
+
+
+                    int different_knots_size = different_knots.size() - 1;
+                    int knot_index_start = m_degree + 1;
+                    int kont_index_end = m_degree + 1 + multiple[1] - 1;
+
+                    for (int index = 1; index < different_knots_size; ++index)
+                    {
+                        if ((knot_index_start >= beg && knot_index_start <= end) || (kont_index_end >= beg && kont_index_end <= end))
+                        {
+                            if (different_knots[index] == remove_knot && 1 == mul)
+                            {
+                                end = std::min(r + m_degree - mul + 1, new_points_count - 2);
+                                --kont_index_end;
+                                --mul;
+                                knot_index_start = kont_index_end + 1;
+                                kont_index_end = knot_index_start + multiple[index + 1] - 1;
+                                continue;
+                            }
+                            if (different_knots[index] == remove_knot)
+                            {
+                                end = std::min(r + m_degree - mul + 1, new_points_count - 2);
+                                kont_index_end -= 1;
+                                --multiple[index];
+                            }
+
+                            T Br;
+                            get_removal_bnd_curve<T, dim>(new_control_points, new_knots_vector, m_degree, different_knots[index], kont_index_end, multiple[index], Br);
+                            Brs[index - 1] = Br;
+                        }
+                        knot_index_start = kont_index_end + 1;
+                        kont_index_end = knot_index_start + multiple[index + 1] - 1;
+                    }
+
+                    if (mul == 0)
+                    {
+                        auto knot_it = std::find(different_knots.begin(), different_knots.end(), remove_knot);
+                        multiple.erase(multiple.begin() + (knot_it - different_knots.begin()));
+                        different_knots.erase(knot_it);
+                        Brs.erase(min_it);
+                    }
+
+                }
+                else
+                {
+                    *min_it = -1.0;
+                }
+            }
+            new_nurbs.set_control_points(new_control_points);
+            new_nurbs.set_knots_vector(new_knots_vector);
+            new_nurbs.set_degree(m_degree);
+            
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+
 
     private:
 
