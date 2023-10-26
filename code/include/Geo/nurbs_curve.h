@@ -957,33 +957,33 @@ namespace tnurbs
             return ENUM_NURBS::NURBS_SUCCESS;
         }
 
-        /// @brief 将节点矢量去重, 并且记录各个节点的重复度
-        /// @param different_knots 去重后的节点矢量
-        /// @param multiples 各个节点的重复度
-        /// @return 错误码
-        ENUM_NURBS get_different_knots(std::vector<T> &different_knots, std::vector<int> &multiples) const
-        {
-            int knots_count = m_knots_vector.size();
-            different_knots.reserve(knots_count - 2 * m_degree);
-            multiples.reserve(knots_count - 2 * m_degree);
-            int current_knots_multiple = 0;
-            T current_knots = m_knots_vector[0];
-            for (int index = 0; index < knots_count; ++index)
-            {
-                if (current_knots != m_knots_vector[index])
-                {
-                    different_knots.push_back(current_knots);
-                    multiples.push_back(current_knots_multiple);
-                    current_knots = m_knots_vector[index];
-                    current_knots_multiple = 1;
-                }
-                else
-                    current_knots_multiple += 1;
-            }
-            different_knots.push_back(current_knots);
-            multiples.push_back(current_knots_multiple);
-            return ENUM_NURBS::NURBS_SUCCESS;
-        }
+        // /// @brief 将节点矢量去重, 并且记录各个节点的重复度
+        // /// @param different_knots 去重后的节点矢量
+        // /// @param multiples 各个节点的重复度
+        // /// @return 错误码
+        // ENUM_NURBS get_different_knots(std::vector<T> &different_knots, std::vector<int> &multiples) const
+        // {
+        //     int knots_count = m_knots_vector.size();
+        //     different_knots.reserve(knots_count - 2 * m_degree);
+        //     multiples.reserve(knots_count - 2 * m_degree);
+        //     int current_knots_multiple = 0;
+        //     T current_knots = m_knots_vector[0];
+        //     for (int index = 0; index < knots_count; ++index)
+        //     {
+        //         if (current_knots != m_knots_vector[index])
+        //         {
+        //             different_knots.push_back(current_knots);
+        //             multiples.push_back(current_knots_multiple);
+        //             current_knots = m_knots_vector[index];
+        //             current_knots_multiple = 1;
+        //         }
+        //         else
+        //             current_knots_multiple += 1;
+        //     }
+        //     different_knots.push_back(current_knots);
+        //     multiples.push_back(current_knots_multiple);
+        //     return ENUM_NURBS::NURBS_SUCCESS;
+        // }
 
 
         ENUM_NURBS get_ends_point(std::array<Eigen::Vector<T, dim>, 2> &points) const
@@ -2050,7 +2050,7 @@ namespace tnurbs
 
         /// @brief 给定误差, 在误差范围内消去所有可以消去的节点; 此函数仅在非有理nurbs曲线是合法的(要求参数从小到大排列, 且不重复, 稍加改造应该可以使得消去误差在整个参数域都成立)
         /// @param params 消去的曲线在参数params上误差小于给定的误差; 即(new_curve(params[i]) - curve(params[i])).norm() < E;
-        /// @param error 返回的各个点的误差(如果params为空, 则返回各个节点区间的误差)
+        /// @param error 返回的各个点的误差
         /// @param new_nurbs 节点消去后新的nurbs
         /// @param E 最大误差
         /// @return 错误码
@@ -2069,7 +2069,7 @@ namespace tnurbs
             // T inf = -1.0;
             std::vector<T> different_knots;
             std::vector<int> multiple;
-            get_different_knots(different_knots, multiple);
+            get_different_knots(m_knots_vector, m_degree, different_knots, multiple);
             if (params_count > 0)
                 if (params[0] < different_knots[0] || params[params_count - 1] > different_knots.back())
                     return ENUM_NURBS::NURBS_PARAM_IS_INVALID;

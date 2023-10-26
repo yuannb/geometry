@@ -181,15 +181,53 @@ TEST_F(CreateNurbsCurve2, RemoveKnots1)
     nurbs_curve<double, 3, false, -1, -1> new_nurbs;
     std::vector<double> errors;
     m_nurbs.remove_knots_bound_curve(params, errors, new_nurbs, 2.0);
+    std::vector<double> real_errors;
+    for (int index = 1; index < 10; ++index)
+    {
+        Eigen::Vector3d p1, p2;
+        m_nurbs.point_on_curve(0.1 * index, p1);
+        new_nurbs.point_on_curve(0.1 * index, p2);
+        double d = (p1 - p2).norm();
+        real_errors.push_back(d);
+        EXPECT_TRUE(d < errors[index - 1] + DEFAULT_ERROR);
+    }
 
     ASSERT_TRUE(true == true);
 }
+TEST_F(CreateNurbsCurve2, RemoveKnots2)
+{
+    std::vector<double> params(5);
+    for (int index = 0; index < 5; ++index)
+        params[index] = 0.2 * index;
+    Eigen::VectorX<double> knots(7);
+    knots << 0, 0, 0, 0.522576, 1, 1, 1;
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points(3, 4);
+    points << 0, 0, 0, 0,
+              2, 2.99661, 2.45643, 3.11111,
+              5 ,3.78986, 0.588487, 0.722222;
+    nurbs_curve<double, 3, false, -1, -1> new_nurbs(knots, points);
+    nurbs_curve<double, 3, false, -1, -1> new_nurbs2;
+    std::vector<double> errors;
+    std::vector<double> real_errors;
+    new_nurbs.remove_knots_bound_curve(params, errors, new_nurbs2, 2.0);
+    for (int index = 0; index < 5; ++index)
+    {
+        Eigen::Vector3d p1, p2;
+        new_nurbs2.point_on_curve(0.2 * index, p1);
+        new_nurbs.point_on_curve(0.2 * index, p2);
+        double d = (p1 - p2).norm();
+        real_errors.push_back(d);
+        EXPECT_TRUE(d <= errors[index] + DEFAULT_ERROR);
+    }
+
+    ASSERT_TRUE(true == true);
+}
+
 TEST_F(CreateNurbsCurve, GlobalCurveApproximationErrBnd1)
 {
     nurbs_curve<double, 3, false, -1, -1> new_nurbs2;
 
-    ENUM_NURBS flag = global_curve_approximation_err_bnd<double, 3, ENPARAMETERIEDTYPE::CHORD>(many_points, 5, new_nurbs2, 1);
-    int i = 0;
+    global_curve_approximation_err_bnd<double, 3, ENPARAMETERIEDTYPE::CHORD>(many_points, 5, new_nurbs2, 1);
 }
 
 
@@ -415,6 +453,54 @@ TEST_F(CreateNurbsCurve, globalLeastSquaresCurveApproximation2)
     EXPECT_NEAR(d2, 0.0, DEFAULT_ERROR);
 
 }
+
+TEST_F(CreateNurbsSurface,SurfaceSimplify)
+{
+    nurbs_surface<double, 3, -1, -1, -1, -1, false> new_nurbs;
+
+    flag = global_surface_approximation<double, 3, ENPARAMETERIEDTYPE::CHORD>(points, 3, 2, 4, 4, new_nurbs);
+    new_nurbs.surface_knots_insert(0.2, 1, ENUM_DIRECTION::U_DIRECTION);
+    new_nurbs.surface_knots_insert(0.8, 1, ENUM_DIRECTION::U_DIRECTION);
+    new_nurbs.surface_knots_insert(0.2, 2, ENUM_DIRECTION::V_DIRECTION);
+    new_nurbs.surface_knots_insert(0.7, 2, ENUM_DIRECTION::V_DIRECTION);
+    nurbs_surface<double, 3, -1, -1, -1, -1, false> new_nurbs2;
+    std::vector<std::array<double, 2>> params;
+    Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> fit_params(5);
+    Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> fit_params2(5);
+    for (int i = 0; i < 5; ++i)
+    {
+        fit_params[i].resize(3, 5);
+        fit_params2[i].resize(3, 5);
+    }
+    for (int index = 0; index < 5; ++index)
+    {
+        for (int v_index = 0; v_index < 5; ++v_index)
+        {
+            std::array<double, 2> temp{0.2 * index, 0.2 * v_index};
+            params.push_back(std::move(temp));
+        }
+
+    }
+    std::vector<double> errors;
+    new_nurbs.remove_knots_bound_surface(params, errors, new_nurbs2, 2.0);
+
+    std::vector<double> real_error;
+    for (int i = 0; i < 5; ++i)
+    {
+        for (int j = 0; j < 5; ++j)
+        {
+            Eigen::Vector3d p1, p2;
+            new_nurbs2.point_on_surface(0.2 * i, 0.2 * j, p1);
+            new_nurbs.point_on_surface(0.2 * i, 0.2 * j, p2);
+            fit_params[i].col(j) = p1;
+            fit_params2[i].col(j) = p2;
+            double error = (p1 - p2).norm();
+            real_error.push_back(error);
+            EXPECT_TRUE(errors[i * 5 + j] + DEFAULT_ERROR > error);
+        }
+    }
+}
+
 
 TEST_F(CreateNurbsSurface, globalLeastSquaresSurfaceApproximation1)
 {

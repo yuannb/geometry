@@ -1964,6 +1964,571 @@ namespace tnurbs
             return ENUM_NURBS::NURBS_ERROR;
         }
 
+        /// @brief 给定误差, 在误差范围内消去所有可以消去的节点; 此函数仅在非有理nurbs曲面是合法的
+        /// @param params 消去的曲线在参数params上误差小于给定的误差; 即(new_nurbs(params[i]) - nurbs(params[i])).norm() < E;
+        /// @param error 返回的各个点的误差
+        /// @param new_nurbs 节点消去后新的nurbs
+        /// @param E 最大误差
+        /// @return 错误码
+        ENUM_NURBS remove_knots_bound_surface(const std::vector<std::array<T, 2>> &params, std::vector<T> &errors, 
+                nurbs_surface<T, dim, -1, -1, -1, -1, false> &new_nurbs, T E = DEFAULT_ERROR) const
+        {
+            static_assert(is_rational ==false, "rational b spline surface can not use this function");
+            if constexpr(is_rational == true)
+            {
+                return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+            }
+
+            std::vector<T> u_different_knots;
+            std::vector<int> u_multiple;
+            std::vector<T> v_different_knots;
+            std::vector<int> v_multiple;
+            get_different_knots(m_u_knots_vector, m_u_degree, u_different_knots, u_multiple);
+            get_different_knots(m_v_knots_vector, m_v_degree, v_different_knots, v_multiple);
+            //获得每一行和每一列的Br
+            int u_different_knots_count = u_different_knots.size();
+            int v_different_knots_count = v_different_knots.size();
+            std::vector<std::vector<T>> u_Brs;
+            std::vector<std::vector<T>> v_Brs;
+            int u_points_count = m_control_points[0].cols();
+            int v_points_count = m_control_points.rows();            
+            u_Brs.reserve(v_points_count);
+            v_Brs.reserve(u_points_count);
+
+            for (int v_index = 0; v_index < v_points_count; ++v_index)
+            {
+                int current_index = m_u_degree;
+                std::vector<T> Brs(u_different_knots_count - 2, 0.0);
+                //计算内节点Br的值
+                for (int u_index = 1; u_index < u_different_knots_count - 1; ++u_index)
+                {
+                    int r = current_index + u_multiple[u_index];
+                    T Br;
+                    get_removal_bnd_curve<T, dim>(m_control_points[v_index], m_u_knots_vector, m_u_degree, 
+                                            u_different_knots[u_index], r, u_multiple[u_index], Br);
+                    Brs[u_index - 1] = Br;
+                    current_index = r;
+                }
+                u_Brs.push_back(std::move(Brs));
+            }
+
+            for (int u_index = 0; u_index < u_points_count; ++u_index)
+            {
+                int current_index = m_v_degree;
+                std::vector<T> Brs(v_different_knots_count - 2, 0.0);
+                Eigen::Matrix<T, dim, Eigen::Dynamic> v_control_ponts(dim, v_points_count);
+                for (int index = 0; index < v_points_count; ++index)
+                {
+                    v_control_ponts.col(index) = m_control_points[index].col(u_index);
+                }
+
+                //计算内节点Br的值
+                for (int v_index = 1; v_index < v_different_knots_count - 1; ++v_index)
+                {
+                    int r = current_index + v_multiple[v_index];
+                    T Br;
+                    get_removal_bnd_curve<T, dim>(v_control_ponts, m_v_knots_vector, m_v_degree, 
+                                            v_different_knots[v_index], r, v_multiple[v_index], Br);
+                    Brs[v_index - 1] = Br;
+                    current_index = r;
+                }
+                v_Brs.push_back(std::move(Brs));
+            }
+        
+            //对每个基函数, 计算相关参数params的下标
+            std::list<std::vector<int>> u_knots_params_relation;
+            std::list<std::vector<int>> v_knots_params_relation;
+
+            int params_count = static_cast<int> (params.size());
+            for (int u_index = 0; u_index < u_points_count; ++u_index)
+            {
+                T u_min = m_u_knots_vector[u_index];
+                T u_max = m_u_knots_vector[u_index + m_u_degree + 1];
+                std::vector<int> indexs;
+                for (int index = 0; index < params_count; ++index)
+                {
+                    if (params[index][0] >= u_min && params[index][0] < u_max)
+                        indexs.push_back(index);
+                }
+                u_knots_params_relation.push_back(std::move(indexs));
+            }
+            for (int v_index = 0; v_index < v_points_count; ++v_index)
+            {
+                T v_min = m_v_knots_vector[v_index];
+                T v_max = m_v_knots_vector[v_index + m_v_degree + 1];
+                std::vector<int> indexs;
+                for (int index = 0; index < params_count; ++index)
+                {
+                    if (params[index][1] >= v_min && params[index][1] < v_max)
+                        indexs.push_back(index);
+                }
+                v_knots_params_relation.push_back(std::move(indexs));
+            }
+            errors.resize(params_count, 0.0);
+            Eigen::VectorX<T> u_new_knots = m_u_knots_vector;
+            Eigen::VectorX<T> v_new_knots = m_v_knots_vector;
+            Eigen::VectorX<Eigen::Matrix<T, dim, Eigen::Dynamic>> new_control_points = m_control_points;
+            while (true)
+            {
+                //找到Brs和最小的u
+                T u_min_sum = -1.0;
+                int u_min_index = -1;
+                for (int u_index = 0; u_index < u_different_knots_count - 2; ++u_index)
+                {
+                    bool flag = false;
+                    T tem_min_sum = 0.0;
+                    for (int v_index = 0; v_index < v_points_count; ++v_index)
+                    {
+                        flag = true;
+                        if (u_Brs[v_index][u_index] == -1.0)
+                        {
+                            tem_min_sum = -1.0;
+                            break;
+                        }
+                        tem_min_sum += u_Brs[v_index][u_index];
+                    }
+                    if (tem_min_sum != -1.0)
+                    {
+                        if (u_min_sum > tem_min_sum || (u_min_sum == -1.0 && flag == true))
+                        {
+                            u_min_sum = tem_min_sum;
+                            u_min_index = u_index;
+                        }
+                    }
+                }
+                //找到Brs和最小的v
+                T v_min_sum = -1.0;
+                int v_min_index = -1;
+                for (int v_index = 0; v_index < v_different_knots_count - 2; ++v_index)
+                {
+                    bool flag = false;
+                    T tem_min_sum = 0.0;
+                    for (int u_index = 0; u_index < u_points_count; ++u_index)
+                    {
+                        flag = true;
+                        if (v_Brs[u_index][v_index] == -1.0)
+                        {
+                            tem_min_sum = -1.0;
+                            break;
+                        }
+                        tem_min_sum += v_Brs[u_index][v_index];
+                    }
+                    if (tem_min_sum != -1.0)
+                    {
+                        if (v_min_sum > tem_min_sum || (v_min_sum == -1.0 && flag == true))
+                        {
+                            v_min_sum = tem_min_sum;
+                            v_min_index = v_index;
+                        }
+                    }
+                }
+
+                //消去最小的u或者v
+                if (u_min_sum == -1.0 && v_min_sum == -1.0)
+                    break;
+                ENUM_DIRECTION direction;
+                if (u_min_sum == -1.0)
+                    direction = ENUM_DIRECTION::V_DIRECTION;
+                else if (v_min_index == -1.0)
+                    direction = ENUM_DIRECTION::U_DIRECTION;
+                else
+                {
+                    T min_sum = std::min(u_min_sum, v_min_sum);
+                    direction = min_sum == u_min_sum ? ENUM_DIRECTION::U_DIRECTION : ENUM_DIRECTION::V_DIRECTION;
+                }
+
+                int new_v_points_count = new_control_points.rows();
+                int new_u_points_count = new_control_points[0].cols();
+
+                std::vector<T> temp_error = errors;
+                if (direction == ENUM_DIRECTION::U_DIRECTION)
+                {
+                    if (u_Brs.size() == 0)
+                        break;
+                    Eigen::Matrix<T, 1, Eigen::Dynamic> temp_control_points(1, new_v_points_count);
+                    for (int i = 0; i < new_v_points_count; ++i)
+                        temp_control_points(0, i) = u_Brs[i][u_min_index];
+                    nurbs_curve<T, 1, false, -1, -1> temp_nurbs(v_new_knots, temp_control_points);
+                    int r = std::accumulate(u_multiple.begin(), u_multiple.begin() + u_min_index + 2, -1);
+                    
+                    int &mul = u_multiple[u_min_index + 1];
+                    bool flag = true;
+                    if ((m_u_degree + mul) % 2 == 0)
+                    {
+                        int k = (m_u_degree + mul) / 2;
+                        int i = r - k;
+                        auto current_params_it = u_knots_params_relation.begin();
+                        for (int index = 1; index <= i; ++index)
+                            ++current_params_it;
+                        const std::vector<int> &current_params = *current_params_it;//u_knots_params_relation[u_min_index];
+                        for (const int index : current_params)
+                        {                      
+                            int temp_index = -1;
+                            find_span<T>(params[index][1], m_v_degree, v_new_knots, temp_index);
+                            for (int j = temp_index - m_v_degree; j <= temp_index; ++j)
+                            {
+                                if (temp_control_points(0, j) == -1.0)
+                                {
+                                    for (int l = 1; l < v_different_knots_count - 1; ++l)
+                                        u_Brs[l - 1][u_min_index] = -1.0;
+                                    flag = false;
+                                    break;
+                                }
+                            }
+                            if (flag == false)
+                                break;
+                            Eigen::Vector<T, 1> right;
+                            temp_nurbs.point_on_curve(params[index][1], right);
+                            T basis;
+                            one_basis_function<T>(i, params[index][0], m_u_degree, u_new_knots, basis);
+                            temp_error[index] += basis * right[0];
+                        }
+                    }
+                    else
+                    {
+                        int k = (mul + m_u_degree + 1) / 2;
+                        int i = r - k + 1;
+                        auto current_params_it = u_knots_params_relation.begin();
+                        for (int index = 1; index <= i; ++index)
+                            ++current_params_it;
+                        const std::vector<int> &current_params = *current_params_it;//u_knots_params_relation[u_min_index];
+                        T alpha = (u_new_knots[r] - u_new_knots[r - k + 1]) / (u_new_knots[r - k + m_u_degree + 2] - u_new_knots[r - k + 1]);
+                        for (const int index : current_params)
+                        {
+                            int temp_index = -1;
+                            find_span<T>(params[index][1], m_v_degree, v_new_knots, temp_index);
+                            for (int j = temp_index - m_v_degree; j <= temp_index; ++j)
+                            {
+                                if (temp_control_points(0, j) == -1.0)
+                                {
+                                    u_Brs[j][u_min_index] = -1.0;
+                                    flag = false;
+                                    break;
+                                }
+                            }
+                            if (flag == false)
+                                break;
+                            Eigen::Vector<T, 1> right;
+                            temp_nurbs.point_on_curve(params[index][1], right);
+                            T basis;
+                            one_basis_function<T>(i, params[index][0], m_u_degree, u_new_knots, basis);
+                            temp_error[index] += basis * (1.0 - alpha) * right[0];
+                        }
+                    }
+                    T max_error = *(std::max_element(temp_error.begin(), temp_error.end()));
+                    if (max_error < E && flag == true)
+                    {
+                        errors = temp_error;
+                        Eigen::VectorX<T> temp_u_new_knots;
+                        for (int k = 0; k < new_v_points_count; ++k)
+                        {
+                            temp_u_new_knots = u_new_knots;
+                            //可能有问题
+                            remove_curve_knots_no_check_error<T, dim, false>(r, 1, m_u_degree, mul, temp_u_new_knots, new_control_points[k]);
+                        }
+                        u_new_knots = temp_u_new_knots;
+                        u_points_count = new_control_points[0].cols();
+                        auto u_knots_params_relation_it = u_knots_params_relation.begin();
+                        for (int k = 0; k < r - m_u_degree - 1; ++k)
+                            ++u_knots_params_relation_it;
+
+                        for (int k = r - m_u_degree - 1; k <= r - mul; ++k)
+                        {
+                            T u_min = u_new_knots[k];
+                            T u_max = u_new_knots[k + m_u_degree + 1];
+                            std::vector<int> indexs;
+                            for (int index = 0; index < params_count; ++index)
+                            {
+                                if (params[index][0] >= u_min && params[index][0] < u_max)
+                                    indexs.push_back(index);
+                            }
+                            *u_knots_params_relation_it = indexs;
+                            ++u_knots_params_relation_it;
+                        }
+                        u_knots_params_relation.erase(u_knots_params_relation_it);
+
+                        int beg = std::max(r - m_u_degree, m_u_degree + 1);
+                        int end = std::min(r + m_u_degree - mul + 1, new_u_points_count - 1);
+                        //更新v_Brs
+                        for (int u_index = r - m_u_degree; u_index < r - mul; ++u_index)
+                        {
+                            int current_index = m_v_degree;
+                            std::vector<T> Brs(v_different_knots_count - 2, 0.0);
+                            //计算内节点Br的值
+                            for (int v_index = 1; v_index < v_different_knots_count - 1; ++v_index)
+                            {
+                                Eigen::Matrix<T, dim, Eigen::Dynamic> points(dim, v_points_count);
+                                for (int i = 0; i < v_points_count; ++i)
+                                    points.col(i) = new_control_points[i].col(u_index);
+                                int r1 =  current_index + v_multiple[v_index];
+                                T Br;
+                                get_removal_bnd_curve<T, dim>(points, v_new_knots, m_v_degree, 
+                                                        v_different_knots[v_index], r1, v_multiple[v_index], Br);
+                                Brs[v_index - 1] = Br;
+                                current_index = r1;
+                            }
+                            v_Brs[u_index] = Brs;
+                        }
+                        v_Brs.erase(v_Brs.begin() + (r - mul));
+                        std::vector<int> need_eval_br_index;
+                        int current_index = m_u_degree + 1;
+                        for (int i = 1; i < u_different_knots_count - 1; ++i)
+                        {
+                            int next_index = current_index + u_multiple[i];
+                            if (current_index >= beg && current_index <= end)
+                            {
+                                if (i == (u_min_index + 1) && mul == 1)
+                                    continue;
+                                if (i > (u_min_index + 1) && mul == 1)
+                                    need_eval_br_index.push_back(i - 2);
+                                else
+                                    need_eval_br_index.push_back(i - 1);
+                            }
+                            current_index = next_index;
+                        }
+                        bool removed = false;
+                        if (mul == 1)
+                        {
+                            removed = true;
+                            u_different_knots.erase(u_different_knots.begin() + u_min_index + 1);
+                            u_different_knots_count = u_different_knots.size();
+                            u_multiple.erase(u_multiple.begin() + u_min_index + 1);
+                        }
+                        else
+                        {
+                            mul -= 1;
+                        }
+
+                        //计算Br
+                        for (int v_index = 0; v_index < v_points_count; ++v_index)
+                        {
+                            // std::vector<T> Brs(u_different_knots_count - 2, 0.0);
+                            //计算内节点Br的值
+                            if (removed == true)
+                                u_Brs[v_index].erase(u_Brs[v_index].begin() + u_min_index);
+                            for (int u_need_eval_index : need_eval_br_index)
+                            {
+                                int r = std::accumulate(u_multiple.begin(), u_multiple.begin() + u_need_eval_index + 2, -1);
+                                T Br;
+                                get_removal_bnd_curve<T, dim>(new_control_points[v_index], u_new_knots, m_u_degree, 
+                                                        u_different_knots[u_need_eval_index + 1], r, u_multiple[u_need_eval_index + 1], Br);
+                                u_Brs[v_index][u_need_eval_index] = Br;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        for (int index = 0; index < v_points_count; ++index)
+                            u_Brs[index][u_min_index] = -1.0;
+                    }
+                }
+                else
+                {
+                    if (v_Brs.size() == 0)
+                        break;
+                    Eigen::Matrix<T, 1, Eigen::Dynamic> temp_control_points(1, new_u_points_count);
+                    for (int i = 0; i < new_u_points_count; ++i)
+                        temp_control_points(0, i) = v_Brs[i][v_min_index];
+                    nurbs_curve<T, 1, false, -1, -1> temp_nurbs(u_new_knots, temp_control_points);
+                    int r = std::accumulate(v_multiple.begin(), v_multiple.begin() + v_min_index + 2, -1);
+
+                    int &mul = v_multiple[v_min_index + 1];
+                    bool flag = true;
+                    if ((m_v_degree + mul) % 2 == 0)
+                    {
+                        int k = (m_v_degree + mul) / 2;
+                        int i = r - k;
+                        auto current_params_it = v_knots_params_relation.begin();
+                        for (int index = 1; index <= i; ++index)
+                            ++current_params_it;
+                        const std::vector<int> &current_params = *current_params_it;//v_knots_params_relation[u_min_index];
+                        for (const int index : current_params)
+                        {
+                            int temp_index = -1;
+                            find_span<T>(params[index][0], m_u_degree, u_new_knots, temp_index);
+                            for (int j = temp_index - m_u_degree; j <= temp_index; ++j)
+                            {
+                                if (temp_control_points(0, j) == -1.0)
+                                {
+                                    for (int i = 1; i < u_different_knots_count - 1; ++i)
+                                        v_Brs[i - 1][v_min_index] = -1.0;
+                                    flag = false;
+                                    break;
+                                }
+                            }
+                            if (flag == false)
+                                break;
+                            Eigen::Vector<T, 1> right;
+                            temp_nurbs.point_on_curve(params[index][0], right);
+                            T basis;
+                            one_basis_function<T>(i, params[index][1], m_v_degree, v_new_knots, basis);
+                            temp_error[index] += basis * right[0];
+                        }
+                    }
+                    else
+                    {
+                        int k = (mul + m_v_degree + 1) / 2;
+                        int i = r - k + 1;
+                        auto current_params_it = v_knots_params_relation.begin();
+                        for (int index = 1; index <= i; ++index)
+                            ++current_params_it;
+                        T alpha = (v_new_knots[r] - v_new_knots[r - k + 1]) / (v_new_knots[r - k + m_v_degree + 2] - v_new_knots[r - k + 1]);
+                        const std::vector<int> &current_params = *current_params_it;//v_knots_params_relation[v_min_index];
+                        for (const int index : current_params)
+                        {
+                            int temp_index = -1;
+                            find_span<T>(params[index][0], m_u_degree, u_new_knots, temp_index);
+                            for (int j = temp_index - m_u_degree; j <= temp_index; ++j)
+                            {
+                                if (temp_control_points(0, j) == -1.0)
+                                {
+                                    for (int l = 1; l < u_different_knots_count - 1; ++l)
+                                        v_Brs[l - 1][v_min_index] = -1.0;
+                                    flag = false;
+                                    break;
+                                }
+                            }
+                            if (flag == false)
+                                break;
+                            Eigen::Vector<T, 1> right;
+                            temp_nurbs.point_on_curve(params[index][0], right);
+                            T basis;
+                            one_basis_function<T>(i, params[index][1], m_v_degree, v_new_knots, basis);
+                            // T right_temp;
+                            // one_basis_function<T>(i - 1, params[index][1], m_v_degree, v_new_knots, right_temp);
+                            // T temp_test = right_temp * right[0] * (1.0 - alpha);
+                            temp_error[index] += basis * right[0] * (1.0 - alpha);
+                        }
+                    }
+                    T max_error = *(std::max_element(temp_error.begin(), temp_error.end()));
+                    if (max_error < E && flag == true)
+                    {
+                        errors = temp_error;
+                        Eigen::VectorX<T> temp_v_new_knots;
+                        Eigen::VectorX<Eigen::Matrix<T, dim, Eigen::Dynamic>> points(new_v_points_count - 1);
+                        for (int l = 0; l < new_v_points_count - 1; ++l)
+                            points[l].resize(dim, new_u_points_count);
+                        for (int k = 0; k < new_u_points_count; ++k)
+                        {
+                            temp_v_new_knots = v_new_knots;
+                            Eigen::Matrix<T, dim, Eigen::Dynamic> temp_control_points(dim, new_v_points_count);
+                            for (int j = 0; j < new_v_points_count; ++j)
+                            {
+                                temp_control_points.col(j) = new_control_points[j].col(k);
+                            }
+                            remove_curve_knots_no_check_error<T, dim, false>(r, 1, m_v_degree, mul, temp_v_new_knots, temp_control_points);
+                            for (int j = 0; j < new_v_points_count - 1; ++j)
+                            {
+                                points[j].col(k) = temp_control_points.col(j);
+                            }
+                        }
+                        new_control_points = points;
+                        v_new_knots = temp_v_new_knots;
+                        v_points_count = new_control_points.rows();
+                        auto v_knots_params_relation_it = v_knots_params_relation.begin();
+                        for (int k = 0; k < r - m_v_degree - 1; ++k)
+                            ++v_knots_params_relation_it;
+
+                        for (int k = r - m_v_degree - 1; k <= r - mul; ++k)
+                        {
+                            T v_min = v_new_knots[k];
+                            T v_max = v_new_knots[k + m_v_degree + 1];
+                            std::vector<int> indexs;
+                            for (int index = 0; index < params_count; ++index)
+                            {
+                                if (params[index][1] >= v_min && params[index][1] < v_max)
+                                    indexs.push_back(index);
+                            }
+                            *v_knots_params_relation_it = indexs;
+                            ++v_knots_params_relation_it;
+                        }
+                        v_knots_params_relation.erase(v_knots_params_relation_it);
+
+                        int beg = std::max(r - m_v_degree, m_v_degree + 1);
+                        int end = std::min(r + m_v_degree - mul + 1, new_v_points_count - 1);
+                        //更新u_Brs
+                        for (int v_index = r - m_v_degree; v_index < r - mul; ++v_index)
+                        {
+                            int current_index = m_u_degree;
+                            std::vector<T> Brs(u_different_knots_count - 2, 0.0);
+                            //计算内节点Br的值
+                            for (int u_index = 1; u_index < u_different_knots_count - 1; ++u_index)
+                            {
+                                int r1 = current_index + u_multiple[u_index];
+                                T Br;
+                                get_removal_bnd_curve<T, dim>(new_control_points[v_index], u_new_knots, m_u_degree, 
+                                                        u_different_knots[u_index], r1, u_multiple[u_index], Br);
+                                Brs[u_index - 1] = Br;
+                                current_index = r1;
+                            }
+                            u_Brs[v_index] = Brs;
+                        }
+                        u_Brs.erase(u_Brs.begin() + (r - mul));
+                        std::vector<int> need_eval_br_index;
+                        int current_index = m_v_degree + 1;
+                        for (int i = 1; i < v_different_knots_count - 1; ++i)
+                        {
+                            int next_index = current_index + v_multiple[i];
+                            if (current_index >= beg && current_index <= end)
+                            {
+                                if (i == (v_min_index + 1) && mul == 1)
+                                    continue;
+                                if (i > (v_min_index + 1) && mul == 1)
+                                    need_eval_br_index.push_back(i - 2);
+                                else
+                                    need_eval_br_index.push_back(i - 1);
+                            }
+                            current_index = next_index;
+                        }
+                        bool removed = false;
+                        if (mul == 1)
+                        {
+                            v_different_knots.erase(v_different_knots.begin() + v_min_index + 1);
+                            v_different_knots_count = v_different_knots.size();
+                            v_multiple.erase(v_multiple.begin() + v_min_index + 1);
+                            removed = true;
+                        }
+                        else
+                        {
+                            mul -= 1;
+                        }
+
+                        //计算Br
+                        for (int u_index = 0; u_index < u_points_count; ++u_index)
+                        {
+                            // std::vector<T> Brs(v_different_knots_count - 2, 0.0);
+                            //计算内节点Br的值
+                            if (removed == true)
+                                v_Brs[u_index].erase(v_Brs[u_index].begin() + v_min_index);
+                            Eigen::Matrix<T, dim, Eigen::Dynamic> temp_points(dim, v_points_count);
+                            for (int i = 0; i < v_points_count; ++i)
+                                temp_points.col(i) = new_control_points[i].col(u_index);
+                            for (int v_need_eval_index : need_eval_br_index)
+                            {
+                                int r = std::accumulate(v_multiple.begin(), v_multiple.begin() + v_need_eval_index + 2, -1);
+                                T Br;
+                                get_removal_bnd_curve<T, dim>(temp_points, v_new_knots, m_v_degree, 
+                                                        v_different_knots[v_need_eval_index + 1], r, v_multiple[v_need_eval_index + 1], Br);
+                                v_Brs[u_index][v_need_eval_index] = Br;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        for (int index = 0; index < u_points_count; ++index)
+                            v_Brs[index][v_min_index] = -1.0;
+                    }
+                }
+                
+            }
+
+            new_nurbs.set_control_points(new_control_points);
+            new_nurbs.set_uv_degree(m_u_degree, m_v_degree);
+            new_nurbs.set_uv_knots(u_new_knots, v_new_knots);
+            return ENUM_NURBS::NURBS_SUCCESS;
+        
+        }
+
 
     };
 

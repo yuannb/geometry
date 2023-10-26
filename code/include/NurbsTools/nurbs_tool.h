@@ -2897,7 +2897,8 @@ namespace tnurbs
         new_knots_vector.block(index + 1 - time, 0, knots_size - index - 1, 1) = knots_vector.block(index + 1, 0, knots_size - index - 1, 1);
         knots_vector = new_knots_vector;
 
-        int j = (2 * index - repeat - degree) / 2, i = j;
+        //此处j的取值和进行误差判断的节点移除函数里面稍有不同; 真tmd坑死人
+        int j = (2 * index - repeat - degree + 1) / 2, i = j;
         for (int k = 1; k < time; ++k)
         {
             if (k % 2 == 1)
@@ -4301,6 +4302,34 @@ namespace tnurbs
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
+    /// @brief 将节点矢量去重, 并且记录各个节点的重复度
+    /// @param different_knots 去重后的节点矢量
+    /// @param multiples 各个节点的重复度
+    /// @return 错误码
+    template<typename T>
+    ENUM_NURBS get_different_knots(const Eigen::VectorX<T> &knots, int degree, std::vector<T> &different_knots, std::vector<int> &multiples)
+    {
+        int knots_count = knots.size();
+        different_knots.reserve(knots_count - 2 * degree);
+        multiples.reserve(knots_count - 2 * degree);
+        int current_knots_multiple = 0;
+        T current_knots = knots[0];
+        for (int index = 0; index < knots_count; ++index)
+        {
+            if (current_knots != knots[index])
+            {
+                different_knots.push_back(current_knots);
+                multiples.push_back(current_knots_multiple);
+                current_knots = knots[index];
+                current_knots_multiple = 1;
+            }
+            else
+                current_knots_multiple += 1;
+        }
+        different_knots.push_back(current_knots);
+        multiples.push_back(current_knots_multiple);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
 }
 
 

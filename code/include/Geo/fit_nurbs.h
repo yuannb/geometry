@@ -1778,9 +1778,7 @@ namespace tnurbs
             ENUM_NURBS flag = global_least_squares_curve_approximation<T, dim>(points, current_params, knots, current_degree + 1, temp_points_count, temp_nurbs);
             if (flag != ENUM_NURBS::NURBS_SUCCESS)
             {
-                temp_nurbs.set_control_points(simply_nurbs.get_control_points());
-                temp_nurbs.set_knots_vector(simply_nurbs.get_knots_vector());
-                temp_nurbs.degree_elevate(1);
+                global_curve_interpolate<T, dim>(points, current_degree + 1, params, temp_nurbs);
                 continue;
             }
             //寻找points的最近点(TODO: 根据反求的参数点重新排序拟合点(points))
