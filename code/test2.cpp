@@ -2049,9 +2049,6 @@ void test_decompose_vector_4()
 
     Eigen::Vector<double, 7> knots_vector{0, 0, 0, 0.4, 1, 1, 1};
     nurbs_curve<double, 3, false, 4, 2> curve1(knots_vector, mat);
-    Eigen::VectorX<double> insert_knots(3);
-    insert_knots << 0.22222, 0.4, 0.77777;
-    // curve1.refine_knots_vector(insert_knots);
     std::vector<bezier_curve<double, 3, false, 3> *> beziers_curves;
     curve1.decompose_to_bezier(beziers_curves);
     std::vector<std::vector<Eigen::Vector3d>>  pointss(4);

@@ -119,13 +119,9 @@ namespace tnurbs
             Eigen::Matrix<T, dim, 2> mat;
             mat << direction_vec, -T0;
             Eigen::Vector<T, dim> vec = P - P0;
-            Eigen::Matrix<T, dim, 3> externMat;
-            externMat << direction_vec, -T0, vec;
             Eigen::JacobiSVD<Eigen::MatrixX<T>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(mat);
-            Eigen::JacobiSVD<Eigen::MatrixX<T>, Eigen::ComputeThinU | Eigen::ComputeThinV> externMatSvd(externMat);
             int rankMat = matSvd.rank();
-            int rankExternMat = externMatSvd.rank();
-            if (rankMat != 2 && rankExternMat != 2)
+            if (rankMat != 2)
             {
                 return ENUM_NURBS::NURBS_ERROR;
             }
@@ -143,13 +139,9 @@ namespace tnurbs
         Eigen::Matrix<T, dim, 2> mat;
         mat << T0, -T2;
         Eigen::Vector<T, dim> vec = P2 - P0;
-        Eigen::Matrix<T, dim, 3> externMat;
-        externMat << T0, -T2, vec;
         Eigen::JacobiSVD<Eigen::MatrixX<T>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(mat);
-        Eigen::JacobiSVD<Eigen::MatrixX<T>, Eigen::ComputeThinU | Eigen::ComputeThinV> externMatSvd(externMat);
         int rankMat = matSvd.rank();
-        int rankExternMat = externMatSvd.rank();
-        if (rankMat != 2 && rankExternMat != 2)
+        if (rankMat != 2)
         {
             return ENUM_NURBS::NURBS_ERROR;
         }
@@ -198,7 +190,9 @@ namespace tnurbs
     {
         Eigen::Vector<T, dim> P1;
         T w1;
-        create_one_arc(P0, T0, P2, T2, P, P1, w1);
+        ENUM_NURBS flag = create_one_arc(P0, T0, P2, T2, P, P1, w1);
+        if (flag != ENUM_NURBS::NURBS_SUCCESS)
+            return flag;
         if (w1 <= -1.0)
             return ENUM_NURBS::NURBS_ERROR;
         

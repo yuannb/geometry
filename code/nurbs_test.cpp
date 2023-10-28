@@ -241,6 +241,31 @@ TEST_F(CreateNurbsCurve, InterpolateWithEndsTangent)
     ASSERT_TRUE(true == true);
 }
 
+TEST_F(CreateNurbsCurve2, InterpolateWithEndsTangent2)
+{
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points(3, 100);
+    Eigen::Matrix<double, 3, Eigen::Dynamic> tangents(3, 100);
+    for (int i = 0; i < 100; ++i)
+    {
+        Eigen::Vector<Eigen::Vector3d, 2> p;
+    
+        m_nurbs.derivative_on_curve<1>(i * 0.01, p);
+        points.col(i) = p[0];
+        tangents.col(i) = p[1];
+    }
+    nurbs_curve<double, 3, true, -1, -1> test_nurbs;
+    fit_with_conic<double, 3>(points, tangents, test_nurbs, 0.5);
+    for (int i = 0; i < 100; ++i)
+    {
+        Eigen::Vector3d p;
+        double u;
+        test_nurbs.find_nearst_point_on_curve(points.col(i), u, p);
+        double d = (p - points.col(i)).norm();
+        EXPECT_NEAR(d, 0.0, 0.5);
+    }
+}
+
+
 
 TEST_F(CreateNurbsCurve, InterpolateWithEndsTangent2)
 {
@@ -458,7 +483,7 @@ TEST_F(CreateNurbsSurface,SurfaceSimplify)
 {
     nurbs_surface<double, 3, -1, -1, -1, -1, false> new_nurbs;
 
-    flag = global_surface_approximation<double, 3, ENPARAMETERIEDTYPE::CHORD>(points, 3, 2, 4, 4, new_nurbs);
+    global_surface_approximation<double, 3, ENPARAMETERIEDTYPE::CHORD>(points, 3, 2, 4, 4, new_nurbs);
     new_nurbs.surface_knots_insert(0.2, 1, ENUM_DIRECTION::U_DIRECTION);
     new_nurbs.surface_knots_insert(0.8, 1, ENUM_DIRECTION::U_DIRECTION);
     new_nurbs.surface_knots_insert(0.2, 2, ENUM_DIRECTION::V_DIRECTION);

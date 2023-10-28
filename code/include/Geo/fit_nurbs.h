@@ -1832,6 +1832,167 @@ namespace tnurbs
         return global_curve_approximation_err_bnd<T, dim>(points, params, degree, nurbs, E);
     }
 
+    template<typename T, int dim>
+    ENUM_NURBS fit_with_conic(int ks, int ke, const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, const Eigen::Vector<T, dim> &ts, 
+        const Eigen::Vector<T, dim> &te, Eigen::Vector<T, dim> &R, T &w, T E)
+    {
+        if (ks >= ke)
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+        int points_count = points.cols();
+        if (ks < 0 || ke >= points_count)
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+        
+        if (ke - ks == 1)
+        {
+            nurbs_curve<T, dim, true, -1, -1> new_nurbs;
+            Eigen::Matrix<T, dim, Eigen::Dynamic> tangents(dim, 2);
+            tangents << ts, te;
+            local_2degree_arc_interpolate<T, dim>(points.block(0, ks, dim, ke - ks + 1), tangents, new_nurbs);
+            // Eigen::Vector<T, dim> control_point;
+            new_nurbs.get_control_point(1, R);
+            // R = control_point.template block<dim, 1>(0, 0) / control_point[dim];
+            // w = control_point[dim];
+            new_nurbs.get_weight(1, w);
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+        Eigen::Vector2<T> params;
+        ENUM_NURBS flag = tow_line_intersect<T, dim>(points.col(ks), ts, points.col(ke), te, params);
+        if (flag != ENUM_NURBS::NURBS_SUCCESS)
+        {
+            Eigen::Vector<T, dim> v = points.col(ke) - points.col(ks);
+            //有bug, 需要处理v很小的情况
+            v.normalize();
+            for (int index = ks + 1; index < ke; ++index)
+            {
+                Eigen::Vector<T, dim> v2 = points.col(index) - points.col(ks);
+                v2.normalize();
+                T cd = v.cross(v2).squaredNorm();
+                if (cd > DEFAULT_ERROR * DEFAULT_ERROR)
+                    return ENUM_NURBS::NURBS_ERROR;
+            }
+            R = (points.col(ks) + points.col(ke)) / 2.0;
+            w = 1.0;
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+        //else
+        if (params[0] <= 0.0 || params[1] >= 0.0)
+            return ENUM_NURBS::NURBS_ERROR;
+        T s = 0.0;
+        Eigen::Vector<T, dim> v = points.col(ke) - points.col(ks);
+        R = (points.col(ks) + params[0] * ts + points.col(ke) + params[1] * te) / 2.0;
+        for (int index = ks + 1; index < ke; ++index)
+        {
+            Eigen::Vector<T, dim> v1 = points.col(index) - R;
+            flag = tow_line_intersect<T, dim>(points.col(ks), v, R, v1, params);
+            if (flag != ENUM_NURBS::NURBS_SUCCESS || params[0] <= 0.0 || params[0] >= 1.0 || params[1] <= 0.0)
+                return ENUM_NURBS::NURBS_ERROR;
+            // Eigen::Vector<T, dim> Q = ((points.col(ks) + params[0] * v + R + params[1] * v1) / 2.0);
+            
+            T a = std::sqrt(params[0] / (1.0 - params[0]));
+            T u = a / (1.0 + a);
+            T num = std::pow(1.0 - u, 2) * (points.col(index) - points.col(ks)).dot(R - points.col(index)) + std::pow(u, 2) * (points.col(index) - points.col(ke)).dot(R - points.col(index));
+            T den = 2.0 * u * (1.0 - u) * (R - points.col(index)).squaredNorm();
+            T wi = num / den;
+            s += wi / (1.0 + wi);
+        }
+        s /= (ke - ks - 1);
+        w = s / (1.0 - s);
+        if (w < MIN_WEIGHT<T>::value || w > MAX_WEIGHT<T>::value)
+            return ENUM_NURBS::NURBS_ERROR;
+        Eigen::Vector<T, dim + 1> p0, p1, p2;
+        p0.template block<dim, 1>(0, 0) = points.col(ks);
+        p0[dim] = 1.0;// << points.col(ks) << 1.0;
+        p1.template block<dim, 1>(0, 0) = R;
+        p1[dim] = 1.0;;
+        p1 *= w;
+        p2.template block<dim, 1>(0, 0) = points.col(ke);
+        p2[dim] = 1.0;
+        // p2 << points.col(ke) << 1.0;
+        Eigen::Matrix<T, dim + 1, Eigen::Dynamic> control_points(dim + 1, 3);
+        control_points << p0, p1, p2;
+        Eigen::VectorX<T> knots(6);
+        knots << 0.0, 0.0, 0.0, 1.0, 1.0, 1.0;
+        nurbs_curve<T, dim, true, -1, -1> new_nurbs(knots, control_points);
+        for (int index = ks + 1; index < ke; ++index)
+        {
+            T u;
+            Eigen::Vector<T, dim> nearst_ponts;
+            flag = new_nurbs.find_nearst_point_on_curve(points.col(index), u, nearst_ponts);
+            if (flag != ENUM_NURBS::NURBS_SUCCESS)
+                return ENUM_NURBS::NURBS_ERROR;
+            T dis = (nearst_ponts - points.col(index)).norm();
+            if (dis > E)
+                return ENUM_NURBS::NURBS_ERROR;
+        }
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    template<typename T, int dim>
+    ENUM_NURBS fit_with_conic(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points,  const Eigen::Matrix<T, dim, Eigen::Dynamic> &tangents, 
+        nurbs_curve<T, dim, true, -1, -1> &new_nurbs, T E)
+    {
+        int ks = 0;
+        int points_count = points.cols();
+        int ke = points_count - 1;
+        std::vector<Eigen::Vector<T, dim>> control_points;
+        control_points.push_back(points.col(0));
+        std::vector<T> wi;
+        wi.push_back(1.0);
+        std::vector<T> temp_knots;
+        temp_knots.push_back(0.0);
+        temp_knots.push_back(0.0);
+        temp_knots.push_back(0.0);
+        while(true)
+        {
+            Eigen::Vector<T, dim> R;
+            T w;
+            ENUM_NURBS flag = fit_with_conic<T, dim>(ks, ke, points, tangents.col(ks), tangents.col(ke), R, w, E);
+            if (flag != ENUM_NURBS::NURBS_SUCCESS)
+            {
+                ke = (ks + ke) / 2;
+            }
+            else
+            {
+                control_points.push_back(std::move(R));
+                control_points.push_back(points.col(ke));
+                wi.push_back(std::move(w));
+                wi.push_back(1.0);
+                T chord = (points.col(ke) - points.col(ks)).norm();
+                temp_knots.push_back(temp_knots.back() + chord);
+                temp_knots.push_back(temp_knots.back());
+                if (ke == points_count - 1)
+                    break;
+                ks = ke;
+                ke = points_count - 1;
+            }
+        }
+        temp_knots.push_back(temp_knots.back());
+        int control_points_count = control_points.size();
+        Eigen::Matrix<T, dim + 1, Eigen::Dynamic> nurbs_control_points(dim + 1, control_points_count);
+        for (int index = 0; index < control_points_count; ++index)
+        {
+            Eigen::Vector<T, dim + 1> p;
+            p.template block<dim, 1>(0, 0) = control_points[index];
+            p[dim] = 1.0;
+            p *= wi[index];
+            nurbs_control_points.col(index) = p;
+        }
+        Eigen::VectorX<T> knots = Eigen::Map<Eigen::VectorX<T>>(temp_knots.data(), temp_knots.size());
+        new_nurbs.set_control_points(nurbs_control_points);
+        new_nurbs.set_knots_vector(knots);
+        new_nurbs.set_degree(2);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    template<typename T, int dim, bool flag>
+    ENUM_NURBS fit_with_conic(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, nurbs_curve<T, dim, true, -1, -1> &new_nurbs, T E)
+    {
+        Eigen::Matrix<T, dim, Eigen::Dynamic> tangents;
+        make_tangent_by_5points<T, dim, flag>(points, tangents);
+        return fit_with_conic(points, tangents, new_nurbs, E);
+    }
+
+
 }
 
 

@@ -1964,7 +1964,7 @@ namespace tnurbs
             return ENUM_NURBS::NURBS_ERROR;
         }
 
-        /// @brief 给定误差, 在误差范围内消去所有可以消去的节点; 此函数仅在非有理nurbs曲面是合法的
+        /// @brief 给定误差, 在误差范围内消去所有可以消去的节点; 此函数仅在非有理nurbs曲面是合法的(稍微修改下一误差即可在有理曲面下也是合法的)
         /// @param params 消去的曲线在参数params上误差小于给定的误差; 即(new_nurbs(params[i]) - nurbs(params[i])).norm() < E;
         /// @param error 返回的各个点的误差
         /// @param new_nurbs 节点消去后新的nurbs

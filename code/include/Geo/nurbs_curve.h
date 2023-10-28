@@ -299,7 +299,7 @@ namespace tnurbs
             int interval_count = -1;
             find_interval_segment_count<T, points_count, degree>(m_knots_vector, interval_count);
             new_control_points.resize(interval_count);
-            decompose_curve_to_bezier<T, rows, points_count,  degree>(interval_count, m_knots_vector, m_control_points, new_knots_vector, new_control_points);
+            decompose_curve_to_bezier<T, rows, points_count, degree>(interval_count, m_knots_vector, m_control_points, new_knots_vector, new_control_points);
             bezier_curves.resize(interval_count, nullptr);
             for (int index = 0; index < interval_count; ++index)
             {
@@ -2048,7 +2048,7 @@ namespace tnurbs
             return ENUM_NURBS::NURBS_SUCCESS;
         }
 
-        /// @brief 给定误差, 在误差范围内消去所有可以消去的节点; 此函数仅在非有理nurbs曲线是合法的(要求参数从小到大排列, 且不重复, 稍加改造应该可以使得消去误差在整个参数域都成立)
+        /// @brief 给定误差, 在误差范围内消去所有可以消去的节点; 此函数仅在非有理nurbs曲线是合法的(稍微修改下一误差即可在有理曲线下也是合法的, 要求参数从小到大排列, 且不重复, 稍加改造应该可以使得消去误差在整个参数域都成立)
         /// @param params 消去的曲线在参数params上误差小于给定的误差; 即(new_curve(params[i]) - curve(params[i])).norm() < E;
         /// @param error 返回的各个点的误差
         /// @param new_nurbs 节点消去后新的nurbs
