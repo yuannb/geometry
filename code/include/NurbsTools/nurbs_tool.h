@@ -4326,6 +4326,32 @@ namespace tnurbs
         multiples.push_back(current_knots_multiple);
         return ENUM_NURBS::NURBS_SUCCESS;
     }
+    
+    /// @brief 求平面和直线的交点
+    /// @tparam T double, float
+    /// @tparam dim 平面和直线嵌入的欧氏空间的维数
+    /// @param p1 平面上一点
+    /// @param p2 直线上一点
+    /// @param mat mat.col(0)为平面的u向, mat.col(1)为平面的v向, mat.col(2)为直线方向的负方向
+    /// @param intersect_params 交点参数(u0, v0, t0)
+    /// @return 错误码
+    template<typename T, int dim>
+    ENUM_NURBS plane_line_intersect(const Eigen::Vector<T, dim> &p1, const Eigen::Vector<T, dim> &p2, 
+        const Eigen::Matrix<T, dim, 3> &mat, Eigen::Vector<T, 3> &intersect_params)
+    {
+        Eigen::Vector<T, dim> vec = p2 - p1;
+        Eigen::JacobiSVD<Eigen::MatrixX<T>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(mat);
+        int rankMat = matSvd.rank();
+        if (rankMat != 3)
+        {
+            return ENUM_NURBS::NURBS_ERROR;
+        }
+        intersect_params = matSvd.solve(vec);
+        if (matSvd.info() !=  Eigen::Success)
+            return ENUM_NURBS::NURBS_ERROR;
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
 }
 
 

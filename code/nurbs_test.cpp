@@ -265,6 +265,59 @@ TEST_F(CreateNurbsCurve2, InterpolateWithEndsTangent2)
     }
 }
 
+TEST_F(CreateNurbsCurve2, InterpolateWithEndsTangent3)
+{
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points(3, 10);
+    Eigen::Matrix<double, 3, Eigen::Dynamic> tangents(3, 10);
+    for (int i = 0; i < 10; ++i)
+    {
+        Eigen::Vector<Eigen::Vector3d, 2> p;
+    
+        m_nurbs.derivative_on_curve<1>(i * 0.1, p);
+        points.col(i) = p[0];
+        tangents.col(i) = p[1];
+    }
+    nurbs_curve<double, 3, false, -1, -1> test_nurbs;
+    fit_with_cubic<double, 3>(points, tangents, test_nurbs, 0.1);
+    for (int i = 0; i < 10; ++i)
+    {
+        Eigen::Vector3d p;
+        double u;
+        test_nurbs.find_nearst_point_on_curve(points.col(i), u, p);
+        double d = (p - points.col(i)).norm();
+        EXPECT_NEAR(d, 0.0, 0.1);
+    }
+}
+
+TEST_F(CreateNurbsCurve2, InterpolateWithEndsTangent4)
+{
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points(3, 10);
+    Eigen::Matrix<double, 3, Eigen::Dynamic> tangents(3, 10);
+    double step = M_PI / 5;
+    for (int index = 0; index < 10; ++index)
+    {
+
+        double x = 5.0 * std::cos(index * step);
+        double y = 5.0 * std::sin(index * step);
+        double z = 0.5 * (double)index;
+        points(0, index) = x;
+        points(1, index) = y;
+        points(2, index) = z;
+        tangents(0, index) = -y;
+        tangents(1, index) = x;
+        tangents(2, index) = 0.5;
+    }
+    nurbs_curve<double, 3, false, -1, -1> test_nurbs;
+    fit_with_cubic<double, 3>(points, tangents, test_nurbs, 0.1);
+    for (int i = 0; i < 10; ++i)
+    {
+        Eigen::Vector3d p;
+        double u;
+        test_nurbs.find_nearst_point_on_curve(points.col(i), u, p);
+        double d = (p - points.col(i)).norm();
+        EXPECT_NEAR(d, 0.0, 0.1);
+    }
+}
 
 
 TEST_F(CreateNurbsCurve, InterpolateWithEndsTangent2)
@@ -609,3 +662,10 @@ TEST_F(CreateNurbsSurface, InterpolateSurface)
     }
 }
 
+
+int main(int argc, char **argv)
+{
+    testing::InitGoogleTest(&argc, argv);
+    // ::testing::FLAGS_gtest_filter = "CreateNurbsCurve2.InterpolateWithEndsTangent4";
+    return RUN_ALL_TESTS();
+}

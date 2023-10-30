@@ -602,6 +602,8 @@ namespace tnurbs
         Q.block(0, 2, dim, points_count - 1) = points.block(0, 1, dim, points_count - 1) - points.block(0, 0, dim, points_count - 1);
         Q.col(1) = 2.0 * Q.col(2) - Q.col(3);
         Q.col(0) = 2.0 * Q.col(1) - Q.col(2);
+        Q.col(points_count + 1) = 2.0 * Q.col(points_count) - Q.col(points_count - 1);
+        Q.col(points_count + 2) = 2.0 * Q.col(points_count + 1) - Q.col(points_count);
 
         tangent.resize(dim, points_count);
 
@@ -623,7 +625,7 @@ namespace tnurbs
             }
             else
             {
-                alpha = coeff1 / (coeff1 + coeff2);
+                alpha = coeff1 / (coeff1 + std::sqrt(coeff2));
             }
 
             tangent.col(index - 1) = (1.0 - alpha) * Q.col(index - 1) + alpha * Q.col(index);
@@ -1848,10 +1850,7 @@ namespace tnurbs
             Eigen::Matrix<T, dim, Eigen::Dynamic> tangents(dim, 2);
             tangents << ts, te;
             local_2degree_arc_interpolate<T, dim>(points.block(0, ks, dim, ke - ks + 1), tangents, new_nurbs);
-            // Eigen::Vector<T, dim> control_point;
             new_nurbs.get_control_point(1, R);
-            // R = control_point.template block<dim, 1>(0, 0) / control_point[dim];
-            // w = control_point[dim];
             new_nurbs.get_weight(1, w);
             return ENUM_NURBS::NURBS_SUCCESS;
         }
@@ -1992,6 +1991,272 @@ namespace tnurbs
         return fit_with_conic(points, tangents, new_nurbs, E);
     }
 
+
+    template<typename T, int dim>
+    ENUM_NURBS fit_with_cubic(int ks, int ke, const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, 
+        const Eigen::Matrix<T, dim, Eigen::Dynamic> tangents, Eigen::Vector<T, dim> &P1, Eigen::Vector<T, dim> &P2, T E)
+    {
+        const Eigen::Vector<T, dim> &te = tangents.col(ke);
+        const Eigen::Vector<T, dim> &ts = tangents.col(ks);
+        int points_count = points.cols();
+        if (ks < 0 || points_count <= ke)
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+        if (ke <= ks)
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+
+        if (ke - ks == 1)
+        {
+            P1 = points.col(ks) + ts / 3.0;
+            P2 = points.col(ke) - te / 3.0; 
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+        Eigen::Vector<T, dim> v = points.col(ke) - points.col(ks);
+        T v_len = v.norm();
+        bool flag = true;
+        for (int index = ks + 1; index < ke; ++index)
+        {
+            Eigen::Vector<T, dim> v2 = points.col(index) - points.col(ks);
+            T cross_product = v2.cross(v).norm();
+            if (cross_product > DEFAULT_ERROR * v_len * v2.norm())
+            {
+                flag = false;
+                break;
+            }
+        }
+        if (flag == true)
+        {
+            P1 = (2.0 * points.col(ks) + points.col(ke)) / 2.0;
+            P2 = (2.0 * points.col(ke) + points.col(ks)) / 2.0;
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+        int dk = ke - ks;
+        T te_len = te.norm();
+        std::vector<T> uh(dk - 1);
+        std::vector<T> alphas(dk - 1);
+        std::vector<T> betas(dk - 1);
+        
+        std::vector<T> ck(dk + 1, 0.0);
+        T total_chord = 0.0;
+        for (int index = 0; index < dk; ++index)
+        {
+            total_chord += (points.col(ks + index + 1) - points.col(ks + index)).norm();
+        }
+        T current_chord = 0.0;
+        for (int index = 1; index < dk; ++index)
+        {
+            current_chord += (points.col(ks + index) - points.col(ks + index - 1)).norm();
+            ck[index] = current_chord / total_chord;
+        }
+        
+        Eigen::Vector<T, dim> ts_u = ts.normalized();
+        Eigen::Vector<T, dim> te_u = te.normalized();
+        for (int k = 1; k < dk; ++k)
+        {
+            //判断是否共面; 默认共面
+            flag = true;
+            Eigen::Vector<T, dim> normal = v.cross(ts);
+            T normal_len = normal.norm();
+            T c1 = std::abs(normal.dot(te));
+            if (c1 > 0.1 * normal_len * te_len)
+            {
+                Eigen::Vector<T, dim> temp = points.col(ks + k) - points.col(ke);
+                T c2 = temp.dot(normal);
+                if (c2 > 0.1 * normal_len * temp.norm())
+                    flag = false;
+            }
+            if (flag == true)
+            {
+                uh[k - 1] = ck[k];
+                T s = 1 - uh[k - 1];
+                Eigen::Matrix<T, dim * 2, 2> mat;
+                mat.template block<dim, 1>(0, 0) = 3.0 * s * s * uh[k - 1] * ts_u;
+                mat.template block<dim, 1>(0, 1) = 3.0 * s * uh[k - 1] * uh[k - 1] * te_u;
+                mat.template block<dim, 1>(dim, 0) = s * (s - 2.0 * uh[k - 1]) * tangents.col(k + ks).cross(ts_u);
+                mat.template block<dim, 1>(dim, 1) = uh[k - 1] * (s * 2.0 - uh[k - 1]) * tangents.col(k + ks).cross(te_u);
+
+                Eigen::Vector<T, 2 * dim> vecs;
+                vecs.template block<dim, 1>(0, 0) = points.col(ks + k) - (std::pow(s, 3) + 3.0 * std::pow(s, 2) * uh[k - 1]) * points.col(ks)\
+                                                     - (std::pow(uh[k - 1], 3) + 3.0 * std::pow(uh[k - 1], 2) * s) * points.col(ke);
+                vecs.template block<dim, 1>(dim, 0) = 2.0 * s * uh[k - 1] * (tangents.col(k + ks).cross(points.col(ks) - points.col(ke)));
+
+                Eigen::BDCSVD<Eigen::MatrixX<T>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(mat);
+                int rank = matSvd.rank();
+                if (rank != 2)
+                    return ENUM_NURBS::NURBS_ERROR;
+                Eigen::Vector2<T> intersect_params = matSvd.solve(vecs);
+                if (matSvd.info() !=  Eigen::Success)
+                    return ENUM_NURBS::NURBS_ERROR;
+                if (intersect_params[0] <= 0.0 || intersect_params[1] >= 0.0)
+                    return ENUM_NURBS::NURBS_ERROR;
+                alphas[k - 1] = intersect_params[0];
+                betas[k - 1] = intersect_params[1];
+                // return ENUM_NURBS::NURBS_SUCCESS;
+            }
+            else
+            {
+                Eigen::Vector<T, 3> pd_params;
+                Eigen::Matrix<T, dim, 3> mat;
+                mat.col(0) = v;
+                mat.col(1) = ts;
+                mat.col(2) = -1.0 * te;
+                ENUM_NURBS flag2 = plane_line_intersect<T, dim>(points.col(ks), points.col(k + ks), mat, pd_params);
+                if (flag2 != ENUM_NURBS::NURBS_SUCCESS)
+                {
+                    return ENUM_NURBS::NURBS_ERROR;
+                }
+                Eigen::Vector<T, dim> pd = pd_params[2] * te + points.col(k + ks);
+                Eigen::Vector<T, 2> pc_params;
+                flag2 = tow_line_intersect<T, dim>(points.col(ks), v, pd, ts, pc_params);
+                if (flag2 != ENUM_NURBS::NURBS_SUCCESS)
+                {
+                    return ENUM_NURBS::NURBS_ERROR;
+                }
+                Eigen::Vector<T, dim> pc = pc_params[1] * ts + pd;
+                T gamma = (pc - points.col(ke)).norm() / v_len;
+                if (gamma < 0.0 || gamma > 1.0)
+                    return ENUM_NURBS::NURBS_ERROR;
+                T p = -1.0 / 3.0;
+                T q = (27.0 * (1.0 - gamma) - 2.0) / 54.0;
+                T a = -0.5 * q;
+                T b = p / 3.0;
+                T u = std::sqrt(a * a + b * b * b);
+                T s = std::cbrt(a + u) + std::cbrt(a - u);
+                //TODO : 将s作为初值进行迭代求解
+                if(s < 0.0 || s > 1.0)
+                    return ENUM_NURBS::NURBS_ERROR;
+                uh[k - 1] = s;
+                a = (pc - pd).norm();
+                b = -1.0 * (pd - points.col(k + ks)).norm();
+                alphas[k - 1] = a / 3.0;
+                betas[k - 1] = b / 3.0;
+            }
+        }
+        T sum_a = std::accumulate(alphas.begin(), alphas.end(), 0.0);
+        T sum_b = std::accumulate(betas.begin(), betas.end(), 0.0);
+        T alpha = sum_a / static_cast<T>(dk - 1);
+        T beta = sum_b / static_cast<T>(dk - 1);
+
+        P1 = points.col(ks) + alpha * ts_u;
+        P2 = points.col(ke) + beta * te_u;
+        Eigen::VectorX<T> knots(8);
+        knots.template block<4, 1>(0, 0).setConstant(0.0);
+        knots.template block<4, 1>(4, 0).setConstant(1.0);
+        for (int k = 1; k < dk; ++k)
+        {
+            T b1, b2;
+            one_basis_function<T>(1, uh[k - 1], 3, knots, b1);
+            one_basis_function<T>(2, uh[k - 1], 3, knots, b2);
+            T dis = ((alphas[k - 1] - alpha) * b1 * ts - (betas[k - 1] - beta) * te).norm();
+            if (dis <= E)
+                continue;
+            Eigen::Matrix<T, dim, Eigen::Dynamic> matrix(dim, 4);
+            matrix.col(0) = points.col(ks);
+            matrix.col(1) = P1;
+            matrix.col(2) = P2;
+            matrix.col(3) = points.col(ke);
+            Eigen::VectorX<T> temp_knots(8);
+            temp_knots << 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0;
+            nurbs_curve<T, dim, false, -1, -1> temp_nurbs(temp_knots, matrix);
+            T u;
+            Eigen::Vector<T, dim> nearst_point;
+            temp_nurbs.find_nearst_point_on_curve(points.col(k + ks), u, nearst_point);
+            dis = (nearst_point - points.col(k + ks)).norm();
+            if (dis > E)
+                return ENUM_NURBS::NURBS_ERROR;
+        }
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    template<typename T, int dim>
+    ENUM_NURBS fit_with_cubic(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points,  const Eigen::Matrix<T, dim, Eigen::Dynamic> &tangents, 
+        nurbs_curve<T, dim, false, -1, -1> &new_nurbs, T E)
+    {
+        int ks = 0;
+        int points_count = points.cols();
+        int ke = points_count - 1;
+        std::vector<Eigen::Vector<T, dim>> control_points;
+        control_points.push_back(points.col(0));
+        std::vector<int> indexs;
+        indexs.push_back(0);
+        while(true)
+        {
+            Eigen::Vector<T, dim> P1, P2;
+
+            ENUM_NURBS flag = fit_with_cubic<T, dim>(ks, ke, points, tangents, P1, P2, E);
+            if (flag != ENUM_NURBS::NURBS_SUCCESS)
+            {
+                ke = (ks + ke) / 2;
+            }
+            else
+            {
+                control_points.push_back(std::move(P1));
+                control_points.push_back(std::move(P2));
+                indexs.push_back(ke);
+                if (ke == points_count - 1)
+                    break;
+                ks = ke;
+                ke = points_count - 1;
+            }
+        }
+        control_points.push_back(points.col(points_count - 1));
+        indexs.push_back(points_count - 1);
+        int control_points_count = control_points.size();
+
+        Eigen::Matrix<T, dim, Eigen::Dynamic> nurbs_control_points(dim, control_points_count);
+        for (int index = 0; index < control_points_count; ++index)
+        {
+            nurbs_control_points.col(index) = control_points[index];
+        }
+        
+        Eigen::VectorX<T> knots_vector;
+        knots_vector.resize(control_points_count + 4);
+        knots_vector.template block<4, 1>(0, 0).setConstant(0.0);
+        knots_vector.template block<4, 1>(control_points_count, 0).setConstant(1.0);
+        knots_vector[4] = 1.0;
+        knots_vector[5] = 1.0;
+        int count = (control_points_count - 6) / 2;
+        for (int index = 0; index < count; ++index)
+        {
+            T len1 = (control_points[index * 2 + 3] - points.col(indexs[index + 1])).norm();
+            T len2 = (control_points[index * 2 + 2] - points.col(indexs[index + 1])).norm();
+            knots_vector[2 * index + 7] = knots_vector[2 * index + 6] = knots_vector[2 * index + 5] + (knots_vector[2 * index + 5] - knots_vector[2 * index + 3]) * len1 / len2;
+        }
+
+        if (count >= 0)
+        {
+            T len1 = (control_points[count * 2 + 3] - points.col(indexs[count + 1])).norm();
+            T len2 = (control_points[count * 2 + 2] - points.col(indexs[count + 1])).norm();
+            T un = knots_vector[2 * count + 5] + (knots_vector[2 * count + 5] - knots_vector[2 * count + 3]) * len1 / len2;
+            knots_vector.block(4, 0, control_points_count - 4, 1) /= un;
+        }
+
+        new_nurbs.set_control_points(nurbs_control_points);
+        new_nurbs.set_knots_vector(knots_vector);
+        new_nurbs.set_degree(3);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+
+    template<typename T, int dim>
+    ENUM_NURBS fit_with_cubic(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, nurbs_curve<T, dim, false, -1, -1> &new_nurbs, T E)
+    {
+        Eigen::Matrix<T, dim, Eigen::Dynamic> tangents;
+        make_tangent_by_5points<T, dim, false>(points, tangents);
+
+        int points_count = points.cols();
+        T c0 = 0.0;
+        T c1 = (points.col(1) - points.col(0)).norm();
+        for (int index = 1; index < points_count - 1; ++index)
+        {
+            T c2 = c1 + (points.col(index + 1) - points.col(index)).norm();
+            tangents.col(index) /= ((c2 - c1) / (c1 - c0));
+            c0 = c1;
+            c1 = c2;
+        }
+
+
+        return fit_with_cubic(points, tangents, new_nurbs, E);
+    }
 
 }
 
