@@ -90,7 +90,7 @@ namespace tnurbs
         for (auto point : points)
         {
             outfile2 << "v " << point[0] << " " <<
-            point[1] << " " << point[2] << std::endl;
+            point[1] << " " << 0 << std::endl;
         }
         outfile2.close();
         return ENUM_NURBS::NURBS_SUCCESS;
@@ -112,7 +112,7 @@ namespace tnurbs
         for (auto point : points)
         {
             outfile2 << "v " << point[0] << " " <<
-            point[1] << " " << point[2] << std::endl;
+            point[1] << " " << 0 << std::endl;
         }
         outfile2.close();
         return ENUM_NURBS::NURBS_SUCCESS;

@@ -2274,6 +2274,27 @@ namespace tnurbs
         }
 
 
+        /// @brief 将nurbs曲线的维数提升一维
+        /// @param index 在第index个坐标之前插入0
+        /// @return 错误码
+        ENUM_NURBS dimension_elevate(int index, nurbs_curve<T, dim + 1, is_rational, -1, -1> &new_nurbs) const
+        {
+            int points_count = m_control_points.cols();
+            Eigen::Matrix<T, rows + 1, Eigen::Dynamic> new_control_points(rows + 1, points_count);
+
+            // if (index > 0)
+            new_control_points.block(0, 0, index, points_count) = m_control_points.block(0, 0, index, points_count);
+            new_control_points.block(index, 0, 1, points_count).setConstant(0.0);
+            new_control_points.block(index + 1, 0, rows - index, points_count) = m_control_points.block(index, 0, rows - index, points_count);
+
+
+            new_nurbs.set_knots_vector(m_knots_vector);
+            new_nurbs.set_control_points(new_control_points);
+            new_nurbs.set_degree(m_degree);
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+
+
     private:
 
         ENUM_NURBS bezier_curve_reparameter(const nurbs_curve<T, 1, false, -1, -1> &reparameter_function,

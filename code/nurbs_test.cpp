@@ -8,6 +8,7 @@
 #include "gtest/gtest.h"
 #include <cmath>
 #include "debug_used.h"
+#include "nurbs_build.h"
 // #include <memory>
 using namespace tnurbs;
 
@@ -171,6 +172,54 @@ protected:
      
 
 };
+
+class CreateNurbsCurve4 : public testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        Eigen::Vector<double, 2> v1{0, 1};
+        Eigen::Vector<double, 2> v2{1.0 / 2.0, 2};
+        Eigen::Vector<double, 2> v3{1, 1};
+        Eigen::Matrix<double, 2, Eigen::Dynamic> mat(2, 3);
+        mat.col(0) = v1;
+        mat.col(1) = v2;
+        mat.col(2) = v3;
+        Eigen::VectorX<double> knots_vector(6);
+        knots_vector << 0, 0, 0, 1, 1, 1;
+        m_nurbs1.set_control_points(mat);//  = nurbs_curve<double, 2, false, -1, -1>(knots_vector, mat);
+        m_nurbs1.set_knots_vector(knots_vector);
+        m_nurbs1.set_degree(2);
+
+        Eigen::Vector<double, 3> wv1{0, 0, 1};
+        Eigen::Vector<double, 3> wv2{0.3, 0.2, 0.5};
+        Eigen::Vector<double, 3> wv3{1.4 / 2.0, 1, 2};
+        Eigen::Vector<double, 3> wv4{2.6, 0.7, 3};
+        Eigen::Vector<double, 3> wv5{1.5, 0.5, 0.5};
+        Eigen::Vector<double, 3> wv6{3.4, 1.2, 1};
+        Eigen::Matrix<double, 3, Eigen::Dynamic> mat2(3, 6);
+        mat2.col(0) = wv1;
+        mat2.col(1) = wv2;
+        mat2.col(2) = wv3;
+        mat2.col(3) = wv4;
+        mat2.col(4) = wv5;
+        mat2.col(5) = wv6;
+
+
+        Eigen::VectorX<double> knots_vector2(10);
+        knots_vector2 << 0, 0, 0, 0, 0.3, 0.7, 1, 1, 1, 1;
+
+
+        m_nurbs2.set_knots_vector(knots_vector2);
+        m_nurbs2.set_control_points(mat2);
+        m_nurbs2.set_degree(3);
+    }
+    
+    nurbs_curve<double, 2, false, -1, -1> m_nurbs1;
+    nurbs_curve<double, 2, true, -1, -1> m_nurbs2;
+
+};
+
 
 
 TEST_F(CreateNurbsCurve2, RemoveKnots1)
@@ -662,10 +711,21 @@ TEST_F(CreateNurbsSurface, InterpolateSurface)
     }
 }
 
+TEST_F(CreateNurbsCurve4, SwungSurface)
+{
+
+    nurbs_surface<double, 3, -1, -1, -1, -1, true> sur;
+    swung_surface<double, true, false>(1.0, m_nurbs2, m_nurbs1, sur);
+    nurbs_curve<double, 3, false, -1, -1> new_nurbs1;
+    nurbs_curve<double, 3, true, -1, -1> new_nurbs2;
+    m_nurbs1.dimension_elevate(2, new_nurbs1);
+    m_nurbs2.dimension_elevate(1, new_nurbs2);
+}
+
 
 int main(int argc, char **argv)
 {
     testing::InitGoogleTest(&argc, argv);
-    // ::testing::FLAGS_gtest_filter = "CreateNurbsCurve2.InterpolateWithEndsTangent4";
+    ::testing::FLAGS_gtest_filter = "CreateNurbsCurve4.SwungSurface";
     return RUN_ALL_TESTS();
 }
