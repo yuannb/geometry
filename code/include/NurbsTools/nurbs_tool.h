@@ -4155,8 +4155,10 @@ namespace tnurbs
 
             //else
             merge_vector.push_back(vec1[current_index2]);
-            vec1_add.push_back(vec1_add.back());
-            vec2_add.push_back(vec2_add.back());
+            if (vec1_add.empty() == false)
+                vec1_add.push_back(vec1_add.back());
+            if (vec2_add.empty() == false)
+                vec2_add.push_back(vec2_add.back());
             current_index2 += 1;
             current_index1 += 1; 
         }

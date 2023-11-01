@@ -2294,6 +2294,20 @@ namespace tnurbs
             return ENUM_NURBS::NURBS_SUCCESS;
         }
 
+        ENUM_NURBS move(const Eigen::Vector<T, dim> &translate_vector, nurbs_curve<T, dim, is_rational, -1, -1> &new_nurbs) const
+        {
+            Eigen::Matrix<T, rows, Eigen::Dynamic> new_control_points = m_control_points;
+            int points_count = m_control_points.cols();
+            for (int index = 0; index < points_count; ++index)
+            {
+                new_control_points.template block<dim, 1>(0, index) += translate_vector;
+            }
+            new_nurbs.set_control_points(new_control_points);
+            new_nurbs.set_degree(m_degree);
+            new_nurbs.set_knots_vector(m_knots_vector);
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+
 
     private:
 

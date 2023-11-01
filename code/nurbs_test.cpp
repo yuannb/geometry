@@ -722,10 +722,28 @@ TEST_F(CreateNurbsCurve4, SwungSurface)
     m_nurbs2.dimension_elevate(1, new_nurbs2);
 }
 
+TEST_F(CreateNurbsCurve2, SkinSurface1)
+{
+
+    std::vector<nurbs_curve<double, 3, false, -1, -1> *> nurbs_curves;
+    nurbs_curves.push_back(&m_nurbs);
+    nurbs_curve<double, 3, false, -1, -1> nurbs2;
+    m_nurbs.move(Eigen::Vector3d(10, 20, 10), nurbs2);
+    nurbs_curve<double, 3, false, -1, -1> nurbs3;
+    nurbs2.move(Eigen::Vector3d(0, 10, 10), nurbs3);
+    nurbs_curves.push_back(&nurbs2);
+    nurbs_curves.push_back(&nurbs3);
+
+
+    nurbs_surface<double, 3, -1 ,-1, -1, -1, false> skin;
+    std::vector<double> v_params{0, 0.5, 1};
+    skin_surface<double, 3, false>(2, v_params, nurbs_curves, skin);
+}
+
 
 int main(int argc, char **argv)
 {
     testing::InitGoogleTest(&argc, argv);
-    ::testing::FLAGS_gtest_filter = "CreateNurbsCurve4.SwungSurface";
+    ::testing::FLAGS_gtest_filter = "CreateNurbsCurve2.SkinSurface1";
     return RUN_ALL_TESTS();
 }
