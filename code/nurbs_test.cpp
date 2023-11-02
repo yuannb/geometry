@@ -724,7 +724,6 @@ TEST_F(CreateNurbsCurve4, SwungSurface)
 
 TEST_F(CreateNurbsCurve2, SkinSurface1)
 {
-
     std::vector<nurbs_curve<double, 3, false, -1, -1> *> nurbs_curves;
     nurbs_curves.push_back(&m_nurbs);
     nurbs_curve<double, 3, false, -1, -1> nurbs2;
@@ -737,13 +736,62 @@ TEST_F(CreateNurbsCurve2, SkinSurface1)
 
     nurbs_surface<double, 3, -1 ,-1, -1, -1, false> skin;
     std::vector<double> v_params{0, 0.5, 1};
+    skin_surface<double, 3, false>(2, nurbs_curves, skin);
+    Eigen::Vector3d pos;
+    Eigen::Vector3d test_pos(17.011133746658562, 24.452491384379741, 8.3548178734335181);
+    skin.point_on_surface(0.23, 0.56, pos);
+    double d = (pos - test_pos).norm();
+    EXPECT_NEAR(d, 0.0, DEFAULT_ERROR);
+
     skin_surface<double, 3, false>(2, v_params, nurbs_curves, skin);
+    test_pos = Eigen::Vector3d(18.052542683375325, 28.339082447662982, 11.199999999999999);
+    skin.point_on_surface(0.23, 0.56, pos);
+    d = (pos - test_pos).norm();
+    EXPECT_NEAR(d, 0.0, DEFAULT_ERROR);
+}
+
+TEST_F(CreateNurbsCurve2, SkinSurface2)
+{
+    std::vector<nurbs_curve<double, 3, false, -1, -1> *> nurbs_curves;
+    nurbs_curves.push_back(&m_nurbs);
+    nurbs_curve<double, 3, false, -1, -1> nurbs2;
+    m_nurbs.move(Eigen::Vector3d(10, 20, 10), nurbs2);
+    nurbs_curve<double, 3, false, -1, -1> nurbs3;
+    nurbs2.move(Eigen::Vector3d(0, 10, 10), nurbs3);
+    nurbs_curves.push_back(&nurbs2);
+    nurbs_curves.push_back(&nurbs3);
+    
+    nurbs_curve<double, 2, false, -1, -1> m_nurbs1;
+    Eigen::Vector<double, 2> v1{0, 10};
+    Eigen::Vector<double, 2> v2{10.0 / 2.0, 20};
+    Eigen::Vector<double, 2> v3{10, 25};
+    Eigen::Matrix<double, 2, Eigen::Dynamic> mat(2, 3);
+    mat.col(0) = v1;
+    mat.col(1) = v2;
+    mat.col(2) = v3;
+    Eigen::VectorX<double> knots_vector(6);
+    knots_vector << 0, 0, 0, 1, 1, 1;
+    m_nurbs1.set_control_points(mat);//  = nurbs_curve<double, 2, false, -1, -1>(knots_vector, mat);
+    m_nurbs1.set_knots_vector(knots_vector);
+    m_nurbs1.set_degree(2);
+    nurbs_curve<double, 3, false, -1, -1> new_nurbs1;
+    m_nurbs1.dimension_elevate(0, new_nurbs1);
+
+    nurbs_surface<double, 3, -1 ,-1, -1, -1, false> skin;
+    std::vector<double> v_params{0, 0.5, 1};
+    skin_surface<double, 3, false, 2>(nurbs_curves, new_nurbs1, v_params, skin);
+    Eigen::Matrix<Eigen::Vector3d, 2, 2> tangents;
+    skin.derivative_on_surface<1>(0, 0.63397459621556151, tangents);
+    Eigen::Vector2<Eigen::Vector3d> tangents2;
+    new_nurbs1.derivative_on_curve<1>(0.5, tangents2);
+    double cp = tangents2[1].cross(tangents(0, 1)).norm();
+    EXPECT_NEAR(cp, 0.0, DEFAULT_ERROR);
 }
 
 
 int main(int argc, char **argv)
 {
     testing::InitGoogleTest(&argc, argv);
-    ::testing::FLAGS_gtest_filter = "CreateNurbsCurve2.SkinSurface1";
+    ::testing::FLAGS_gtest_filter = "CreateNurbsCurve2.SkinSurface2";
     return RUN_ALL_TESTS();
 }

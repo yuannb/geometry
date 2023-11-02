@@ -1137,6 +1137,22 @@ namespace tnurbs
             return m_control_points;
         }
 
+        Eigen::Matrix<T, dim, Eigen::Dynamic> get_nonhomo_control_points() const
+        {
+            if constexpr (is_rational == false)
+                return m_control_points;
+            else
+            {
+                int points_count = m_control_points.cols();
+                Eigen::Matrix<T, dim, Eigen::Dynamic> cp(dim, points_count);
+                for (int index = 0; index < points_count; ++index)
+                {
+                    cp.col(index) = m_control_points.block(0, index, dim, 1) / m_control_points(index, dim);
+                }
+                return std::move(cp);
+            }
+        }
+
         int get_control_points_count() const
         {
             return m_control_points.cols();
