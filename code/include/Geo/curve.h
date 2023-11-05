@@ -26,7 +26,7 @@ namespace tnurbs
         // using derived_type = typename geo_traits<curve_type>::type;
         using point_number_type = typename geo_traits<curve_type>::point_number_type;
         using point_type = typename geo_traits<curve_type>::point_type;
-    private:
+    protected:
 
         Interval<point_number_type> m_interval;
 

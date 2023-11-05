@@ -937,8 +937,6 @@ namespace tnurbs
                     const Eigen::Matrix<T, rows, Eigen::Dynamic> &control_points) : m_knots_vector(knots_vector),
                     m_control_points(control_points) 
                     { 
-                        // int knots_size = m_knots_vector.size();
-                        // int control_points_count = m_control_points.cols();
                         m_degree = m_knots_vector.size() - m_control_points.cols() - 1; 
                     }
         nurbs_curve(const nurbs_curve<T, dim, is_rational, -1, -1> &nurbs_curve_to_copy)
@@ -948,6 +946,16 @@ namespace tnurbs
             m_control_points = nurbs_curve_to_copy.get_control_points();
         }
 
+        // //生成值全为1的一阶的nurbs曲线
+        // static nurbs_curve<T, dim, false, -1, -1> *make_identity_nurbs(T low, T high) const
+        // {
+        //     Eigen::VectorX<T> knots(2);
+        //     knots << low, high;
+        //     Eigen::Matrix<T, dim, Eigen::Dynamic> control_points(dim, 1);
+        //     control_points.col(0) = Eigen::Vector<T, dim>(1.0, 1.0, 1.0);
+        //     nurbs_curve<T, dim, false, -1, -1> *id_nurbs = new nurbs_curve<T, dim, false, -1, -1>(knots, control_points);
+        //     return id_nurbs;
+        // }
 
         ENUM_NURBS get_ends_knots(std::array<T, 2> &ends_knots) const
         {
@@ -1074,6 +1082,24 @@ namespace tnurbs
             return ENUM_NURBS::NURBS_SUCCESS;
         }
 
+        ENUM_NURBS get_homo_control_point(int index, Eigen::Vector<T, dim + 1> &point) const
+        {
+            if (index < 0 || index >= m_control_points.cols())
+                return ENUM_NURBS::NURBS_ERROR;
+            if constexpr (is_rational == true)
+            {
+                point = m_control_points.col(index);
+            }
+            else
+            {
+                point.block(0, 0, dim, 1) = m_control_points.col(index);
+                point[dim] = 1.0;
+            }
+
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+
+
         int is_include_konts(T u, T eps = 0.0) const
         {
             int knots_size = m_knots_vector.size();
@@ -1090,17 +1116,6 @@ namespace tnurbs
             return m_knots_vector[index];
         }
         ENUM_NURBS set_degree(int degree) { m_degree = degree; return ENUM_NURBS::NURBS_SUCCESS; }
-
-
-        ENUM_NURBS to_rational_nurbs(nurbs_curve<T, dim, true, -1, -1> &new_nurbs)
-        {
-            Eigen::Matrix<T, dim + 1, Eigen::Dynamic> new_control_points;
-            to_ratioanl_contrl_points<T, is_rational, rows>::convert(m_control_points, new_control_points);
-            new_nurbs.set_control_points(new_control_points);
-            new_nurbs.set_knots_vector(m_knots_vector);
-            new_nurbs.set_degree(m_degree);
-            return ENUM_NURBS::NURBS_SUCCESS;
-        }
 
 
         ENUM_NURBS set_control_points(const Eigen::Matrix<T, dim, Eigen::Dynamic> &points, const Eigen::VectorX<T> &weights)
@@ -1130,7 +1145,22 @@ namespace tnurbs
             return ENUM_NURBS::NURBS_SUCCESS;
         }
 
-        ENUM_NURBS set_knots_vector(const Eigen::VectorX<T> &knots_vector) { m_knots_vector = knots_vector; return ENUM_NURBS::NURBS_SUCCESS; }
+        ENUM_NURBS set_knots_vector(const Eigen::VectorX<T> &knots_vector) 
+        {
+            m_knots_vector = knots_vector;
+            return ENUM_NURBS::NURBS_SUCCESS; 
+        }
+
+        ENUM_NURBS to_rational_nurbs(nurbs_curve<T, dim, true, -1, -1> &new_nurbs)
+        {
+            Eigen::Matrix<T, dim + 1, Eigen::Dynamic> new_control_points;
+            to_ratioanl_contrl_points<T, is_rational, rows>::convert(m_control_points, new_control_points);
+            new_nurbs.set_control_points(new_control_points);
+            new_nurbs.set_knots_vector(m_knots_vector);
+            new_nurbs.set_degree(m_degree);
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+
 
         Eigen::Matrix<T, rows, Eigen::Dynamic> get_control_points() const
         {
@@ -1182,6 +1212,31 @@ namespace tnurbs
             point = project_point<T, is_rational, rows>::project_point_to_euclidean_space(vec);
             return ENUM_NURBS::NURBS_SUCCESS;
         }
+
+        /// @brief 计算nurbs曲线上在参数u处的权重
+        /// @param u 曲线参数
+        /// @param w out_put_param nurbs曲线参数u对应的权重
+        /// @return ENUM_NURBS错误码
+        ENUM_NURBS weight_on_curve(T u, T &w) const
+        {
+            if constexpr (is_rational == false)
+            {
+                w = 1.0;
+                return ENUM_NURBS::NURBS_SUCCESS;
+            }
+            else
+            {
+                int index = -1;
+                find_span<T>(u,m_degree, m_knots_vector, index);
+                Eigen::Vector<T, Eigen::Dynamic> coeff(m_degree + 1);
+                basis_functions<T>(index, u, m_degree, m_knots_vector, coeff);
+                Eigen::Vector<T, rows> vec = m_control_points.block(0, index - m_degree, rows, m_degree + 1) * coeff;
+                w = vec[dim];
+                return ENUM_NURBS::NURBS_SUCCESS;
+            }
+            return ENUM_NURBS::NURBS_ERROR;
+        }
+
 
         /// @brief 计算nurbs曲线的右导数(结果向量不单位化)
         /// @param u 曲线参数

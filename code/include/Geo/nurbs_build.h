@@ -529,5 +529,222 @@ namespace tnurbs{
     }
 
 
+    /// @brief 通过法向投影法生成一系列标架(对于高维来说, 还需要更多的量来确定标架, 因此此方法仅用于三维情况, 故此处的维数固定为3即可)
+    /// @tparam T double, float ...
+    /// @tparam is_rational 是否是有理的
+    /// @param params nurbs曲线上的参数点
+    /// @param nurbs nurbs曲线
+    /// @param frames nurbs曲线在参数点标架
+    /// @return 错误码
+    template<typename T, bool is_rational>
+    ENUM_NURBS eval_frames_by_project(const std::vector<T> &params, const nurbs_curve<T, 3, is_rational, -1, -1> &nurbs, std::vector<frame<T, 3>> &frames)
+    {
+        //TODO: 首先大致检查参数合法性
+        frames.clear();
+        int params_count = params.size();
+        frames.reserve(params_count);
+        for (int index = 0; index < params_count; ++index)
+        {
+            // Eigen::VectorX<Eigen::Vector3<T>> ders;
+            Eigen::Vector<Eigen::Vector<T, 3>, 2> ders;
+            // nurbs.derivative_on_curve(params[index], 1, ders);
+            nurbs.template derivative_on_curve<1>(params[index], ders);
+            frame<T, 3> current_frame;
+            current_frame.origin.col(0) = std::move(ders[0]);
+            ders[1].normalize();
+            current_frame.basis.col(0) = std::move(ders[1]);
+            frames.push_back(current_frame);
+        }
+
+        //先将法向从前向后计算一遍
+        Eigen::Vector3<T> bi_normal;
+        Eigen::Vector3<T> tangent = frames[0].basis.col(0);
+        if (std::abs(tangent[0]) > std::abs(tangent[1]) && std::abs(tangent[0] > std::abs(tangent[2])))
+        {
+            bi_normal = Eigen::Vector3<T>(-tangent[1], tangent[0], 0.0);
+        }
+        else
+        {
+            bi_normal = Eigen::Vector3<T>(0.0, -tangent[2], tangent[1]);
+        }
+        bi_normal.normalize();
+        frames[0].basis.col(2) = std::move(bi_normal);
+
+        for (int index = 1; index < params_count; ++index)
+        {
+            const Eigen::Vector3<T> &pre_bi_normal = frames[index - 1].basis.col(2);
+            const Eigen::Vector3<T> &current_tangent = frames[index].basis.col(0);
+            bi_normal =  pre_bi_normal - pre_bi_normal.dot(current_tangent) * current_tangent;
+            bi_normal.normalize();
+            frames[index].basis.col(2) = std::move(bi_normal);
+        }
+
+        T dis = (frames[0].origin - frames.back().origin).norm();
+        if (dis < TDEFAULT_ERROR<T>::value)//闭曲线
+        {
+            frames.back().origin = frames[0].origin;
+            frames.back().basis = frames[0].basis;
+
+            //将法向从后往前在算一遍 
+            Eigen::Vector3<T> next_bi_normal = frames[0].basis.col(2);
+            for (int index = params_count - 2; index >= 0; --index)
+            {
+                const Eigen::Vector3<T> &current_tangent = frames[index].basis.col(0);
+                bi_normal =  next_bi_normal - next_bi_normal.dot(current_tangent) * current_tangent;
+                bi_normal.normalize();
+                next_bi_normal = bi_normal;
+                bi_normal += frames[index].basis.col(2);
+                bi_normal.normalize();
+                frames[index].basis.col(2) = std::move(bi_normal);
+            }
+        }
+        //计算normal
+        for (int index = 0; index < params_count; ++index)
+        {
+            frames[index].basis.col(1) = frames[index].basis.col(2).cross(frames[index].basis.col(0));
+        }
+        return ENUM_NURBS::NURBS_SUCCESS;
+
+    }
+
+
+    /// @brief 扫掠曲面
+    /// @tparam T double float ...
+    /// @tparam spine_is_rational 脊线是否是有理的
+    /// @tparam scale_is_rational 放缩函数(nurbs)是否是有理的
+    /// @param profile_curve 截面曲线(x轴为法向)
+    /// @param spine_curve 轨道曲线
+    /// @param K 截面曲线实例的最小值(K越大, 所得到的曲面约接近理论上的扫掠曲面)
+    /// @param nurbs 扫掠曲面
+    /// @param scale_function 放缩函数(为nullptr表示各个方向的放缩值为1, scale的中心为原点)
+    /// @return 错误码
+    template<typename T, bool profile_curve_is_rational, bool spine_is_rational, bool scale_is_rational = false>
+    ENUM_NURBS sweep_surface(const nurbs_curve<T, 3, profile_curve_is_rational, -1, -1> &profile_curve, const nurbs_curve<T, 3, spine_is_rational, -1, -1> &spine_curve, int K, 
+        nurbs_surface<T, 3, -1, -1, -1, -1, true> &nurbs, const nurbs_curve<T, 3, scale_is_rational, -1, -1> *scale_function = nullptr)
+    {
+        int spine_curve_degree = spine_curve.get_degree();
+        Eigen::VectorX<T> spine_curve_knots = spine_curve.get_knots_vector();
+        int ksv = spine_curve_knots.size();
+        int nsect = K + 1;
+        Eigen::VectorX<T> surface_v_knots;
+        if (ksv <= nsect + spine_curve_degree) //(应该是确保后面的插值矩阵非奇异)
+        {
+            int m = nsect + spine_curve_degree - ksv + 1;
+            std::vector<T> new_knots_vector(spine_curve_knots.data(), spine_curve_knots.data() + spine_curve_knots.rows());
+            std::list<T> new_knots_list(new_knots_vector.begin(), new_knots_vector.end());
+
+            for (int index = 0; index < m; ++index)
+            {
+                auto max_it = new_knots_list.begin();
+                auto end_it = --new_knots_list.end();
+                T max_interval_len = 0.0;
+                for (auto it = new_knots_list.begin(); it != end_it; ++it)
+                {
+                    auto next_it = it;
+                    ++next_it;
+                    T len = *next_it - *it;
+                    if (len > max_interval_len)
+                    {
+                        max_it = it;
+                        max_interval_len = len;
+                    }
+                }
+                T new_knot = max_interval_len / 2.0 + *max_it;
+                new_knots_list.insert(++max_it, new_knot);
+            }
+            std::vector<T> V = std::vector<T>(new_knots_list.begin(), new_knots_list.end());
+            surface_v_knots = Eigen::Map<Eigen::VectorX<T>>(V.data(), nsect + spine_curve_degree + 1);
+        }
+        else
+        {
+            surface_v_knots = std::move(spine_curve_knots);
+            if (ksv > nsect + spine_curve_degree + 1)
+                nsect = ksv - spine_curve_degree - 1;
+        }
+
+        std::array<T, 2> end_knots;
+        spine_curve.get_ends_knots(end_knots);
+        std::vector<T> params(nsect);
+        params[0] = end_knots[0];
+        params[nsect - 1] = end_knots[1];
+        T temp_sum = end_knots[0] * spine_curve_degree;
+        for (int k = 1; k < nsect - 1; ++k)
+        {
+            temp_sum = temp_sum - surface_v_knots[k] + surface_v_knots[k + spine_curve_degree];
+            params[k] = temp_sum / spine_curve_degree;
+        }
+        std::vector<frame<T, 3>> frames;
+        eval_frames_by_project<T, spine_is_rational>(params, spine_curve, frames);
+        int profile_curve_control_points_count = profile_curve.get_control_points_count();
+        std::vector<Eigen::Matrix<T, 4, Eigen::Dynamic>> temp_control_points;
+        temp_control_points.resize(profile_curve_control_points_count);
+        for (int index = 0; index < profile_curve_control_points_count; ++index)
+        {
+            temp_control_points[index].resize(4, nsect);
+        }
+
+        for (int k = 0; k < nsect; ++k)
+        {
+            Eigen::Matrix3<T> scale_mat;
+            scale_mat.setConstant(0.0);
+            if (scale_function != nullptr)
+            {
+                Eigen::Vector3<T> scales;
+                scale_function->point_on_curve(params[k], scales);
+                scale_mat(0, 0) = scales[0];
+                scale_mat(1, 1) = scales[1];
+                scale_mat(2, 2) = scales[2];
+            }
+            else
+            {
+                scale_mat(0, 0) = 1.0;
+                scale_mat(1, 1) = 1.0;
+                scale_mat(2, 2) = 1.0;
+            }
+            T sw = 1.0;
+            if constexpr (spine_is_rational == true)
+            {
+                spine_curve.weight_on_curve(params[k], sw);
+            }
+            for (int index = 0; index < profile_curve_control_points_count; ++index)
+            {
+                Eigen::Vector<T, 3> p;
+                profile_curve.get_control_point(index, p);
+                p = frames[k].basis * scale_mat * p;
+                p += frames[k].origin;
+                Eigen::Vector<T, 4> homo_p;
+                homo_p.block(0, 0, 3, 1) = p;
+                homo_p[3] = 1.0;
+                T w;
+                profile_curve.get_weight(index, w);
+                homo_p *= (w * sw);
+                temp_control_points[index].col(k) = homo_p;
+            }
+
+        }
+
+        Eigen::VectorX<Eigen::Matrix4X<T>> new_control_points;
+        new_control_points.resize(nsect);
+        for (int index = 0; index < nsect; ++index)
+        {
+            new_control_points[index].resize(4, profile_curve_control_points_count);
+        }
+        for (int index = 0; index < profile_curve_control_points_count; ++index)
+        {
+            nurbs_curve<T, 4, false, -1, -1> temp_nurbs;
+            global_curve_interpolate<T, 4>(temp_control_points[index], spine_curve_degree, params, surface_v_knots, temp_nurbs);
+            for (int i = 0; i < nsect; ++i)
+            {
+                Eigen::Vector4<T> p;
+                temp_nurbs.get_control_point(i, p);
+                new_control_points[i].col(index) = p;
+            }
+        }
+        nurbs.set_control_points(new_control_points);
+        nurbs.set_uv_knots(profile_curve.get_knots_vector(), surface_v_knots);
+        nurbs.set_uv_degree(profile_curve.get_degree(), spine_curve_degree);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
 
 }

@@ -788,10 +788,30 @@ TEST_F(CreateNurbsCurve2, SkinSurface2)
     EXPECT_NEAR(cp, 0.0, DEFAULT_ERROR);
 }
 
+TEST_F(CreateNurbsCurve2, sweep)
+{
+    Eigen::Vector<double, 3> center{0, 0, 0};
+    Eigen::Vector<double, 3> u_dir{1, 0, 0};
+    Eigen::Vector<double, 3> v_dir{0, 0, 1};
+    double radius = 10;
+    double start_angles = 0;
+    double end_angles = M_PI * 2.0;
+    nurbs_curve<double, 3, true, -1, -1> spine;
+    create_nurbs_circle(center, u_dir, v_dir, radius, start_angles, end_angles, spine);
+
+    Eigen::Vector<double, 3> x_dir{0, 1, 0};
+    radius = 2;
+    nurbs_curve<double, 3, true, -1, -1> profile;
+    create_nurbs_circle(center, x_dir, v_dir, radius, start_angles, end_angles, profile);
+
+    nurbs_surface<double, 3, -1, -1, -1, -1, true> surf;
+    sweep_surface<double, true, true>(profile, spine, 10, surf);
+}
+
 
 int main(int argc, char **argv)
 {
     testing::InitGoogleTest(&argc, argv);
-    ::testing::FLAGS_gtest_filter = "CreateNurbsCurve2.SkinSurface2";
+    // ::testing::FLAGS_gtest_filter = "CreateNurbsCurve2.sweep";
     return RUN_ALL_TESTS();
 }
