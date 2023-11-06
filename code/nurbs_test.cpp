@@ -806,12 +806,44 @@ TEST_F(CreateNurbsCurve2, sweep)
 
     nurbs_surface<double, 3, -1, -1, -1, -1, true> surf;
     sweep_surface<double, true, true>(profile, spine, 10, surf);
+
+    Eigen::Vector3d pos;
+    surf.point_on_surface(0, 0.63397459621556151, pos);
+    Eigen::Vector3d test_pos(-5.3106937415249327, 0, -5.9830203061437084);
+    double cp = (pos - test_pos).norm();
+    EXPECT_NEAR(cp, 0.0, DEFAULT_ERROR);
 }
+
+TEST_F(CreateNurbsCurve2, sweep2)
+{
+    Eigen::Vector<double, 3> center{0, 0, 0};
+    Eigen::Vector<double, 3> u_dir{1, 0, 0};
+    Eigen::Vector<double, 3> v_dir{0, 0, 1};
+    double radius = 10;
+    double start_angles = 0;
+    double end_angles = M_PI * 2.0;
+    nurbs_curve<double, 3, true, -1, -1> spine;
+    create_nurbs_circle(center, u_dir, v_dir, radius, start_angles, end_angles, spine);
+
+    Eigen::Vector<double, 3> x_dir{0, 1, 0};
+    radius = 2;
+    nurbs_curve<double, 3, true, -1, -1> profile;
+    create_nurbs_circle(center, x_dir, v_dir, radius, start_angles, end_angles, profile);
+
+    nurbs_surface<double, 3, -1, -1, -1, -1, true> surf;
+    sweep_surface<double, true, true>(profile, spine, 6, 10, surf);
+    Eigen::Vector3d pos;
+    surf.point_on_surface(0, 0.63397459621556151, pos);
+    Eigen::Vector3d test_pos(-5.3202257954846646, 0, -5.9357274224120795);
+    double cp = (pos - test_pos).norm();
+    EXPECT_NEAR(cp, 0.0, DEFAULT_ERROR);
+}
+
 
 
 int main(int argc, char **argv)
 {
     testing::InitGoogleTest(&argc, argv);
-    // ::testing::FLAGS_gtest_filter = "CreateNurbsCurve2.sweep";
+    ::testing::FLAGS_gtest_filter = "CreateNurbsCurve2.sweep*";
     return RUN_ALL_TESTS();
 }

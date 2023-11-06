@@ -608,7 +608,7 @@ namespace tnurbs{
     }
 
 
-    /// @brief 扫掠曲面
+    /// @brief 扫掠曲面(插值轨道曲线)
     /// @tparam T double float ...
     /// @tparam spine_is_rational 脊线是否是有理的
     /// @tparam scale_is_rational 放缩函数(nurbs)是否是有理的
@@ -745,6 +745,107 @@ namespace tnurbs{
         nurbs.set_uv_degree(profile_curve.get_degree(), spine_curve_degree);
         return ENUM_NURBS::NURBS_SUCCESS;
     }
+
+    /// @brief 扫掠曲面(不插值轨道曲线)(TODO: 对于无理的proflile, 使其生成的nurbs surface为无理的)
+    /// @tparam T double float ...
+    /// @tparam spine_is_rational 脊线是否是有理的
+    /// @tparam scale_is_rational 放缩函数(nurbs)是否是有理的
+    /// @param profile_curve 截面曲线(x轴为法向)
+    /// @param spine_curve 轨道曲线
+    /// @param v_degree 扫掠曲面v向阶数
+    /// @param K 截面曲线实例的最小值(K越大, 所得到的曲面约接近理论上的扫掠曲面)
+    /// @param nurbs 扫掠曲面
+    /// @param scale_function 放缩函数(为nullptr表示各个方向的放缩值为1, scale的中心为原点)
+    /// @return 错误码
+    template<typename T, bool profile_curve_is_rational, bool spine_is_rational, bool scale_is_rational = false>
+    ENUM_NURBS sweep_surface(const nurbs_curve<T, 3, profile_curve_is_rational, -1, -1> &profile_curve, const nurbs_curve<T, 3, spine_is_rational, -1, -1> &spine_curve, int v_degree, int K, 
+        nurbs_surface<T, 3, -1, -1, -1, -1, true> &nurbs, const nurbs_curve<T, 3, scale_is_rational, -1, -1> *scale_function = nullptr)
+    {
+        //简单等分参数域
+        std::array<T, 2> end_knots;
+        spine_curve.get_ends_knots(end_knots);
+        std::vector<T> params(K + 1);
+
+        T step = (end_knots[1] - end_knots[0]) / K;
+        params[0] = end_knots[0];
+        for (int k = 1; k < K; ++k)
+        {
+            params[k] = step * static_cast<T> (k);
+        }
+        params[K] = end_knots[1];
+        
+        std::vector<frame<T, 3>> frames;
+        eval_frames_by_project<T, spine_is_rational>(params, spine_curve, frames);
+        int profile_curve_control_points_count = profile_curve.get_control_points_count();
+        std::vector<Eigen::Matrix<T, 4, Eigen::Dynamic>> temp_control_points;
+        temp_control_points.resize(profile_curve_control_points_count);
+        for (int index = 0; index < profile_curve_control_points_count; ++index)
+        {
+            temp_control_points[index].resize(4, K + 1);
+        }
+
+        for (int k = 0; k <= K; ++k)
+        {
+            Eigen::Matrix3<T> scale_mat;
+            scale_mat.setConstant(0.0);
+            if (scale_function != nullptr)
+            {
+                Eigen::Vector3<T> scales;
+                scale_function->point_on_curve(params[k], scales);
+                scale_mat(0, 0) = scales[0];
+                scale_mat(1, 1) = scales[1];
+                scale_mat(2, 2) = scales[2];
+            }
+            else
+            {
+                scale_mat(0, 0) = 1.0;
+                scale_mat(1, 1) = 1.0;
+                scale_mat(2, 2) = 1.0;
+            }
+
+            for (int index = 0; index < profile_curve_control_points_count; ++index)
+            {
+                Eigen::Vector<T, 3> p;
+                profile_curve.get_control_point(index, p);
+                p = frames[k].basis * scale_mat * p;
+                p += frames[k].origin;
+                Eigen::Vector<T, 4> homo_p;
+                homo_p.block(0, 0, 3, 1) = p;
+                homo_p[3] = 1.0;
+                T w;
+                profile_curve.get_weight(index, w);
+                homo_p *= w;
+                temp_control_points[index].col(k) = homo_p;
+            }
+
+        }
+
+        Eigen::VectorX<Eigen::Matrix4X<T>> new_control_points;
+        new_control_points.resize(K + 1);
+        Eigen::VectorX<T> surface_v_knots;
+        for (int index = 0; index <= K; ++index)
+        {
+            new_control_points[index].resize(4, profile_curve_control_points_count);
+        }
+        for (int index = 0; index < profile_curve_control_points_count; ++index)
+        {
+            nurbs_curve<T, 4, false, -1, -1> temp_nurbs;
+            global_curve_interpolate<T, 4>(temp_control_points[index], v_degree, params, temp_nurbs);
+            if (index == 0)
+                surface_v_knots = temp_nurbs.get_knots_vector();
+            for (int i = 0; i <= K; ++i)
+            {
+                Eigen::Vector4<T> p;
+                temp_nurbs.get_control_point(i, p);
+                new_control_points[i].col(index) = p;
+            }
+        }
+        nurbs.set_control_points(new_control_points);
+        nurbs.set_uv_knots(profile_curve.get_knots_vector(), surface_v_knots);
+        nurbs.set_uv_degree(profile_curve.get_degree(), v_degree);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
 
 
 }
