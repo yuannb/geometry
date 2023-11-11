@@ -839,11 +839,49 @@ TEST_F(CreateNurbsCurve2, sweep2)
     EXPECT_NEAR(cp, 0.0, DEFAULT_ERROR);
 }
 
-
+TEST_F(CreateNurbsCurve2, GordonSurface2)
+{    
+    std::vector<nurbs_curve<double, 3, false, -1, -1> *> nurbs_curves;
+    nurbs_curves.push_back(&m_nurbs);
+    nurbs_curve<double, 3, false, -1, -1> nurbs2;
+    m_nurbs.move(Eigen::Vector3d(10, 20, 10), nurbs2);
+    nurbs_curve<double, 3, false, -1, -1> nurbs3;
+    nurbs2.move(Eigen::Vector3d(0, 10, 10), nurbs3);
+    nurbs_curves.push_back(&nurbs2);
+    nurbs_curves.push_back(&nurbs3);
+    double step = 1.0 / 3.0;
+    std::vector<nurbs_curve<double, 3, false, -1, -1> *> nurbs_curves2(4, nullptr);
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points(3, 3);
+    std::vector<double> u_params{0.0, 1.0 / 3.0, 2.0 / 3.0, 1.0};
+    std::vector<double> v_params{0.0, 0.5, 1.0};
+    for (int i = 0; i < 4; ++i)
+    {
+        double param = i * step;
+        if (i == 3)
+            param = 1.0;
+        Eigen::Vector3d p;
+        for (int j = 0; j < 3; ++j)
+        {
+            nurbs_curves[j]->point_on_curve(param, p);
+            points.col(j) = p;
+        }
+        nurbs_curve<double, 3, false, -1, -1> *temp = new nurbs_curve<double, 3, false, -1, -1>();
+        global_curve_interpolate(points, 2, v_params, *temp);   
+        nurbs_curves2[i] = temp;
+    }
+    nurbs_surface<double, 3, -1, -1, -1 ,-1, false> gsurf;
+    gordon_surface(nurbs_curves, nurbs_curves2, u_params, v_params, 1, 2, gsurf);
+    Eigen::Vector3d pos;
+    gsurf.point_on_surface(0.3, 0.63397459621556151, pos);
+    Eigen::Vector3d test_pos(16.858787768994848, 31.717702537988608, 12.679491924311229);
+    double cp = (pos - test_pos).norm();
+    EXPECT_NEAR(cp, 0.0, DEFAULT_ERROR);
+}
 
 int main(int argc, char **argv)
 {
     testing::InitGoogleTest(&argc, argv);
-    ::testing::FLAGS_gtest_filter = "CreateNurbsCurve2.sweep*";
+    
+    // ::testing::FLAGS_gtest_filter = "CreateNurbsCurve2.GordonSurface2";
     return RUN_ALL_TESTS();
 }

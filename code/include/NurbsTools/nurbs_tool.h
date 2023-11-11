@@ -3043,6 +3043,12 @@ namespace tnurbs
     ENUM_NURBS degree_elevate_curve(int t, int degree, const Eigen::VectorX<T> &knots_vector, const Eigen::Matrix<T, point_size, Eigen::Dynamic> &control_points,
             Eigen::VectorX<T> &new_knots_vector, Eigen::Matrix<T, point_size, Eigen::Dynamic> &new_control_points)
     {
+        if (t == 0)
+        {
+            new_knots_vector = knots_vector;
+            new_control_points = control_points;
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
         int knots_size = knots_vector.size();
         int ph = degree + t;
         int ph2 = ph / 2;
@@ -4084,11 +4090,13 @@ namespace tnurbs
         int knots_vector_size1 = vec1.size() - 1;
         int knots_vector_size2 = vec2.size() - 1;
         merge_vector.clear();
+        vec1_add.clear();
+        vec2_add.clear();
         for (int index = 0; index <= degree; ++index)
         {
-            if (vec1[index] != vec1[0] || vec2[index] != vec1[0])
+            if (vec1[index] != vec1[0] || vec2[index] != vec2[0])
                 return ENUM_NURBS::NURBS_ERROR;
-            if (vec1[knots_vector_size1 - index] != vec1[knots_vector_size1] || vec2[knots_vector_size2 - index] != vec1[knots_vector_size2])
+            if (vec1[knots_vector_size1 - index] != vec1[knots_vector_size1] || vec2[knots_vector_size2 - index] != vec2[knots_vector_size2])
                 return ENUM_NURBS::NURBS_ERROR;
             if (std::abs(vec1[index] - vec2[index]) > eps || std::abs(vec1[knots_vector_size1 - index] - vec2[knots_vector_size2 - index]) > eps)
                 return ENUM_NURBS::NURBS_ERROR;
@@ -4103,12 +4111,18 @@ namespace tnurbs
             T knots_delta = vec1[current_index1] - vec2[current_index2];
             if (knots_delta < -eps)
             {
-                merge_vector.push_back(vec1[current_index1]);
-                if (vec2_add.empty() == false)
-                {
-                    if (vec1[current_index1] - vec2_add.back() < eps)
-                        vec2_add.push_back(vec2_add.back());
-                }
+                if (std::abs(vec1[current_index1] - merge_vector.back()) < eps)
+                    merge_vector.push_back(merge_vector.back());
+                else
+                    merge_vector.push_back(vec1[current_index1]);
+                // if (vec2_add.empty() == false)
+                // {
+                //     if (vec1[current_index1] - vec2_add.back() < eps)
+                //         vec2_add.push_back(vec2_add.back());
+                // }
+                // else
+                if (std::abs(vec1[current_index1] - vec2[current_index2 - 1]) < eps)
+                    vec2_add.push_back(vec2[current_index2 - 1]);
                 else
                     vec2_add.push_back(vec1[current_index1]);
                 
@@ -4117,25 +4131,31 @@ namespace tnurbs
             }
             else if (knots_delta > eps)
             {
-                merge_vector.push_back(vec1[current_index2]);
-                if (vec1_add.empty() == false)
-                {
-                    if (vec2[current_index1] - vec1_add.back() < eps)
-                        vec1_add.push_back(vec1_add.back());
-                }
+                if (std::abs(vec2[current_index2] - merge_vector.back()) < eps)
+                    merge_vector.push_back(merge_vector.back());
                 else
-                    vec1_add.push_back(vec2[current_index1]);
+                    merge_vector.push_back(vec2[current_index2]);
+                // if (vec1_add.empty() == false)
+                // {
+                //     if (vec2[current_index1] - vec1_add.back() < eps)
+                //         vec1_add.push_back(vec1_add.back());
+                // }
+                // else
+                if (std::abs(vec1[current_index1 - 1] - vec2[current_index2]) < eps)
+                    vec1_add.push_back(vec2[current_index1 - 1]);
+                else
+                    vec1_add.push_back(vec2[current_index2]);
                 
                 current_index2 += 1; 
                 continue;
             }
 
             //else
-            merge_vector.push_back(vec1[current_index2]);
-            if (vec1_add.empty() == false)
-                vec1_add.push_back(vec1_add.back());
-            if (vec2_add.empty() == false)
-                vec2_add.push_back(vec2_add.back());
+            merge_vector.push_back(vec1[current_index1]);
+            // if (vec1_add.empty() == false)
+            //     vec1_add.push_back(vec1_add.back());
+            // if (vec2_add.empty() == false)
+            //     vec2_add.push_back(vec2_add.back());
             current_index2 += 1;
             current_index1 += 1; 
         }

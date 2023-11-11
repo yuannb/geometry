@@ -47,6 +47,12 @@ namespace tnurbs
         ENUM_NURBS set_control_points(Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> &points);
         ENUM_NURBS point_on_surface(T u, T v, Eigen::Vector<T, dim> &point) const;
         ENUM_NURBS set_uv_knots(const Eigen::VectorX<T> &u_knots, const Eigen::VectorX<T> &v_knots);
+        ENUM_NURBS degree_elevate(int t, ENUM_DIRECTION direction);
+        ENUM_NURBS refine_knots_vector(const Eigen::VectorX<T> &insert_knots, ENUM_DIRECTION direction);
+        ENUM_NURBS get_uv_knots_end(std::array<T, 2> &u_knots_end, std::array<T, 2> &v_knots_end) const;
+         // u = f(s) = alpha * s + beta
+        ENUM_NURBS surface_reparameter_with_linear_function(T alpha, T beta, ENUM_DIRECTION direction, 
+            nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> &new_nurbs_surface);
     };
 
 
@@ -730,6 +736,14 @@ namespace tnurbs
             m_u_degree = m_u_knots_vector.size() - m_control_points[0].cols() - 1;
         }
 
+        ENUM_NURBS get_uv_knots_end(std::array<T, 2> &u_knots_end, std::array<T, 2> &v_knots_end) const
+        {
+            u_knots_end[0] = m_u_knots_vector[0];
+            u_knots_end[1] = m_u_knots_vector[m_u_knots_vector.size() - 1];
+            v_knots_end[0] = m_v_knots_vector[0];
+            v_knots_end[1] = m_v_knots_vector[m_v_knots_vector.size() - 1];
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
 
         nurbs_surface(const nurbs_surface &surf)
         {
@@ -811,7 +825,7 @@ namespace tnurbs
             return ENUM_NURBS::NURBS_SUCCESS;
         }
 
-        ENUM_NURBS set_control_points(Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> &points)
+        ENUM_NURBS set_control_points(const Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> &points)
         {
             m_control_points = points;
             return ENUM_NURBS::NURBS_SUCCESS;
@@ -1134,6 +1148,8 @@ namespace tnurbs
 
         ENUM_NURBS refine_knots_vector(const Eigen::VectorX<T> &insert_knots, ENUM_DIRECTION direction)
         {
+            if (insert_knots.size() == 0)
+                return ENUM_NURBS::NURBS_SUCCESS;
             if (direction == ENUM_DIRECTION::V_DIRECTION)
                 reverse_uv();
             int degree = direction == ENUM_DIRECTION::V_DIRECTION ? m_v_degree : m_u_degree;

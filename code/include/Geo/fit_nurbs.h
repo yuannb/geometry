@@ -589,7 +589,7 @@ namespace tnurbs
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
-    template<typename T, int dim, ENPARAMETERIEDTYPE parameteried_type>
+    template<typename T, int dim, ENPARAMETERIEDTYPE parameteried_type = ENPARAMETERIEDTYPE::CHORD>
     ENUM_NURBS global_surface_interpolate(const Eigen::Vector<Eigen::Matrix<T, dim, Eigen::Dynamic>, Eigen::Dynamic> &points, int u_degree, int v_degree, 
             nurbs_surface<T, dim, -1, -1, -1, -1, false> &nurbs)
     {

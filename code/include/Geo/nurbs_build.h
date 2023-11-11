@@ -847,5 +847,158 @@ namespace tnurbs{
     }
 
 
+    /// @brief 戈登曲面(各曲线阶数相等)
+    /// @tparam T double, float...
+    /// @tparam dim 曲线所在欧式空间的维数
+    /// @param CK u向曲线簇(所有曲线的区间相同)
+    /// @param Cl v向曲线簇(所有曲线的区间相同)
+    /// @param u_params u向参数
+    /// @param v_params v向参数
+    /// @param pt 插值曲面u向的最低阶数
+    /// @param qt 插值曲面u向的最低阶数
+    /// @param gordon_nurbs 戈登曲面
+    /// @return 
+    template<typename T, int dim>
+    ENUM_NURBS gordon_surface(const std::vector<nurbs_curve<T, dim, false, -1, -1> *> &CK , const std::vector<nurbs_curve<T, dim, false, -1, -1> *> &Cl, const std::vector<T> &u_params,
+        const std::vector<T> &v_params, int pt, int qt, nurbs_surface<T, dim, -1, -1, -1, -1, false> &gordon_nurbs)
+    {
+        //不检测曲线是否在规定的点相交, 假设相交
+        int ck_degree = CK[0]->get_degree();
+        int ck_count = CK.size();
+        for (int index = 1; index < ck_count; ++index)
+        {
+            int temp_degree = CK[index]->get_degree();
+            if (ck_degree != temp_degree)
+                return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+        }
+        if (ck_count != static_cast<int> (v_params.size()))
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+        int cl_degree = Cl[0]->get_degree();
+        int cl_count = Cl.size();
+        for (int index = 1; index < cl_count; ++index)
+        {
+            int temp_degree = Cl[index]->get_degree();
+            if (cl_degree != temp_degree)
+                return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+        }
+        if (cl_count != static_cast<int> (u_params.size()))
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+        nurbs_surface<T, dim, -1, -1, -1, -1, false> CK_surface;
+        skin_surface<T, dim>(qt, v_params, CK, CK_surface);
+        nurbs_surface<T, dim, -1, -1, -1, -1, false> Cl_surface;
+        skin_surface<T, dim>(pt, u_params, Cl, Cl_surface);
+        Cl_surface.reverse_uv();
+        int u_degree = std::max(pt, ck_degree);
+        int v_degree = std::max(qt, cl_degree);
+        nurbs_surface<T, dim, -1, -1, -1, -1, false> interpolate_surface;
+
+        //交点
+        Eigen::VectorX<Eigen::Matrix<T, dim, Eigen::Dynamic>> points(ck_count);
+        for (int v_index = 0; v_index < ck_count; ++v_index)
+        {
+            points[v_index].resize(dim, cl_count);
+            for (int u_index = 0; u_index < cl_count; ++u_index)
+            {
+                Eigen::Vector<T, dim> p;
+                CK[v_index]->point_on_curve(u_params[u_index], p);
+                points[v_index].col(u_index) = std::move(p);
+            }
+        }
+        global_surface_interpolate<T, dim>(points, pt, qt, u_params, v_params, interpolate_surface);
+        
+        //将interpolate_surface, CK_surface, Cl_surface的区间按照interpolate_surface的区间对齐
+        std::array<T, 2> u_knots_end, v_knots_end;
+        interpolate_surface.get_uv_knots_end(u_knots_end, v_knots_end);
+
+        std::array<T, 2> temp_u_knots_end, temp_v_knots_end;
+        CK_surface.get_uv_knots_end(temp_u_knots_end, temp_v_knots_end);
+        T alpha = (temp_u_knots_end[1] - temp_u_knots_end[0]) / (u_knots_end[1] - u_knots_end[0]);
+        T beta = temp_u_knots_end[0] - alpha * u_knots_end[0];
+        nurbs_surface<T, dim, -1, -1, -1, -1, false>  temp_surface;
+        CK_surface.surface_reparameter_with_linear_function(alpha, beta, ENUM_DIRECTION::U_DIRECTION, temp_surface);
+
+        alpha = (temp_v_knots_end[1] - temp_v_knots_end[0]) / (v_knots_end[1] - v_knots_end[0]);
+        beta = temp_v_knots_end[0] - alpha * v_knots_end[0];
+        temp_surface.surface_reparameter_with_linear_function(alpha, beta, ENUM_DIRECTION::V_DIRECTION, CK_surface);
+
+        Cl_surface.get_uv_knots_end(temp_u_knots_end, temp_v_knots_end);
+        alpha = (temp_u_knots_end[1] - temp_u_knots_end[0]) / (u_knots_end[1] - u_knots_end[0]);
+        beta = temp_u_knots_end[0] - alpha * u_knots_end[0];
+        nurbs_surface<T, dim, -1, -1, -1, -1, false>  new_CK_surface;
+        Cl_surface.surface_reparameter_with_linear_function(alpha, beta, ENUM_DIRECTION::U_DIRECTION, temp_surface);
+
+        alpha = (temp_v_knots_end[1] - temp_v_knots_end[0]) / (v_knots_end[1] - v_knots_end[0]);
+        beta = temp_v_knots_end[0] - alpha * v_knots_end[0];
+        temp_surface.surface_reparameter_with_linear_function(alpha, beta, ENUM_DIRECTION::V_DIRECTION, Cl_surface);
+
+
+        //升阶
+        CK_surface.degree_elevate(u_degree - ck_degree, ENUM_DIRECTION::U_DIRECTION);
+        CK_surface.degree_elevate(v_degree - qt, ENUM_DIRECTION::V_DIRECTION);
+
+        Cl_surface.degree_elevate(u_degree - pt, ENUM_DIRECTION::U_DIRECTION);
+        Cl_surface.degree_elevate(v_degree - cl_degree, ENUM_DIRECTION::V_DIRECTION);
+
+        interpolate_surface.degree_elevate(u_degree - pt, ENUM_DIRECTION::U_DIRECTION);
+        interpolate_surface.degree_elevate(v_degree - qt, ENUM_DIRECTION::V_DIRECTION);
+
+        //合并节点矢量
+        Eigen::VectorX<T> CK_u_knots_vector = CK_surface.get_u_knots();
+        Eigen::VectorX<T> Cl_u_knots_vector = Cl_surface.get_u_knots();
+        Eigen::VectorX<T> int_u_knots_vector = interpolate_surface.get_u_knots();
+        std::vector<T> knots_vector1_add;
+        std::vector<T> knots_vector2_add;
+        std::vector<T> u_merged_knots;
+        merge_two_knots_vector<T>(u_degree, CK_u_knots_vector, Cl_u_knots_vector, u_merged_knots, knots_vector1_add, knots_vector2_add);
+        Eigen::VectorX<T> temp = Eigen::Map<Eigen::VectorX<T>>(u_merged_knots.data(), u_merged_knots.size());
+        merge_two_knots_vector<T>(u_degree, temp, int_u_knots_vector, u_merged_knots, knots_vector1_add, knots_vector2_add);
+
+        Eigen::VectorX<T> CK_v_knots_vector = CK_surface.get_v_knots();
+        Eigen::VectorX<T> Cl_v_knots_vector = Cl_surface.get_v_knots();
+        Eigen::VectorX<T> int_v_knots_vector = interpolate_surface.get_v_knots();
+        std::vector<T> v_merged_knots;
+        merge_two_knots_vector<T>(v_degree, CK_v_knots_vector, Cl_v_knots_vector, v_merged_knots, knots_vector1_add, knots_vector2_add);
+        Eigen::VectorX<T> temp2 = Eigen::Map<Eigen::VectorX<T>>(v_merged_knots.data(), v_merged_knots.size());
+        merge_two_knots_vector<T>(v_degree, temp2, int_v_knots_vector, v_merged_knots, knots_vector1_add, knots_vector2_add);
+
+        //加细
+        std::vector<T> temp_vec;
+        Eigen::VectorX<T> u_merged_knots_vector = Eigen::Map<Eigen::VectorX<T>>(u_merged_knots.data(), u_merged_knots.size());
+        merge_two_knots_vector<T>(u_degree, CK_u_knots_vector, u_merged_knots_vector, temp_vec, knots_vector1_add, knots_vector2_add);
+        Eigen::VectorX<T> refine_knots = Eigen::Map<Eigen::VectorX<T>>(knots_vector1_add.data(), knots_vector1_add.size());
+        CK_surface.refine_knots_vector(refine_knots, ENUM_DIRECTION::U_DIRECTION);
+        merge_two_knots_vector<T>(u_degree, Cl_u_knots_vector, u_merged_knots_vector, temp_vec, knots_vector1_add, knots_vector2_add);
+        refine_knots = Eigen::Map<Eigen::VectorX<T>>(knots_vector1_add.data(), knots_vector1_add.size());
+        Cl_surface.refine_knots_vector(refine_knots, ENUM_DIRECTION::U_DIRECTION);
+        merge_two_knots_vector<T>(u_degree, int_u_knots_vector, u_merged_knots_vector, temp_vec, knots_vector1_add, knots_vector2_add);
+        refine_knots = Eigen::Map<Eigen::VectorX<T>>(knots_vector1_add.data(), knots_vector1_add.size());
+        interpolate_surface.refine_knots_vector(refine_knots, ENUM_DIRECTION::U_DIRECTION);
+
+        Eigen::VectorX<T> v_merged_knots_vector = Eigen::Map<Eigen::VectorX<T>>(v_merged_knots.data(), v_merged_knots.size());
+        merge_two_knots_vector<T>(v_degree, CK_v_knots_vector, v_merged_knots_vector, temp_vec, knots_vector1_add, knots_vector2_add);
+        refine_knots = Eigen::Map<Eigen::VectorX<T>>(knots_vector1_add.data(), knots_vector1_add.size());
+        CK_surface.refine_knots_vector(refine_knots, ENUM_DIRECTION::V_DIRECTION);
+        merge_two_knots_vector<T>(v_degree, Cl_v_knots_vector, v_merged_knots_vector, temp_vec, knots_vector1_add, knots_vector2_add);
+        refine_knots = Eigen::Map<Eigen::VectorX<T>>(knots_vector1_add.data(), knots_vector1_add.size());
+        Cl_surface.refine_knots_vector(refine_knots, ENUM_DIRECTION::V_DIRECTION);
+        merge_two_knots_vector<T>(v_degree, int_v_knots_vector, v_merged_knots_vector, temp_vec, knots_vector1_add, knots_vector2_add);
+        refine_knots = Eigen::Map<Eigen::VectorX<T>>(knots_vector1_add.data(), knots_vector1_add.size());
+        interpolate_surface.refine_knots_vector(refine_knots, ENUM_DIRECTION::V_DIRECTION);
+
+
+        Eigen::VectorX<Eigen::Matrix<T, dim, Eigen::Dynamic>> new_control_points = interpolate_surface.get_control_points();
+        Eigen::VectorX<Eigen::Matrix<T, dim, Eigen::Dynamic>> points1 = Cl_surface.get_control_points();
+        Eigen::VectorX<Eigen::Matrix<T, dim, Eigen::Dynamic>> points2 = CK_surface.get_control_points();
+        int v_count = new_control_points.rows();
+        for (int v_index = 0; v_index < v_count; ++v_index)
+        {
+            new_control_points[v_index] = points1[v_index] + points2[v_index] - new_control_points[v_index];
+        }
+        gordon_nurbs.set_control_points(new_control_points);
+        gordon_nurbs.set_uv_degree(u_degree, v_degree);
+        gordon_nurbs.set_uv_knots(u_merged_knots_vector, v_merged_knots_vector);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
 
 }
