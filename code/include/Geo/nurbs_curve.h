@@ -2371,7 +2371,10 @@ namespace tnurbs
             int points_count = m_control_points.cols();
             for (int index = 0; index < points_count; ++index)
             {
-                new_control_points.template block<dim, 1>(0, index) += translate_vector;
+                T w = 1.0;
+                if constexpr (is_rational == true)
+                    w = new_control_points(dim, index);
+                new_control_points.template block<dim, 1>(0, index) += (translate_vector * w);
             }
             new_nurbs.set_control_points(new_control_points);
             new_nurbs.set_degree(m_degree);

@@ -850,14 +850,14 @@ namespace tnurbs{
     /// @brief 戈登曲面(各曲线阶数相等)
     /// @tparam T double, float...
     /// @tparam dim 曲线所在欧式空间的维数
-    /// @param CK u向曲线簇(所有曲线的区间相同)
-    /// @param Cl v向曲线簇(所有曲线的区间相同)
+    /// @param CK u向曲线簇(所有曲线的区间相同, 阶数相同)
+    /// @param Cl v向曲线簇(所有曲线的区间相同, 阶数相同)
     /// @param u_params u向参数
     /// @param v_params v向参数
     /// @param pt 插值曲面u向的最低阶数
     /// @param qt 插值曲面u向的最低阶数
     /// @param gordon_nurbs 戈登曲面
-    /// @return 
+    /// @return 错误码
     template<typename T, int dim>
     ENUM_NURBS gordon_surface(const std::vector<nurbs_curve<T, dim, false, -1, -1> *> &CK , const std::vector<nurbs_curve<T, dim, false, -1, -1> *> &Cl, const std::vector<T> &u_params,
         const std::vector<T> &v_params, int pt, int qt, nurbs_surface<T, dim, -1, -1, -1, -1, false> &gordon_nurbs)
@@ -998,6 +998,116 @@ namespace tnurbs{
         gordon_nurbs.set_uv_degree(u_degree, v_degree);
         gordon_nurbs.set_uv_knots(u_merged_knots_vector, v_merged_knots_vector);
         return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    template<typename T, int dim, bool is_rational>
+    ENUM_NURBS coons_surface(const std::array<nurbs_curve<T, dim, is_rational, -1, -1> *, 2> CK, const std::array<nurbs_curve<T, dim, is_rational, -1, -1> *, 2> Cl, nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> &coons_nurbs)
+    {
+        if constexpr (is_rational == false)
+        {
+            std::vector<nurbs_curve<T, dim, false, -1, -1> *> row_curve{CK[0], CK[1]};
+            std::vector<nurbs_curve<T, dim, false, -1, -1> *> col_curve{Cl[0], Cl[1]};
+            std::array<T, 2> row_ends_knots;
+            CK[0]->get_ends_knots(row_ends_knots);
+            std::vector<T> u_params{row_ends_knots[0], row_ends_knots[1]}; 
+            Cl[0]->get_ends_knots(row_ends_knots);
+            std::vector<T> v_params{row_ends_knots[0], row_ends_knots[1]};
+            return gordon_surface<T, dim>(row_curve, col_curve, u_params, v_params, 1, 1, coons_nurbs);
+        }
+        else
+        {
+            T u0_low_weight, u1_low_weight, u0_high_weight, u1_high_weight;
+            CK[0]->get_weight(0, u0_low_weight);
+            CK[1]->get_weight(0, u1_low_weight);
+            int CK0_control_points_count = CK[0]->get_control_points_count();
+            int CK1_control_points_count = CK[0]->get_control_points_count();
+            CK[0]->get_weight(CK0_control_points_count - 1, u0_high_weight);
+            CK[1]->get_weight(CK1_control_points_count - 1, u1_high_weight);
+            std::array<T, 2> u_ends_knots, v_ends_knots;
+            CK[0]->get_ends_knots(u_ends_knots);
+            Cl[0]->get_ends_knots(v_ends_knots);
+            std::vector<T> u_params(u_ends_knots.begin(), u_ends_knots.end());
+            std::vector<T> v_params(v_ends_knots.begin(), v_ends_knots.end());
+            int v_degree = Cl[0]->get_degree();
+
+            T v0_low_weight, v1_low_weight, v0_high_weight, v1_high_weight;
+            Cl[0]->get_weight(0, v0_low_weight);
+            Cl[1]->get_weight(0, v1_low_weight);
+            int Cl0_control_points_count = Cl[0]->get_control_points_count();
+            int Cl1_control_points_count = Cl[0]->get_control_points_count();
+            Cl[0]->get_weight(Cl0_control_points_count - 1, v0_high_weight);
+            Cl[1]->get_weight(Cl1_control_points_count - 1, v1_high_weight);
+            T alpha, beta, gamma, delta;
+            Eigen::Matrix2<T> mat;
+            nurbs_curve<T, dim, true, -1, -1> new_col_curve0;
+            if (std::abs(v0_low_weight / u0_low_weight - v0_high_weight / u1_low_weight) < MIN_WEIGHT<T>::value)
+            {
+                T x = u0_low_weight / v0_low_weight;
+                auto points = Cl[0]->get_control_points();
+                points *= x;
+                new_col_curve0.set_control_points(points);
+                new_col_curve0.set_knots_vector(Cl[0]->get_knots_vector());
+                new_col_curve0.set_degree(Cl[0]->get_degree());
+            }
+            else
+            {
+                reparameter_map<T>(v_degree, v_ends_knots[0], v_ends_knots[1], v0_low_weight, v0_high_weight, u0_low_weight, u1_low_weight, alpha, beta, gamma, delta);   
+                mat(0, 0) = alpha;
+                mat(0, 1) = beta;
+                mat(1, 0) = gamma;
+                mat(1, 1) = delta;
+                Cl[0]->curve_reparameter_with_linear_function(mat, new_col_curve0);
+            }
+            nurbs_curve<T, dim, true, -1, -1> new_col_curve1;
+            if (std::abs(v1_low_weight / u0_high_weight - v1_high_weight / u1_high_weight) < MIN_WEIGHT<T>::value)
+            {
+                T x = u0_high_weight / v1_low_weight;
+                auto points = Cl[1]->get_control_points();
+                points *= x;
+                new_col_curve1.set_control_points(points);
+                new_col_curve1.set_knots_vector(Cl[1]->get_knots_vector());
+                new_col_curve1.set_degree(Cl[1]->get_degree());
+            }
+            else
+            {
+                reparameter_map<T>(v_degree, v_ends_knots[0], v_ends_knots[1], v1_low_weight, v1_high_weight, u0_high_weight, u1_high_weight, alpha, beta, gamma, delta);
+                mat(0, 0) = alpha;
+                mat(0, 1) = beta;
+                mat(1, 0) = gamma;
+                mat(1, 1) = delta;
+                
+                Cl[1]->curve_reparameter_with_linear_function(mat, new_col_curve1);
+            }
+            
+            nurbs_curve<T, dim + 1, false, -1, -1> c0;
+            c0.set_control_points(CK[0]->get_control_points());
+            c0.set_knots_vector(CK[0]->get_knots_vector());
+            c0.set_degree(CK[0]->get_degree());
+
+            nurbs_curve<T, dim + 1, false, -1, -1> c1;
+            c1.set_control_points(CK[1]->get_control_points());
+            c1.set_knots_vector(CK[1]->get_knots_vector());
+            c1.set_degree(CK[1]->get_degree());
+            std::vector<nurbs_curve<T, dim + 1, false, -1, -1>*> new_cks{&c0, &c1};
+
+            nurbs_curve<T, dim + 1, false, -1, -1> r0;
+            r0.set_control_points(new_col_curve0.get_control_points());
+            r0.set_knots_vector(new_col_curve0.get_knots_vector());
+            r0.set_degree(new_col_curve0.get_degree());
+
+            nurbs_curve<T, dim + 1, false, -1, -1> r1;
+            r1.set_control_points(new_col_curve1.get_control_points());
+            r1.set_knots_vector(new_col_curve1.get_knots_vector());
+            r1.set_degree(new_col_curve1.get_degree());
+            std::vector<nurbs_curve<T, dim + 1, false, -1, -1>*> new_cls{&r0, &r1};
+            nurbs_surface<T, dim + 1, -1, -1, -1, -1, false> temp_surface;
+            gordon_surface<T, dim + 1>(new_cks, new_cls, u_params, v_params, 1, 1, temp_surface);
+            coons_nurbs.set_control_points(temp_surface.get_control_points());
+            coons_nurbs.set_uv_degree(temp_surface.get_u_degree(), temp_surface.get_v_degree());
+            coons_nurbs.set_uv_knots(temp_surface.get_u_knots(), temp_surface.get_v_knots());
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+        return ENUM_NURBS::NURBS_ERROR;
     }
 
 

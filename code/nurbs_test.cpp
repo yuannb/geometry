@@ -878,10 +878,64 @@ TEST_F(CreateNurbsCurve2, GordonSurface2)
     EXPECT_NEAR(cp, 0.0, DEFAULT_ERROR);
 }
 
+
+TEST_F(CreateNurbsCurve2, Coons1)
+{    
+    
+    Eigen::Vector<double, 3> center{0, 0, 0};
+    Eigen::Vector<double, 3> u_dir{1, 0, 0};
+    Eigen::Vector<double, 3> v_dir{0, 1, 0};
+    double radius = 10;
+    double start_angles = 0;
+    double end_angles = M_PI + 0.78;
+    nurbs_curve<double, 3, true, -1, -1> nurbs;
+    create_nurbs_circle(center, u_dir, v_dir, radius, start_angles, end_angles, nurbs);
+
+    std::vector<nurbs_curve<double, 3, true, -1, -1> *> nurbs_curves(3, nullptr);
+    nurbs_curves[0] = &nurbs;
+    nurbs_curve<double, 3, true, -1, -1> nurbs2;
+    nurbs.move(Eigen::Vector3d(10, 20, 10), nurbs2);
+    nurbs_curves[1] = &nurbs2;
+    nurbs_curve<double, 3, true, -1, -1> nurbs3;
+    nurbs2.move(Eigen::Vector3d(0, 10, 0), nurbs3);
+    nurbs_curves[2] = &nurbs3;
+    std::array<nurbs_curve<double, 3, true, -1, -1> *, 2> nurbs_curves2;
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points(3, 3);
+    std::vector<double> u_params{0.0, 1.0};
+    std::vector<double> v_params{0.0, 1.0};
+    std::vector<double> params{0, 0.5, 1.0};
+    for (int i = 0; i < 2; ++i)
+    {
+        Eigen::Vector3d p;
+        for (int j = 0; j < 3; ++j)
+        {
+            nurbs_curves[j]->point_on_curve(v_params[i], p);
+            points.col(j) = p;
+        }
+        
+        nurbs_curve<double, 3, false, -1, -1> temp;
+        global_curve_interpolate(points, 2, params, temp);
+        nurbs_curve<double, 3, true, -1, -1> *temp1 = new nurbs_curve<double, 3, true, -1, -1>();
+        temp.to_rational_nurbs(*temp1);
+        nurbs_curves2[i] = temp1;
+    }
+    nurbs_surface<double, 3, -1, -1, -1 ,-1, true> csurf;
+    std::array<nurbs_curve<double, 3, true, -1, -1>*, 2> new_nurbs{nurbs_curves[0], nurbs_curves[2]};
+    coons_surface(new_nurbs, nurbs_curves2, csurf);
+    delete nurbs_curves2[0];
+    delete nurbs_curves2[1];
+    Eigen::Vector3d pos;
+    csurf.point_on_surface(0.3, 0.63397459621556151, pos);
+    Eigen::Vector3d test_pos(14.939318509409294, 33.097216638049076, 11.159567219564558);
+    double cp = (pos - test_pos).norm();
+    EXPECT_NEAR(cp, 0.0, DEFAULT_ERROR);
+}
+
+
 int main(int argc, char **argv)
 {
     testing::InitGoogleTest(&argc, argv);
     
-    // ::testing::FLAGS_gtest_filter = "CreateNurbsCurve2.GordonSurface2";
+    ::testing::FLAGS_gtest_filter = "CreateNurbsCurve2.Coons1";
     return RUN_ALL_TESTS();
 }

@@ -4351,6 +4351,110 @@ namespace tnurbs
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
+    template<typename T>
+    ENUM_NURBS nth_root_using_binary_serach(T x, int n, T &root, T eps = TDEFAULT_ERROR<T>::value)
+    {
+        if (n == 2)
+        {
+           root = std::sqrt(x);
+           return ENUM_NURBS::NURBS_SUCCESS;
+        }
+        else if (n == 3)
+        {
+            root = std::cbrt(x);
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+        if (n <= 0 || eps < 0)
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+        T low = x < 0 ? x : 0;
+        T high = x < 0 ? 0 : x;
+        if (low < 0 && n % 2 == 0)
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+        T x1 = std::pow(low, n);
+
+        if (std::abs(x1 - x) < eps)
+        {
+            root = low;
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+        x1 = std::pow(high, n);
+        if (std::abs(x1 - x) < eps)
+        {
+            root = high;
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+        T mid = (low + high) / 2.0;
+        x1 = std::pow(mid, n);
+        while (std::abs(x1 - x) > eps)
+        {
+            if (x1 > x)
+            {
+                high = x1;
+            }
+            else
+            {
+                low = x1;
+            }
+            mid = (high + low) / 2.0;
+            x1 = std::pow(mid, n);
+        }
+        root = mid;
+        return ENUM_NURBS::NURBS_SUCCESS; 
+    }
+
+
+    /// @brief 计算一次有理函数重新参数所需要的alpha, beta, gamma, delta. 使得low和high重新参数化之后还是low, high. w0和w1重新参数化之后是new_w0和new_w1
+    /// @tparam T double, float
+    /// @param degree 阶数
+    /// @param low 参数low
+    /// @param high 参数high
+    /// @param w0 权重w0
+    /// @param w1 权重w1
+    /// @param new_w0 新权重w0
+    /// @param new_w1 新权重w1
+    /// @param alpha 输出参数
+    /// @param beta 输出参数
+    /// @param gamma 输出参数
+    /// @param delta 输出参数
+    /// @return 错误码
+    template<typename T>
+    ENUM_NURBS reparameter_map(int degree, T low, T high, T w0, T w1, T new_w0, T new_w1, T &alpha, T &beta, T &gamma, T &delta)
+    {
+        if (w0 < MIN_WEIGHT<T>::value || new_w0 < MIN_WEIGHT<T>::value)
+        {
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+        }
+        if (high <= low)
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+        T e0, e1;
+        nth_root_using_binary_serach<T>(new_w0 / w0, degree, e0);
+        nth_root_using_binary_serach<T>(new_w1 / w1, degree, e1);
+        if (std::abs(e1 - e0) < MIN_WEIGHT<T>::value)
+            return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+        T l = (e0 * low - e1 * high) / (e1 - e0);
+        Eigen::Matrix2<T> mat;
+        mat(0, 0) = low;
+        mat(0, 1) = low * low;
+        mat(1, 0) = high;
+        mat(1, 1) = high * high;
+        Eigen::JacobiSVD<Eigen::Matrix2<T>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(mat);
+        int rankMat = matSvd.rank();
+        if (rankMat != 2)
+        {
+            return ENUM_NURBS::NURBS_ERROR;
+        }
+        Eigen::Vector2<T> vec{l * low + 1.0, l * high + 1.0};
+        Eigen::Vector2<T> intersect_params = matSvd.solve(vec);
+        T temp = (low + intersect_params[0] / intersect_params[1]);
+        temp /= (1.0 - (intersect_params[0] / intersect_params[1]) * l);
+        beta = e0 * temp;
+        alpha = l * beta;
+        gamma = intersect_params[1] * beta;
+        delta = intersect_params[0] * beta;
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+
 }
 
 
