@@ -290,6 +290,23 @@ namespace tnurbs
         outfile2.close();
         return ENUM_NURBS::NURBS_SUCCESS;
     }
+
+    ENUM_NURBS save_obj(const mesh_helper<nurbs_surface<double, 3, -1, -1, -1, -1, true>> *mesht, const char *path)
+    {
+        std::ofstream outfile2(path);
+        for (auto point : mesht->ders)
+        {
+            outfile2 << "v " << point(0, 0)[0] << " " <<
+            point(0, 0)[1] << " " << point(0, 0)[2] << std::endl;
+        }
+        for (auto index : mesht->point_indexs)
+        {
+            outfile2 << "f " << index[0] + 1 << " " <<
+            index[1] + 1 << " " << index[2] + 1 << " " << index[3] + 1 << std::endl;
+        }
+        outfile2.close();
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
 }
 
 

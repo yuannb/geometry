@@ -9,6 +9,7 @@
 #include <cmath>
 #include "debug_used.h"
 #include "nurbs_build.h"
+#include "discret.h"
 // #include <memory>
 using namespace tnurbs;
 
@@ -929,13 +930,106 @@ TEST_F(CreateNurbsCurve2, Coons1)
     Eigen::Vector3d test_pos(14.939318509409294, 33.097216638049076, 11.159567219564558);
     double cp = (pos - test_pos).norm();
     EXPECT_NEAR(cp, 0.0, DEFAULT_ERROR);
+
+    // mesh_helper<nurbs_surface<double, 3, -1, -1, -1 ,-1, true>> disc;
+    // disc_surface(&csurf, disc, TDEFAULT_ERROR<double>::value, 20.0, 0.1, 0.1);
+    // int i = 0;    
+
+
 }
+
+TEST_F(CreateNurbsCurve2, FindNearstPoint1)
+{    
+    
+    Eigen::VectorX<double> u_knots_vector(7);
+    u_knots_vector<< 0, 0, 0, 2, 5, 5, 5;
+    Eigen::VectorX<double> v_knots_vector(7);
+    v_knots_vector << 0, 0, 0, 1, 3, 3, 3;
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points1(4, 4);
+    points1 << 0, 0, 0, 0,
+               2, 6, 2, 8,
+               5, 4, 0, 2,
+               1, 2, 1, 2;
+
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points2(4, 4);
+    points2 << 4, 12, 4, 8,
+               6, 24, 10, 28,
+               8, 12, 0, 0,
+               2, 6,  2, 4;
+
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points3(4, 4);
+    points3 << 4, 8, 4, 12,
+               2, 6, 4, 12,
+               4, 4, 0, -3,
+               1, 2, 1, 3;
+
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points4(4, 4);
+    points4 << 4, 8, 4, 12,
+               2, 6, 4, 12,
+               4, 8, 4, 12,
+               1, 2, 1, 3;
+
+    Eigen::VectorX<Eigen::Matrix<double, 4, Eigen::Dynamic>> control_points(4);
+    control_points(0) = points1;
+    control_points(1) = points2;
+    control_points(2) = points3;
+    control_points(3) = points4;
+    nurbs_surface<double, 3, -1, -1, -1, -1, true> test_surface(u_knots_vector, v_knots_vector, control_points);
+
+
+    std::vector<Eigen::Vector3d> pointss;
+    std::vector<Eigen::Vector3d> points22;
+    Eigen::Vector<Eigen::Vector3d, 2> normals;
+    normals[0] = Eigen::Vector3d(0, 0, 1);
+    normals[1] = Eigen::Vector3d(0, 0, -1);
+    for (int i = 30; i < 35; ++i)
+    {
+        for (int j = 50; j < 55; ++j)
+        {
+            std::cout << i << " " << j << std::endl;
+            Eigen::Vector3d point;
+            test_surface.point_on_surface(0.05 * i, 0.03 * j, point);
+            Eigen::Vector3d p = point + 1 * normals[i % 2], nearst_point;
+            pointss.push_back(p);
+        }
+
+    }
+    std::vector<Eigen::Vector3d> nearst_points;
+    std::vector<double> us, vs;
+    clock_t start_time = clock();
+    find_nearst_point_on_surface(test_surface, pointss, us, vs, nearst_points);
+    clock_t end_time=clock();
+    std::cout << "The run time is: " <<(double)(end_time - start_time) / CLOCKS_PER_SEC << "s" << std::endl;
+    
+    clock_t start_time2 = clock();
+    for (int i = 30; i < 35; ++i)
+    {
+        for (int j = 50; j < 55; ++j)
+        {
+            Eigen::Vector3d point;
+            test_surface.point_on_surface(0.05 * i, 0.03 * j, point);
+            Eigen::Vector3d p = point + 1 * normals[i % 2], nearst_point;
+            double u_p, v_p;
+            test_surface.find_nearst_point_on_surface(p, u_p, v_p, nearst_point);
+            double d1 = (nearst_point - p).norm();
+            double d2 = (nearst_points[(i - 30) * 5 + (j - 50)] - p).norm();
+            double dis = d1 - d2;
+            std::cout << dis << std::endl;
+        }
+    } 
+    clock_t end_time2 = clock();
+    std::cout << "The run time is2 : " <<(double)(end_time2 - start_time2) / CLOCKS_PER_SEC << "s" << std::endl;
+    int i = 0;
+
+}
+
+  
 
 
 int main(int argc, char **argv)
 {
     testing::InitGoogleTest(&argc, argv);
     
-    ::testing::FLAGS_gtest_filter = "CreateNurbsCurve2.Coons1";
+    ::testing::FLAGS_gtest_filter = "CreateNurbsCurve2.FindNearstPoint1";
     return RUN_ALL_TESTS();
 }

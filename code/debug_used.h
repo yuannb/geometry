@@ -4,6 +4,7 @@
 #include <Eigen/Dense>
 #include "nurbs_curve.h"
 #include "nurbs_surface.h" 
+#include "discret.h"
 namespace tnurbs
 {
     void printEigenVector(const Eigen::VectorX<double> &vec);
@@ -38,5 +39,7 @@ namespace tnurbs
     ENUM_NURBS save_obj(const nurbs_surface<double, 3, -1, -1, -1, -1, false> &surf, const char *path);
 
     ENUM_NURBS save_obj(const nurbs_surface<double, 3, -1, -1, -1, -1, true> &surf, const char *path);
+
+    ENUM_NURBS save_obj(const mesh_helper<nurbs_surface<double, 3, -1, -1, -1, -1, true>> *surf, const char *path);
 } // namespace tnurbs
 

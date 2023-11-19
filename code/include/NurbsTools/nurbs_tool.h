@@ -14,6 +14,7 @@
 #define ANGLE_ERROR       1e-3
 #define MAX_ITERATE_DEEP 1e5
 #define MAX_SURFACE_ITERATE_DEEP 100
+#define SURFACE_ITERATE_DEEP 10
 #define MAX_ITERATE_STEP    1e-3
 #define INDEX_IS_OUTSIDE_OF_KNOTS_VECTOR    -1
 
@@ -4403,6 +4404,8 @@ namespace tnurbs
     }
 
 
+
+    ///此函数有问题, 以后再改吧
     /// @brief 计算一次有理函数重新参数所需要的alpha, beta, gamma, delta. 使得low和high重新参数化之后还是low, high. w0和w1重新参数化之后是new_w0和new_w1
     /// @tparam T double, float
     /// @param degree 阶数
@@ -4454,6 +4457,55 @@ namespace tnurbs
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
+    template<typename T>
+    int konts_multiple(T &u, const Eigen::VectorX<T> knots, int degree, int &idx, T eps = KNOTS_EPS<T>::value)
+    {
+        
+        find_span<T, ENUM_LIMITDIRECTION::LEFT>(u, degree, knots, idx);
+        if (u - knots[idx] < eps)
+        {
+            u = knots[idx];
+            int mul = 1;
+            for (int index = idx - 1; index >= 0; --index)
+            {
+                if (knots[index] == knots[index + 1])
+                {
+                    mul += 1;
+                    idx -= 1;
+                }
+                else
+                    break;
+            }
+            return mul;
+        }
+            
+        else if (knots[idx + 1] - u < eps)
+        {
+            u = knots[idx + 1];
+            idx += 1;
+
+            int knots_count = knots.size();
+            int mul = 1;
+            for (int index = idx + 1; index < knots_count; ++index)
+            {
+                if (knots[index] == knots[index - 1])
+                    mul += 1;
+                else
+                {
+                    break;
+                }
+            }
+            return mul;
+        }
+            
+        else
+        {
+            idx += 1;
+            return 0;
+        }
+
+        return -1;
+    }
 
 }
 
