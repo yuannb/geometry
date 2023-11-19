@@ -128,6 +128,7 @@ namespace tnurbs
     };
 
 
+    //以point为奇异点, 包含box的锥;
     template<typename T, int dim>
     cone<T, dim> point_box(const Box<T, dim> &box, const Eigen::Vector<T, dim> &point)
     {

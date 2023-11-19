@@ -3071,7 +3071,9 @@ namespace tnurbs
                 bezalfs(i, j) = bezalfs(ph - i, degree - j);
         }
         int knots_num;
-        find_knots_num(knots_vector, knots_num);
+        ENUM_NURBS flag = find_knots_num(knots_vector, knots_num);
+        if (flag != ENUM_NURBS::NURBS_SUCCESS)
+            return ENUM_NURBS::NURBS_ERROR;
         new_knots_vector.resize(knots_size + knots_num * t);
         new_control_points.resize(point_size, knots_size - degree - 1 + (knots_num - 1) * t);
         T ua = knots_vector[0];

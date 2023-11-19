@@ -931,6 +931,13 @@ TEST_F(CreateNurbsCurve2, Coons1)
     double cp = (pos - test_pos).norm();
     EXPECT_NEAR(cp, 0.0, DEFAULT_ERROR);
 
+    Eigen::MatrixX<nurbs_surface<double, 3, -1, -1, -1, -1, true> *> segment;
+
+    csurf.decompose_to_nurbs(segment);
+    auto s1 = segment(0, 0);
+    auto s2 = segment(1, 0);
+    auto s3 = segment(2, 0);
+    ASSERT_TRUE(true);
     // mesh_helper<nurbs_surface<double, 3, -1, -1, -1 ,-1, true>> disc;
     // disc_surface(&csurf, disc, TDEFAULT_ERROR<double>::value, 20.0, 0.1, 0.1);
     // int i = 0;    
@@ -1019,8 +1026,20 @@ TEST_F(CreateNurbsCurve2, FindNearstPoint1)
     } 
     clock_t end_time2 = clock();
     std::cout << "The run time is2 : " <<(double)(end_time2 - start_time2) / CLOCKS_PER_SEC << "s" << std::endl;
-    int i = 0;
+    // int i = 0;
 
+}
+
+TEST_F(CreateNurbsCurve2, DiscCurve)
+{    
+    std::vector<nurbs_curve<double, 3, false, -1, -1>*> curves;
+    Eigen::VectorX<double> insert_knots(1);
+    insert_knots << 0.2;
+    m_nurbs.refine_knots_vector(insert_knots);
+    m_nurbs.decompose_to_nurbs(curves);
+    curve_mesh_helper<nurbs_curve<double, 3, false, -1, -1>> mh;
+    disc_curve(&m_nurbs, mh, TDEFAULT_ERROR<double>::value, 20.0, 0.1, 0.1);
+    ASSERT_TRUE(true);
 }
 
   
@@ -1030,6 +1049,6 @@ int main(int argc, char **argv)
 {
     testing::InitGoogleTest(&argc, argv);
     
-    ::testing::FLAGS_gtest_filter = "CreateNurbsCurve2.FindNearstPoint1";
+    ::testing::FLAGS_gtest_filter = "CreateNurbsCurve2.Coons1";
     return RUN_ALL_TESTS();
 }

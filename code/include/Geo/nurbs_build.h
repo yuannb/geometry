@@ -716,7 +716,8 @@ namespace tnurbs{
                 homo_p.block(0, 0, 3, 1) = p;
                 homo_p[3] = 1.0;
                 T w;
-                profile_curve.get_weight(index, w);
+                if (profile_curve.get_weight(index, w) != ENUM_NURBS::NURBS_SUCCESS)
+                    return ENUM_NURBS::NURBS_ERROR;
                 homo_p *= (w * sw);
                 temp_control_points[index].col(k) = homo_p;
             }

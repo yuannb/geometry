@@ -2035,47 +2035,47 @@ void test_decompose_vector_3()
 
 }
 
-void test_decompose_vector_4()
-{
-    Eigen::Vector<double, 3> v1{0, 0, 0};
-    Eigen::Vector<double, 3> v2{1, 0, 0};
-    Eigen::Vector<double, 3> v3{1, 1, 0};
-    Eigen::Vector<double, 3> v4{2, 2, 0};
-    Eigen::Matrix<double, 3, 4> mat;
-    mat.col(0) = v1;
-    mat.col(1) = v2;
-    mat.col(2) = v3;
-    mat.col(3) = v4;
+// void test_decompose_vector_4()
+// {
+//     Eigen::Vector<double, 3> v1{0, 0, 0};
+//     Eigen::Vector<double, 3> v2{1, 0, 0};
+//     Eigen::Vector<double, 3> v3{1, 1, 0};
+//     Eigen::Vector<double, 3> v4{2, 2, 0};
+//     Eigen::Matrix<double, 3, 4> mat;
+//     mat.col(0) = v1;
+//     mat.col(1) = v2;
+//     mat.col(2) = v3;
+//     mat.col(3) = v4;
 
-    Eigen::Vector<double, 7> knots_vector{0, 0, 0, 0.4, 1, 1, 1};
-    nurbs_curve<double, 3, false, 4, 2> curve1(knots_vector, mat);
-    std::vector<bezier_curve<double, 3, false, 3> *> beziers_curves;
-    curve1.decompose_to_bezier(beziers_curves);
-    std::vector<std::vector<Eigen::Vector3d>>  pointss(4);
-    for (int j = 0; j < 2; ++j)
-    {
-        for (int i = 0; i < 100; ++i)
-        {
-            Eigen::Vector3d point;
-            beziers_curves[j]->point_on_curve((double)0.01 * i, point);
-            pointss[j].push_back(point);
-        }
-    }
+//     Eigen::Vector<double, 7> knots_vector{0, 0, 0, 0.4, 1, 1, 1};
+//     nurbs_curve<double, 3, false, 4, 2> curve1(knots_vector, mat);
+//     std::vector<bezier_curve<double, 3, false, 3> *> beziers_curves;
+//     curve1.decompose_to_bezier(beziers_curves);
+//     std::vector<std::vector<Eigen::Vector3d>>  pointss(4);
+//     for (int j = 0; j < 2; ++j)
+//     {
+//         for (int i = 0; i < 100; ++i)
+//         {
+//             Eigen::Vector3d point;
+//             beziers_curves[j]->point_on_curve((double)0.01 * i, point);
+//             pointss[j].push_back(point);
+//         }
+//     }
 
-    for (int i = 0; i < 4; ++i)
-    {
-            //     // // write doc
-        std::string dir("view" + std::to_string(i) + ".obj");
-        std::ofstream outfile(dir);
-        for (auto point : pointss[i])
-        {
-            outfile << "v " << point[0] << " " <<
-            point[1] << " " << point[2] << std::endl;
-        }
-        outfile.close();
-    }
+//     for (int i = 0; i < 4; ++i)
+//     {
+//             //     // // write doc
+//         std::string dir("view" + std::to_string(i) + ".obj");
+//         std::ofstream outfile(dir);
+//         for (auto point : pointss[i])
+//         {
+//             outfile << "v " << point[0] << " " <<
+//             point[1] << " " << point[2] << std::endl;
+//         }
+//         outfile.close();
+//     }
 
-}
+// }
 
 void nurbs_surface_decompose_1()
 {
