@@ -38,7 +38,7 @@ namespace tnurbs
             if (angle < m_angle)
                 return ENUM_NURBS::NURBS_SUCCESS;
             //else
-            Eigen::Vector<T, dim> u_normal = m_dir - m_dir.dot(unit_v) * m_dir;
+            Eigen::Vector<T, dim> u_normal = unit_v - m_dir.dot(unit_v) * m_dir;
             if (u_normal.norm() < TDEFAULT_ERROR<T>::value)
             {
                 int max_index = 0;
@@ -86,7 +86,7 @@ namespace tnurbs
             if (angle + c.m_angle < m_angle)
                 return ENUM_NURBS::NURBS_SUCCESS;
             //else
-            Eigen::Vector<T, dim> u_normal = m_dir - m_dir.dot(unit_v) * m_dir;
+            Eigen::Vector<T, dim> u_normal = unit_v - m_dir.dot(unit_v) * m_dir;
             if (u_normal.norm() < TDEFAULT_ERROR<T>::value)
             {
                 int max_index = 0;
@@ -105,6 +105,9 @@ namespace tnurbs
                 u_normal[next_index] = m_dir[max_index];
             }
             u_normal.normalize();
+            // Eigen::Vector<T, dim> v1 = std::cos(m_angle) * m_dir - std::sin(m_angle) * u_normal;
+            // v1.normalize();
+            // Eigen::Vector<T, dim> v2 = std::cos(angle)
             m_dir = (std::cos(m_angle) + std::cos(angle + c.m_angle)) * m_dir + (std::sin(angle + c.m_angle) - std::sin(m_angle)) * u_normal;
             m_dir.normalize();
             
@@ -145,7 +148,7 @@ namespace tnurbs
                         break;
                     else
                     {
-                        index[i] -= 1;
+                        index[i] -= 2;
                         index[i - 1] += 1;
                     }
                 }
@@ -168,11 +171,13 @@ namespace tnurbs
         Index idx;
         Eigen::Vector<T, dim> vec;
         idx.get_point(box, vec);
+        vec -= point;
         vec.normalize();
         cone<T, dim> result(0.0, vec);
         while (idx.add_one())
         {
             idx.get_point(box, vec);
+            vec -= point;
             result.merge_vector(vec);
         }
         return result;

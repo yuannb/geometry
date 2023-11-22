@@ -2,6 +2,7 @@
 #include "nurbs_surface.h"
 #include "cone.h"
 #include "declare.h"
+#include "memory"
 
 namespace tnurbs
 {
@@ -299,10 +300,10 @@ namespace tnurbs
 
 
     template<typename T, int dim, bool is_rational>
-    ENUM_NURBS find_nearst_point_on_curve(const nurbs_curve<T, dim, is_rational, -1, -1> &cur, const Eigen::Vector<T, dim> &point,  T &u, const Box<T, 1> &u_box , Eigen::Vector<T, dim> &nearst_point, T eps = TDEFAULT_ERROR<T>::value)
+    ENUM_NURBS find_nearst_point_on_curve_inner(const nurbs_curve<T, dim, is_rational, -1, -1> &cur, const Eigen::Vector<T, dim> &point,  T &u, const Box<T, 1> &u_box , Eigen::Vector<T, dim> &nearst_point, T eps = TDEFAULT_ERROR<T>::value)
     {
         T min = u_box.Min[0];
-        T max = u_box.Min[1];
+        T max = u_box.Max[0];
 
         cur.point_on_curve(u, nearst_point);
         T min_length = (point - nearst_point).squaredNorm();
@@ -334,7 +335,12 @@ namespace tnurbs
             {
                 break;
             }
-        
+            
+            
+            T a = ders_vec[2].dot(dist_vec);
+            T b = ders_vec[2].dot(dist_vec) + tanget_vec_square_len;
+            
+            
             T next_u = current_u - cos_angle / (ders_vec[2].dot(dist_vec) + tanget_vec_square_len);
             bool is_closed_flag = cur.is_closed();
             if (is_closed_flag)
@@ -360,45 +366,36 @@ namespace tnurbs
 
 
     template<typename T, int dim, bool is_rational>
-    ENUM_NURBS find_nearst_point_on_curve(const nurbs_curve<T, dim, is_rational, -1, -1> &cur, const std::vector<Eigen::Vector<T, dim>> &points, std::vector<T> &us, std::vector<Eigen::Vector<T, dim>> &nearst_points)
+    ENUM_NURBS find_nearst_point_on_curve_inner(const nurbs_curve<T, dim, is_rational, -1, -1> &cur, const std::vector<Eigen::Vector<T, dim>> &points, const std::vector<T> &min_distances,  std::vector<T> &us, std::vector<Eigen::Vector<T, dim>> &nearst_points)
     {
-
-        //TODO: 先将曲面沿着重节点=阶数的节点切开, 防止曲面切向在此处波动过大, 以至于离散效果很差
-
-        //先找曲面的极值点
-        // int count = 0;
         //1.离散
         using curve_type = nurbs_curve<T, dim, is_rational, -1, -1>;
         curve_mesh_helper<curve_type> mh;
         clock_t start_time = clock();
-        disc_curve(&cur, mh, TDEFAULT_ERROR<double>::value, 1.0, 0.1, 1.0);
+        disc_curve(&cur, mh, TDEFAULT_ERROR<double>::value, 0.1, 0.1, 1.0);
         clock_t end_time=clock();
         std::cout << "find_nearst_point_on_surface: disc_surface " <<(double)(end_time - start_time) / CLOCKS_PER_SEC << "s" << std::endl;
         Box<T, 1> ends_knots;
         cur.get_u_box(ends_knots);
-        Eigen::Vector<T, dim> corner_point;
+        Eigen::Vector<T, dim> corner_point1;
+        Eigen::Vector<T, dim> corner_point2;
+        cur.point_on_curve(ends_knots.Min[0], corner_point1);
+        cur.point_on_curve(ends_knots.Max[0], corner_point2);
         int points_count = points.size();
         
         us.reserve(points_count);
-        nearst_points.reserve(points_count);
+        // nearst_points.reserve(points_count);
         clock_t start_time2 = clock();
         for (int index = 0; index < points_count; ++index)
         {
             std::cout << "index " << index << std::endl;
             curve_patch<curve_type> *current = mh.root;
             Eigen::Vector<T, dim> point = points[index];
-            T u;
-            Eigen::Vector<T, dim> nearst_point;
-            cur.point_on_curve(ends_knots.Min[0], corner_point);
-            T min_dis = (point - corner_point).norm();
-
-            cur.point_on_curve(ends_knots.Max[0], corner_point);
-            T temp = (point - corner_point).norm();
-            min_dis = std::min(min_dis, temp);
+            T u = us[index];
+            Eigen::Vector<T, dim> nearst_point = nearst_points[index];
+            T min_dis = min_distances[index];
             
-            // int num = 0;
-
-            //2.寻找曲面极值点; 先判断是否在包围盒内部
+            //2.寻找曲线极值点; 先判断是否在包围盒内部
             while (current != nullptr)
             {
                 // count += 1;
@@ -419,16 +416,47 @@ namespace tnurbs
                         //先判断目前的patch是否可能存在极值点
                         //先计算point和包围盒成的锥
                         cone<T, dim> c = point_box(current->box, point);
-                        //判断u向切向锥和c锥merge之后是否大于90度, 如果小于90度, 那么此patch就没有极值点
-                        cone<T, dim> temp(c);
-                        temp.merge_cone(current->u_cone);
-                        if (temp.m_angle < M_2_PI - TDEFAULT_ERROR<T>::value)
+                        T dot_product = c.m_dir.dot(current->u_cone.m_dir);
+                        T angle = 0.0;
+                        if (dot_product > 1.0)
+                            angle = M_PI;
+                        else if (dot_product < -1.0)
+                            angle = 0.0;
+                        else
+                            angle = std::acos(dot_product);
+                        //如果两个锥相交, 则merge
+                        if (angle <= c.m_angle + current->u_cone.m_angle)
                         {
-                            exit_minimal_point = false;
+                            c.merge_cone(current->u_cone);
+                            if (c.m_angle < M_PI_2 / 2.0 - TDEFAULT_ERROR<T>::value)
+                            {
+                                exit_minimal_point = false;
+                            }
                         }
+                        else
+                        {
+                            T min_angle = angle - c.m_angle - current->u_cone.m_angle;
+                            T max_angle = angle + c.m_angle + current->u_cone.m_angle;
+                            if ((min_angle < M_PI_2 + TDEFAULT_ERROR<T>::value && max_angle > M_PI_2 - TDEFAULT_ERROR<T>::value) || 
+                                        (min_angle < 1.5 * M_PI + TDEFAULT_ERROR<T>::value && max_angle > 1.5 * M_PI - TDEFAULT_ERROR<T>::value))
+                            {
+                                // exit_minimal_point = true;
+                            }
+                            else
+                            {
+                                exit_minimal_point = false;
+                            }
+                        }
+                        // //判断u向切向锥和c锥merge之后是否大于90度, 如果小于90度, 那么此patch就没有极值点
+                        // cone<T, dim> temp(c);
+                        // temp.merge_cone(current->u_cone);
+                        // if (temp.m_angle < M_PI_2 - TDEFAULT_ERROR<T>::value)
+                        // {
+                        //     exit_minimal_point = false;
+                        // }
                     }
                     //再判断是否是叶子节点
-                    if (current->left != nullptr)
+                    if (current->left != nullptr && exit_minimal_point == true)
                     {
                         current = current->left;
                         continue;
@@ -437,11 +465,11 @@ namespace tnurbs
                 if (exit_minimal_point == true)
                 {
                     //迭代
-                    T current_u = (current->uv_box.Min[0] + current->uv_box.Max[0]) / 2.0;
+                    T current_u = (current->u_box.Min[0] + current->u_box.Max[0]) / 2.0;
                     Eigen::Vector<T, dim> current_point;
                     // num += 1;
                     // std::cout << num << std::endl;
-                    find_nearst_point_on_curve(cur, point, current_u, current->u_box, current_point);
+                    find_nearst_point_on_curve_inner(cur, point, current_u, current->u_box, current_point);
                     T current_dis = (current_point - point).norm();
                     if (min_dis > current_dis)
                     {
@@ -481,10 +509,29 @@ namespace tnurbs
             }
             
 
-            //TODO: 3.找曲线的极值点
-    
-            us.push_back(u);
-            nearst_points.push_back(nearst_point);
+            //3.和端点比较
+            
+            T d1 = (points[index] - corner_point1).norm();
+            T d2 = (points[index] - corner_point2).norm();
+            if (d1 < min_dis || d2 < min_dis)
+            {
+                if (d1 < d2)
+                {
+                    us[index] = ends_knots.Min[0];
+                    nearst_points[index] = corner_point1;
+                }
+                else
+                {
+                    us[index] = ends_knots.Max[0];
+                    nearst_points[index] = corner_point2;
+                }
+            }
+            else
+            {
+                us[index] = u;
+                nearst_points[index] = nearst_point;
+            }
+            
         }
         clock_t end_time2 = clock();
         std::cout << "find_nearst_point_on_surface: else " <<(double)(end_time2 - start_time2) / CLOCKS_PER_SEC << "s" << std::endl;
@@ -493,6 +540,62 @@ namespace tnurbs
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
+
+    template<typename T, int dim, bool is_rational>
+    ENUM_NURBS find_nearst_point_on_curve(const nurbs_curve<T, dim, is_rational, -1, -1> &cur, const std::vector<Eigen::Vector<T, dim>> &points, std::vector<T> &us, std::vector<Eigen::Vector<T, dim>> &nearst_points)
+    {
+
+        //先将曲面沿着重节点=阶数的节点切开, 防止曲线切向在此处波动过大, 以至于离散效果很差
+        std::vector<nurbs_curve<T, dim, is_rational, -1, -1>*> sperate_curves;
+        cur.decompose_to_nurbs(sperate_curves);
+        //将sperate_curves放入unique_ptr管理内存
+        int curves_count = sperate_curves.size();
+        std::vector<std::unique_ptr<nurbs_curve<T, dim, is_rational, -1, -1>>> manger_curves;
+        for (int index = 0; index < curves_count; ++index)
+        {
+            manger_curves.push_back(std::unique_ptr<nurbs_curve<T, dim, is_rational, -1, -1>>(sperate_curves[index]));
+        }
+
+        // using curve_type = nurbs_curve<T, dim, is_rational, -1, -1>;
+
+        Box<T, 1> ends_knots;
+        cur.get_u_box(ends_knots);
+        Eigen::Vector<T, dim> corner_point1;
+        Eigen::Vector<T, dim> corner_point2;
+        cur.point_on_curve(ends_knots.Min[0], corner_point1);
+        cur.point_on_curve(ends_knots.Max[0], corner_point2);
+        int points_count = points.size();
+        
+        us.reserve(points_count);
+        nearst_points.resize(points_count);
+        // clock_t start_time2 = clock();
+        std::vector<T> min_distance(points_count);
+        for (int index = 0; index < points_count; ++index)
+        {
+            Eigen::Vector<T, dim> point = points[index];
+            T min_dis = (point - corner_point1).norm();
+            T temp = (point - corner_point2).norm();
+            if (min_dis < temp)
+            {
+                us.push_back(ends_knots.Min[0]);
+                nearst_points[index] = corner_point1;
+            }
+            else
+            {
+                us.push_back(ends_knots.Max[0]);
+                min_dis = temp;
+                nearst_points[index] = corner_point2;
+            }
+            min_distance[index] = min_dis;
+        }
+        
+
+        for (int index = 0; index < curves_count; ++index)
+        {
+            find_nearst_point_on_curve_inner(*sperate_curves[index], points, min_distance, us, nearst_points);
+        }
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
 
 
     //此类仅在surface_mesh_helper中使用, 内存也在其中管理
@@ -793,17 +896,18 @@ namespace tnurbs
         mh.root->point_index[3] = 3;
 
         surface_patch<surface_type> *curent = root;
-        // int num = 0;
+        int num = 0;
+        int countt = 0;
         do
         {
-            // num += 1;
-            // std::cout << num << std::endl;
+            std::cout << countt << std::endl;
+            ++countt;
             std::vector<Eigen::Matrix<Eigen::Vector<T, dim>, 2, 2>> new_ders;
             ENUM_DIRECTION dir;
             bool flag = check_patch(*curent, mh.ders, dir, new_ders, dist_eps, angle_eps, chord_eps);
-            
             if (flag == true)
             {
+                num += 1;
                 mh.point_indexs.push_back(curent->point_index);
                 surface_patch<surface_type> *temp = curent->root;
                 if (temp == nullptr)
@@ -881,7 +985,7 @@ namespace tnurbs
                 curent = left;
             }
         } while (curent != nullptr);
-        
+        std::cout << "disc " << num << std::endl;
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
@@ -984,7 +1088,7 @@ namespace tnurbs
                 else if (next_v > v_max)
                     next_v = v_max;
             }
-            if (((next_u - current_u) * ders_vec(1, 0) + (next_v - next_u) * ders_vec(0, 1)).squaredNorm() < eps * eps)
+            if (((next_u - current_u) * ders_vec(1, 0) + (next_v - next_v) * ders_vec(0, 1)).squaredNorm() < eps * eps)
             {
                 break;
             }
@@ -1007,7 +1111,7 @@ namespace tnurbs
         using surface_type = nurbs_surface<T, dim, -1, -1, -1, -1, is_rational>;
         surface_mesh_helper<nurbs_surface<T, dim, -1, -1, -1, -1, is_rational>> mh;
         clock_t start_time = clock();
-        disc_surface(&surf, mh, TDEFAULT_ERROR<double>::value, 1.0, 0.1, 1.0);
+        disc_surface(&surf, mh, TDEFAULT_ERROR<double>::value, 0.5, 0.1, 1.0);
         clock_t end_time=clock();
         std::cout << "find_nearst_point_on_surface: disc_surface " <<(double)(end_time - start_time) / CLOCKS_PER_SEC << "s" << std::endl;
         Box<T, 2> ends_knots;
@@ -1021,7 +1125,7 @@ namespace tnurbs
         clock_t start_time2 = clock();
         for (int index = 0; index < points_count; ++index)
         {
-            std::cout << "index " << index << std::endl;
+            // std::cout << "index " << index << std::endl;
             surface_patch<surface_type> *current = mh.root;
             Eigen::Vector<T, dim> point = points[index];
             T u, v;
@@ -1041,13 +1145,17 @@ namespace tnurbs
             temp = (point - corner_point).norm();
             min_dis = std::min(min_dis, temp);
 
-            int num = 0;
+            // int num = 0;
 
             //2.寻找曲面极值点; 先判断是否在包围盒内部
             while (current != nullptr)
             {
-                count += 1;
-                // std::cout << count << std::endl;
+                T u_min = current->uv_box.Min[0];
+                T u_max = current->uv_box.Max[0];
+                T v_min = current->uv_box.Min[1];
+                T v_max = current->uv_box.Max[1];
+                // count += 1;
+                // std::cout << "count " << count << std::endl;
                 bool exit_minimal_point = true;
                 //先计算点与box的最近距离
                 T dis = current->box.eval_minimal_distance(point);
@@ -1066,20 +1174,72 @@ namespace tnurbs
                         cone<T, dim> c = point_box(current->box, point);
                         //判断u向切向锥和c锥merge之后是否大于90度, 如果小于90度, 那么此patch就没有极值点
                         cone<T, dim> temp(c);
-                        temp.merge_cone(current->u_cone);
-                        if (temp.m_angle < M_2_PI - TDEFAULT_ERROR<T>::value)
+                        T dot_product = c.m_dir.dot(current->u_cone.m_dir);
+                        T angle = 0.0;
+                        if (dot_product > 1.0)
+                            angle = M_PI;
+                        else if (dot_product < -1.0)
+                            angle = 0.0;
+                        else
+                            angle = std::acos(dot_product);
+                        //如果两个锥相交, 则merge
+                        if (angle <= c.m_angle + current->u_cone.m_angle)
                         {
-                            exit_minimal_point = false;
+                            temp.merge_cone(current->u_cone);
+                            if (temp.m_angle < M_PI_2 / 2.0 - TDEFAULT_ERROR<T>::value)
+                            {
+                                exit_minimal_point = false;
+                            }
                         }
-                            
-                        //再判断v向
-                        temp = c;
-                        temp.merge_cone(current->v_cone);
-                        if (temp.m_angle < M_2_PI - TDEFAULT_ERROR<T>::value)
-                            exit_minimal_point = false;
+                        else
+                        {
+                            T min_angle = angle - c.m_angle - current->u_cone.m_angle;
+                            T max_angle = angle + c.m_angle + current->u_cone.m_angle;
+                            if ((min_angle < M_PI_2 + TDEFAULT_ERROR<T>::value && max_angle > M_PI_2 - TDEFAULT_ERROR<T>::value) || 
+                                        (min_angle < 1.5 * M_PI + TDEFAULT_ERROR<T>::value && max_angle > 1.5 * M_PI - TDEFAULT_ERROR<T>::value))
+                            {
+                                // exit_minimal_point = true;
+                            }
+                            else
+                            {
+                                exit_minimal_point = false;
+                            }
+                        }
+
+
+                        if (exit_minimal_point == true)
+                        {
+                            //再判断v向
+                            temp = c;
+                            if (angle <= c.m_angle + current->v_cone.m_angle)
+                            {
+                                temp.merge_cone(current->v_cone);
+                                if (temp.m_angle < M_PI_2 / 2.0 - TDEFAULT_ERROR<T>::value)
+                                {
+                                    exit_minimal_point = false;
+                                }
+                            }
+                            else
+                            {
+                                T min_angle = angle - c.m_angle - current->v_cone.m_angle;
+                                T max_angle = angle + c.m_angle + current->v_cone.m_angle;
+                                if ((min_angle < M_PI_2 + TDEFAULT_ERROR<T>::value && max_angle > M_PI_2 - TDEFAULT_ERROR<T>::value) ||
+                                    (min_angle < 1.5 * M_PI + TDEFAULT_ERROR<T>::value && max_angle > 1.5 * M_PI - TDEFAULT_ERROR<T>::value) )
+                                {
+                                    // exit_minimal_point = true;
+                                }
+                                else
+                                {
+                                    exit_minimal_point = false;
+                                }
+                             }
+                        }
+                        // temp.merge_cone(current->v_cone);
+                        // if (temp.m_angle < M_2_PI - TDEFAULT_ERROR<T>::value)
+                        //     exit_minimal_point = false;
                     }
                     //再判断是否是叶子节点
-                    if (current->left != nullptr)
+                    if (current->left != nullptr && exit_minimal_point == true)
                     {
                         current = current->left;
                         continue;
@@ -1091,8 +1251,9 @@ namespace tnurbs
                     T current_u = (current->uv_box.Min[0] + current->uv_box.Max[0]) / 2.0;
                     T current_v = (current->uv_box.Min[1] + current->uv_box.Max[1]) / 2.0;
                     Eigen::Vector<T, dim> current_point;
-                    num += 1;
+                    // num += 1;
                     // std::cout << num << std::endl;
+                    count += 1;
                     find_nearst_point_on_surface(surf, point, current_u, current_v, current->uv_box, current_point);
                     T current_dis = (current_point - point).norm();
                     if (min_dis > current_dis)
@@ -1133,7 +1294,7 @@ namespace tnurbs
 
             }
             
-
+            // std::cout << "num " << num << std::endl;
             //TODO: 3.找曲线的极值点
     
             us.push_back(u);
@@ -1142,7 +1303,7 @@ namespace tnurbs
         }
         clock_t end_time2 = clock();
         std::cout << "find_nearst_point_on_surface: else " <<(double)(end_time2 - start_time2) / CLOCKS_PER_SEC << "s" << std::endl;
-       
+        std::cout << "iterator_count " << count << std::endl;
 
         return ENUM_NURBS::NURBS_SUCCESS;
     }

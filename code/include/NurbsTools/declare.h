@@ -186,7 +186,7 @@ template<typename T>
                 Eigen::Vector<T, dim> vec;
                 idx.get_point(*this, vec);
                 T current_dis = (vec - point).norm();
-                if (current_dis < dis || current_dis < 0.0)
+                if (current_dis < dis || dis < 0.0)
                     dis = current_dis;
             }
             //计算point到box的平面的距离

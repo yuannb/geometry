@@ -58,7 +58,7 @@ namespace tnurbs
         ENUM_NURBS set_nonhome_control_points(const Eigen::Matrix<T, dim, points_count> &control_points);
         ENUM_NURBS sub_divide(Box<T, 1> &u_box, nurbs_curve<T, dim, is_rational, -1, -1> &sub_nurbs) const;
         ENUM_NURBS sub_divide(Box<T, 1> &u_box);
-
+        ENUM_NURBS decompose_to_nurbs(std::vector<nurbs_curve<T, dim, is_rational, -1, -1>*> &curves) const;
         int get_knots_count() const
         {
             return m_knots_vector.size();

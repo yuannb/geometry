@@ -932,17 +932,6 @@ TEST_F(CreateNurbsCurve2, Coons1)
     EXPECT_NEAR(cp, 0.0, DEFAULT_ERROR);
 
     Eigen::MatrixX<nurbs_surface<double, 3, -1, -1, -1, -1, true> *> segment;
-
-    csurf.decompose_to_nurbs(segment);
-    auto s1 = segment(0, 0);
-    auto s2 = segment(1, 0);
-    auto s3 = segment(2, 0);
-    ASSERT_TRUE(true);
-    // mesh_helper<nurbs_surface<double, 3, -1, -1, -1 ,-1, true>> disc;
-    // disc_surface(&csurf, disc, TDEFAULT_ERROR<double>::value, 20.0, 0.1, 0.1);
-    // int i = 0;    
-
-
 }
 
 TEST_F(CreateNurbsCurve2, FindNearstPoint1)
@@ -1021,6 +1010,7 @@ TEST_F(CreateNurbsCurve2, FindNearstPoint1)
             double d1 = (nearst_point - p).norm();
             double d2 = (nearst_points[(i - 30) * 5 + (j - 50)] - p).norm();
             double dis = d1 - d2;
+            ASSERT_TRUE(std::abs(dis) < 1e-4);
             std::cout << dis << std::endl;
         }
     } 
@@ -1029,6 +1019,54 @@ TEST_F(CreateNurbsCurve2, FindNearstPoint1)
     // int i = 0;
 
 }
+
+TEST_F(CreateNurbsCurve2, FindNearstPoint2)
+{    
+    
+    Eigen::Vector<double, 3> v1{0, 0, 0};
+    Eigen::Vector<double, 3> v2{1, 0, 0};
+    Eigen::Vector<double, 3> v3{1, 1, 0};
+    Eigen::Vector<double, 3> v4{2, 2, 0};
+    Eigen::Matrix<double, 3, Eigen::Dynamic> mat(3, 4);
+    mat.col(0) = v1;
+    mat.col(1) = v2;
+    mat.col(2) = v3;
+    mat.col(3) = v4;
+
+    Eigen::VectorX<double> knots_vector(7);
+    knots_vector << 0, 0, 0, 0.4, 1, 1, 1;
+    nurbs_curve<double, 3, false, -1, -1> curve1(knots_vector, mat);
+    std::vector<Eigen::Vector3d> pointss;
+    std::vector<Eigen::Vector3d> points2;
+    Eigen::Vector<Eigen::Vector3d, 2> normals;
+    normals[0] = Eigen::Vector3d(1, -1, 0);
+    normals[1] = Eigen::Vector3d(-1, 1, 0);
+    std::vector<double> us;
+    std::vector<Eigen::Vector3d> nearst_points;
+    for (int i = 0; i < 100; ++i)
+    {
+        Eigen::Vector3d point;
+        curve1.point_on_curve((double)0.01 * i, point);
+        Eigen::Vector3d p = point + 1 * normals[i % 2], nearst_point;
+        pointss.push_back(p);
+    }
+    find_nearst_point_on_curve(curve1, pointss, us, nearst_points);
+    for (int i = 0; i < 100; ++i)
+    {
+        Eigen::Vector3d point;
+        curve1.point_on_curve((double)0.01 * i, point);
+        Eigen::Vector3d p = point + 1 * normals[i % 2], nearst_point;
+        double u_p;
+        curve1.find_nearst_point_on_curve(p, u_p, nearst_point);
+        double d1 = (nearst_point - p).norm();
+        double d2 = (nearst_points[i] - p).norm();
+        std::cout << (d1 - d2) << std::endl;
+        std::cout << i << std::endl;
+        ASSERT_TRUE(std::abs(d1 - d2) < 1e-4);
+    }
+
+}
+
 
 TEST_F(CreateNurbsCurve2, DiscCurve)
 {    
@@ -1049,6 +1087,6 @@ int main(int argc, char **argv)
 {
     testing::InitGoogleTest(&argc, argv);
     
-    ::testing::FLAGS_gtest_filter = "CreateNurbsCurve2.Coons1";
+    ::testing::FLAGS_gtest_filter = "CreateNurbsCurve2.FindNearstPoint*";
     return RUN_ALL_TESTS();
 }
