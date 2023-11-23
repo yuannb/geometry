@@ -994,6 +994,10 @@ TEST_F(CreateNurbsCurve2, FindNearstPoint1)
     std::vector<double> us, vs;
     clock_t start_time = clock();
     find_nearst_point_on_surface(test_surface, pointss, us, vs, nearst_points);
+    std::vector<Eigen::Vector3d> nearst_points2(25);
+    std::vector<double> ddd(25, 10);
+    std::vector<double> us1(25, 0.0), vs1(25, 0.0);
+    find_nearst_point_on_surface_inner(test_surface, pointss, ddd ,us1, vs1, nearst_points2);
     clock_t end_time=clock();
     std::cout << "The run time is: " <<(double)(end_time - start_time) / CLOCKS_PER_SEC << "s" << std::endl;
     

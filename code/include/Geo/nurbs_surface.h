@@ -58,6 +58,8 @@ namespace tnurbs
         ENUM_NURBS get_uv_box(Box<T, 2> &uv_box) const;
         template<int n>
         ENUM_NURBS derivative_on_surface(T u, T v, Eigen::Matrix<Eigen::Vector<T, dim>, n + 1, n + 1> &result) const;
+        ENUM_NURBS decompose_to_nurbs(Eigen::MatrixX<nurbs_surface<T, dim, -1, -1, -1, -1, is_rational>*> &surfs) const;
+        ENUM_NURBS get_c0_isoparameter_curve(const std::vector<nurbs_curve<T, dim, is_rational, -1, -1>*> u_iosparameter_curve, std::vector<T> &us, std::vector<T> &vs, const std::vector<nurbs_curve<T, dim, is_rational, -1, -1>*> v_iosparameter_curve) const;
     };
 
 
@@ -2092,11 +2094,11 @@ namespace tnurbs
             if constexpr (direction == ENUM_DIRECTION::U_DIRECTION)
             {
                 int span = -1;
-                find_span<T>(param, m_u_knots_vector, span);
+                find_span<T>(param, m_u_degree, m_u_knots_vector, span);
                 int cols = m_control_points.rows();
                 Eigen::Matrix<T, point_size, Eigen::Dynamic> new_control_points(point_size, cols);
                 Eigen::VectorX<T> nu(m_u_degree + 1);
-                basis_functions<T>(span, param, m_u_knots_vector, nu);
+                basis_functions<T>(span, param, m_u_degree, m_u_knots_vector, nu);
                 for (int index = 0; index < cols; ++index)
                 { 
                     new_control_points.col(index) = m_control_points[index].block(0, span - m_u_degree, point_size, m_u_degree + 1) * nu;
@@ -2123,13 +2125,13 @@ namespace tnurbs
                 }
                 
                 int span = -1;
-                find_span<T>(param, m_v_knots_vector, span);
+                find_span<T>(param, m_v_degree, m_v_knots_vector, span);
                 Eigen::Matrix<T, point_size, Eigen::Dynamic> new_control_points(point_size, cols);
                 Eigen::VectorX<T> nv(m_v_degree + 1);
-                basis_functions<T>(span, param, m_v_knots_vector, nv);
+                basis_functions<T>(span, param, m_v_degree, m_v_knots_vector, nv);
                 for (int index = 0; index < cols; ++index)
                 {
-                    new_control_points.col(index) = new_control_points[index].block(0, span - m_v_degree, point_size, m_v_degree + 1) * nv;
+                    new_control_points.col(index) = reverse_control_points[index].block(0, span - m_v_degree, point_size, m_v_degree + 1) * nv;
                 }
                 nurbs.set_control_points(new_control_points);
                 nurbs.set_knots_vector(m_u_knots_vector);
@@ -2811,6 +2813,42 @@ namespace tnurbs
             return ENUM_NURBS::NURBS_SUCCESS;
         }
 
+
+        ENUM_NURBS get_c0_isoparameter_curve(std::vector<nurbs_curve<T, dim, is_rational, -1, -1>*> &u_iosparameter_curve, std::vector<T> &us, std::vector<nurbs_curve<T, dim, is_rational, -1, -1>*> &v_iosparameter_curve, std::vector<T> &vs) const
+        {
+             std::vector<T> u_different_knots;
+            std::vector<int> u_multiple;
+            get_different_knots(m_u_knots_vector, m_u_degree, u_different_knots, u_multiple);
+            int u_interval_count = u_different_knots.size();
+            
+            std::vector<T> v_different_knots;
+            std::vector<int> v_multiple;
+            get_different_knots(m_v_knots_vector, m_v_degree, v_different_knots, v_multiple);
+            int v_interval_count = v_different_knots.size();
+            for (int index = 0; index < u_interval_count; ++index)
+            {
+                if (u_multiple[index] >= m_u_degree)
+                {
+                    //此处可以直接从控制点取
+                    nurbs_curve<T, dim, is_rational, -1, -1>* isoparameter_curve = new nurbs_curve<T, dim, is_rational, -1, -1>();
+                    get_isoparameter_curve<ENUM_DIRECTION::U_DIRECTION>(u_different_knots[index], *isoparameter_curve);
+                    u_iosparameter_curve.push_back(isoparameter_curve);
+                    us.push_back(u_different_knots[index]);
+                }
+            }
+            for (int index = 0; index < v_interval_count; ++index)
+            {
+                if (v_multiple[index] >= m_v_degree)
+                {
+                    //此处可以直接从控制点取
+                    nurbs_curve<T, dim, is_rational, -1, -1>* isoparameter_curve = new nurbs_curve<T, dim, is_rational, -1, -1>();
+                    get_isoparameter_curve<ENUM_DIRECTION::V_DIRECTION>(v_different_knots[index], *isoparameter_curve);
+                    v_iosparameter_curve.push_back(isoparameter_curve);
+                    vs.push_back(v_different_knots[index]);
+                }
+            }
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
 
 
     };

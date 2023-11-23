@@ -1186,9 +1186,9 @@ namespace tnurbs
                 Eigen::Matrix<T, dim, Eigen::Dynamic> cp(dim, points_count);
                 for (int index = 0; index < points_count; ++index)
                 {
-                    cp.col(index) = m_control_points.block(0, index, dim, 1) / m_control_points(index, dim);
+                    cp.col(index) = m_control_points.block(0, index, dim, 1) / m_control_points(dim, index);
                 }
-                return std::move(cp);
+                return cp;
             }
         }
 
