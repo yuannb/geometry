@@ -144,75 +144,17 @@ template<typename T>
         }
 
         T eval_minimal_distance(const Eigen::Vector<T, dim> &point) const
-        {
-            struct Index
-            {
-                Eigen::Vector<int, dim> index;
-                Index() { index.setConstant(0); }
-                ENUM_NURBS add_one()
-                {
-                    index[dim - 1] += 1;
-                    for (int i = dim - 1; i > 0; --i)
-                    {
-                        if (index[i] != 2)
-                            break;
-                        else
-                        {
-                            index[i] -= 1;
-                            index[i - 1] += 1;
-                        }
-                    }
-                    if (index[0] == 2)
-                        return ENUM_NURBS::NURBS_ERROR;
-                    return ENUM_NURBS::NURBS_SUCCESS;
-                }
-                ENUM_NURBS get_point(const Box<T, dim> &box, Eigen::Vector<T, dim> &point) const
-                {
-                    for (int i = 0; i < dim; ++i)
-                    {
-                        if (index[i] == 0)
-                            point[i] = box.Min[i];
-                        else
-                            point[i] = box.Max[i];
-                    }             
-                    return ENUM_NURBS::NURBS_SUCCESS;
-                }
-            };
-            Index idx;
-            T dis = -1.0;
-            constexpr int point_count = std::pow(2, dim);
-            for (int i = 0; i < point_count; ++i)
-            {
-                Eigen::Vector<T, dim> vec;
-                idx.get_point(*this, vec);
-                T current_dis = (vec - point).norm();
-                if (current_dis < dis || dis < 0.0)
-                    dis = current_dis;
-            }
-            //计算point到box的平面的距离
-            std::vector<int> out_index;
+        {        
+            T dis = 0.0;
             for (int i = 0; i < dim; ++i)
             {
                 if (point[i] > Max[i] || point[i] < Min[i])
-                    out_index.push_back(i);
-            }
-            int out_index_count = out_index.size();
-            if (out_index_count == 0)
-            {
-                for (int i = 0; i < dim; ++i)
                 {
-                    T d1 = point[i] - Min[i];
-                    T d2 = Max[i] - point[i];
-                    dis = std::min({d1, d2, dis});
+                    T min_dis = std::min(std::abs(point[i] - Max[i]), std::abs(point[i] - Min[i]));
+                    dis += (min_dis * min_dis);
                 }
             }
-            else if (out_index_count == 1)
-            {
-                T d1 = std::abs(point[out_index[0]] - Min[out_index[0]]);
-                T d2 = std::abs(point[out_index[0]] - Max[out_index[0]]);
-                dis = std::min({d1, d2, dis}); 
-            }
-            return dis;
+            return std::sqrt(dis);
         }
     };
 

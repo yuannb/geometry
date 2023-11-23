@@ -383,7 +383,7 @@ namespace tnurbs
         clock_t start_time2 = clock();
         for (int index = 0; index < points_count; ++index)
         {
-            std::cout << "index " << index << std::endl;
+            // std::cout << "index " << index << std::endl;
             curve_patch<curve_type> *current = mh.root;
             Eigen::Vector<T, dim> point = points[index];
             T u = us[index];
@@ -885,11 +885,11 @@ namespace tnurbs
 
         surface_patch<surface_type> *curent = root;
         int num = 0;
-        int countt = 0;
+        // int countt = 0;
         do
         {
-            std::cout << countt << std::endl;
-            ++countt;
+            // std::cout << countt << std::endl;
+            // ++countt;
             std::vector<Eigen::Matrix<Eigen::Vector<T, dim>, 2, 2>> new_ders;
             ENUM_DIRECTION dir;
             bool flag = check_patch(*curent, mh.ders, dir, new_ders, dist_eps, angle_eps, chord_eps);
