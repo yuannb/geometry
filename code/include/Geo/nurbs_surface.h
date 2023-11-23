@@ -2801,7 +2801,7 @@ namespace tnurbs
                     for (int index = 0; index < v_begin_point_index_and_length[v_index][1]; ++index)
                     {
                         new_control_points[index] = m_control_points[v_begin_point_index_and_length[v_index][0] + index].block(0, u_begin_point_index_and_length[u_index][0], point_size, u_begin_point_index_and_length[u_index][1]);
-                        std::cout << new_control_points[index] << std::endl;
+                        // std::cout << new_control_points[index] << std::endl;
                     }
                     new_nurb->set_uv_degree(m_u_degree, m_v_degree);
                     new_nurb->set_control_points(new_control_points);
