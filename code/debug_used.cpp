@@ -323,6 +323,28 @@ namespace tnurbs
         outfile2.close();
         return ENUM_NURBS::NURBS_SUCCESS;
     }
+
+    ENUM_NURBS save_obj(const mesh<2> *surf, const char *path)
+    {
+        std::ofstream outfile2(path);
+        for (auto point : surf->m_ders)
+        {
+            outfile2 << "v " << point(0, 0)[0] << " " <<
+            point(0, 0)[1] << " " << point(0, 0)[2] << std::endl;
+        }
+        for (auto index : surf->m_indexs)
+        {
+            int count = index.size();
+            outfile2 << "f ";
+            for (int i = 0; i < count; ++i)
+            {
+                outfile2 << index[i] + 1 << " ";
+            }
+            outfile2 << std::endl;
+        }
+        outfile2.close();
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
 }
 
 

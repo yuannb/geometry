@@ -994,12 +994,6 @@ TEST_F(CreateNurbsCurve2, FindNearstPoint1)
     std::vector<double> us, vs;
     clock_t start_time = clock();
     find_nearst_point_on_surface(test_surface, pointss, us, vs, nearst_points);
-    std::vector<Eigen::Vector3d> nearst_points2(25);
-    // std::vector<double> ddd(25, 10);
-    // std::vector<double> us1(25, 0.0), vs1(25, 0.0);
-    // find_nearst_point_on_surface_inner(test_surface, pointss, ddd ,us1, vs1, nearst_points2);
-    clock_t end_time=clock();
-    std::cout << "The run time is: " <<(double)(end_time - start_time) / CLOCKS_PER_SEC << "s" << std::endl;
     
     clock_t start_time2 = clock();
     for (int i = 30; i < 35; ++i)
@@ -1019,11 +1013,53 @@ TEST_F(CreateNurbsCurve2, FindNearstPoint1)
             
         }
     } 
-    clock_t end_time2 = clock();
-    std::cout << "The run time is2 : " <<(double)(end_time2 - start_time2) / CLOCKS_PER_SEC << "s" << std::endl;
-    // int i = 0;
-
 }
+
+TEST_F(CreateNurbsCurve2, DiscSurface)
+{    
+    
+    Eigen::VectorX<double> u_knots_vector(7);
+    u_knots_vector<< 0, 0, 0, 2, 5, 5, 5;
+    Eigen::VectorX<double> v_knots_vector(7);
+    v_knots_vector << 0, 0, 0, 1, 3, 3, 3;
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points1(4, 4);
+    points1 << 0, 0, 0, 0,
+               2, 6, 2, 8,
+               5, 4, 0, 2,
+               1, 2, 1, 2;
+
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points2(4, 4);
+    points2 << 4, 12, 4, 8,
+               6, 24, 10, 28,
+               8, 12, 0, 0,
+               2, 6,  2, 4;
+
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points3(4, 4);
+    points3 << 4, 8, 4, 12,
+               2, 6, 4, 12,
+               4, 4, 0, -3,
+               1, 2, 1, 3;
+
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points4(4, 4);
+    points4 << 4, 8, 4, 12,
+               2, 6, 4, 12,
+               4, 8, 4, 12,
+               1, 2, 1, 3;
+
+    Eigen::VectorX<Eigen::Matrix<double, 4, Eigen::Dynamic>> control_points(4);
+    control_points(0) = points1;
+    control_points(1) = points2;
+    control_points(2) = points3;
+    control_points(3) = points4;
+    nurbs_surface<double, 3, -1, -1, -1, -1, true> test_surface(u_knots_vector, v_knots_vector, control_points);
+
+
+    surface_mesh_helper<nurbs_surface<double, 3, -1, -1, -1, -1, true>> mh;
+    disc_surface(&test_surface, mh, TDEFAULT_ERROR<double>::value, 0.5, 0.1, 1.0);
+    mesh<2> surface_mesh;
+    mesh_help_to_mesh(mh, surface_mesh);
+}
+
 
 TEST_F(CreateNurbsCurve2, FindNearstPoint2)
 {    
@@ -1056,6 +1092,7 @@ TEST_F(CreateNurbsCurve2, FindNearstPoint2)
         pointss.push_back(p);
     }
     find_nearst_point_on_curve(curve1, pointss, us, nearst_points);
+    
     for (int i = 0; i < 100; ++i)
     {
         Eigen::Vector3d point;

@@ -3,7 +3,8 @@
 #include "cone.h"
 #include "declare.h"
 #include "memory"
-
+#include <unordered_set>
+#include <deque>
 namespace tnurbs
 {
 
@@ -75,56 +76,76 @@ namespace tnurbs
             curve_patch<curve_type> *current = root;
             while (current)
             {
-                if (current->left)
+                if (current->left == nullptr && current->right == nullptr)
                 {
-                    current = current->left;
-                    continue;
-                }
-                curve_patch<curve_type> *temp = current->root;
-                
-                //寻找下一个节点
-                if (temp == nullptr)
-                {
-                    delete current;
-                    break;
-                }
-                if (temp->left == current)
-                {
-                    temp->left = nullptr;
-                }
-                else
-                {
-                    temp->right = nullptr;
-                }
-                if (temp->right != nullptr)
-                    current = temp->right;
-                else
-                {
-                    //找到下一个节点
-                    while (temp)
+                    curve_patch<curve_type> *temp = current;
+                    current = current->root;
+                    if (current == nullptr)
                     {
-                        if (temp->root == nullptr)
-                        {
-                            current = temp;
-                            temp = temp->root;
-                            delete current;
-                        }
-                        else if (temp->root->right == temp)
-                        {
-                            current = temp;
-                            temp = temp->root;
-                            delete current;
-                        }
-                        else
-                        {
-                            current = temp;
-                            temp = temp->root->right;
-                            delete current;
-                            break;
-                        }
+                        delete temp;
+                        break;
                     }
-                    current = temp;   
+
+                    if (temp == current->left)
+                        current->left = nullptr;
+                    else
+                        current->right = nullptr;
+                    delete temp;
                 }
+                else if (current->left != nullptr)
+                    current = current->left;
+                else
+                    current = current->right;
+                // if (current->left)
+                // {
+                //     current = current->left;
+                //     continue;
+                // }
+                // curve_patch<curve_type> *temp = current->root;
+                
+                // //寻找下一个节点
+                // if (temp == nullptr)
+                // {
+                //     delete current;
+                //     break;
+                // }
+                // if (temp->left == current)
+                // {
+                //     temp->left = nullptr;
+                // }
+                // else
+                // {
+                //     temp->right = nullptr;
+                // }
+                // if (temp->right != nullptr)
+                //     current = temp->right;
+                // else
+                // {
+                //     //找到下一个节点
+                //     while (temp)
+                //     {
+                //         if (temp->root == nullptr)
+                //         {
+                //             current = temp;
+                //             temp = temp->root;
+                //             delete current;
+                //         }
+                //         else if (temp->root->right == temp)
+                //         {
+                //             current = temp;
+                //             temp = temp->root;
+                //             delete current;
+                //         }
+                //         else
+                //         {
+                //             current = temp;
+                //             temp = temp->root->right;
+                //             delete current;
+                //             break;
+                //         }
+                //     }
+                //     current = temp;   
+                // }
             }
             
         }
@@ -602,6 +623,11 @@ namespace tnurbs
         surface_patch *root;
         cone<T, dim> u_cone;
         cone<T, dim> v_cone;
+
+        //离散时使用, indexs记录分割边的所以点
+        std::vector<int> indexs;
+        ENUM_DIRECTION split_direction;
+
         surface_patch() : surface(nullptr), left(nullptr), right(nullptr), root(nullptr) { };
         ~surface_patch () {  }
     };
@@ -619,56 +645,26 @@ namespace tnurbs
             surface_patch<surface_type> *current = root;
             while (current)
             {
-                if (current->left)
+                if (current->left == nullptr && current->right == nullptr)
                 {
-                    current = current->left;
-                    continue;
-                }
-                surface_patch<surface_type> *temp = current->root;
-                
-                //寻找下一个节点
-                if (temp == nullptr)
-                {
-                    delete current;
-                    break;
-                }
-                if (temp->left == current)
-                {
-                    temp->left = nullptr;
-                }
-                else
-                {
-                    temp->right = nullptr;
-                }
-                if (temp->right != nullptr)
-                    current = temp->right;
-                else
-                {
-                    //找到下一个节点
-                    while (temp)
+                    surface_patch<surface_type> *temp = current;
+                    current = current->root;
+                    if (current == nullptr)
                     {
-                        if (temp->root == nullptr)
-                        {
-                            current = temp;
-                            temp = temp->root;
-                            delete current;
-                        }
-                        else if (temp->root->right == temp)
-                        {
-                            current = temp;
-                            temp = temp->root;
-                            delete current;
-                        }
-                        else
-                        {
-                            current = temp;
-                            temp = temp->root->right;
-                            delete current;
-                            break;
-                        }
+                        delete current;
+                        break;
                     }
-                    current = temp;   
+
+                    if (temp == current->left)
+                        current->left = nullptr;
+                    else
+                        current->right = nullptr;
+                    delete temp;
                 }
+                else if (current->left != nullptr)
+                    current = current->left;
+                else
+                    current = current->right;
             }
             
         }
@@ -941,7 +937,7 @@ namespace tnurbs
                     right->uv_box.Min[1] = curent->uv_box.Min[1];
                     right->uv_box.Min[0] = left->uv_box.Max[0];
                     right->point_index = std::array<int, 4>{ m_ders_size - 1, curent->point_index[1], curent->point_index[2], m_ders_size };
-
+                    curent->split_direction = ENUM_DIRECTION::U_DIRECTION;
                 }
                 else
                 {
@@ -954,6 +950,7 @@ namespace tnurbs
                     right->uv_box.Min[0] = curent->uv_box.Min[0];
                     right->uv_box.Min[1] = left->uv_box.Max[1];
                     right->point_index = std::array<int, 4>{ m_ders_size, m_ders_size - 1, curent->point_index[2], curent->point_index[3] };
+                    curent->split_direction = ENUM_DIRECTION::V_DIRECTION;
                 }
                 curent->left = left;
                 curent->right = right;
@@ -1423,6 +1420,529 @@ namespace tnurbs
 
         return ENUM_NURBS::NURBS_SUCCESS;
     }
+
+
+    /// @brief mesh 类
+    /// @tparam T double, float ...
+    /// @tparam n (0 : 表示点; 1 : 表示曲线; 2 : 表示曲面; 其余的暂未实现)
+    /// @tparam dim  维数
+    template<int n, typename T = double, int dim = 3>
+    class mesh
+    {
+    public:
+        // \phi(x_1, x_2, ..., x_n)为参数方程; m_ders[0] 表示点, m_ders[i] = \partial{\phi} / \partial{x_i}
+        std::vector<Eigen::Matrix<Eigen::Vector<T, dim>, n, n>> m_ders;
+        // 表示点的连接关系
+        std::vector<std::vector<int>> m_indexs;
+    public:
+        mesh() = default;
+        ~mesh() { };
+    };
+
+    template<typename surface_type, typename T = typename surface_type::Type, int dim = surface_type::dimension>
+    ENUM_NURBS remove_multiple_point(surface_mesh_helper<surface_type> &mh)
+    {
+        struct help
+        {
+            int m_index;
+            T m_eps;
+            Eigen::Vector<T, dim> m_point;
+            help(const Eigen::Vector<T, dim> &point, int index, T eps = TDEFAULT_ERROR<T>::value) { m_index = index; m_point = point; m_eps = eps; }
+            ~help() { }
+            const bool operator==(const help &right) const
+            {
+                if ((m_point - right.m_point).squaredNorm() < m_eps)
+                    return true;
+                return false;
+            }
+        };
+        class hash_help {
+        public:
+            size_t operator()(const help& hero)const {
+                std::string temp;
+               
+                for (int index = 0; index < dim; ++index)
+                {
+                    temp += std::to_string(hero.m_point[index]);
+                }
+                return std::hash<std::string>()(temp);
+            }
+        };
+        std::unordered_set<help, hash_help> new_ders;
+        std::vector<Eigen::Matrix<Eigen::Vector<T, dim>, 2, 2>> result_vec;
+        std::unordered_map<int, int> index_map;
+        int difference = 0;
+        int mh_ders_size = mh.ders.size();
+        result_vec.reserve(mh_ders_size);
+        for (int index = 0; index < mh_ders_size; ++index)
+        {
+            help temp(mh.ders[index](0, 0), index - difference);
+            auto it = new_ders.find(temp);
+            if (it == new_ders.end())
+            {
+                new_ders.insert(temp);
+                result_vec.push_back(mh.ders[index]);
+                index_map.insert(std::make_pair(index, index - difference));
+            }
+            else
+            {
+                difference += 1;
+                index_map.insert(std::make_pair(index, it->m_index));
+            }
+        }
+
+        surface_patch<surface_type> *current = mh.root;
+        while (current)
+        {
+            if (current->left)
+                current = current->left;
+            else
+                break;
+        }
+        int count = 0;
+        while (current)
+        {
+            count += 1;
+            for (int i = 0; i < 4; ++i)
+                current->point_index[i] = index_map[current->point_index[i]];
+            surface_patch<surface_type> *temp = current->root;
+            if (temp == nullptr)
+                break;
+            if (temp->right == current)
+            {
+                current = temp;
+            }
+            else
+            {
+                current = temp->right;
+                while (current->left != nullptr)
+                {
+                    current = current->left;
+                }
+            }
+                
+        }
+        mh.ders = result_vec;
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+
+    template<typename surface_type, typename T = typename surface_type::Type, int dim = surface_type::dimension>
+    ENUM_NURBS eval_boundary_index(const surface_patch<surface_type> *patch, std::vector<int> &indexs)
+    {
+
+        const surface_patch<surface_type> *patch_root = patch->root;
+        if (patch_root == nullptr)
+        {
+            //错误
+            return ENUM_NURBS::NURBS_ERROR;
+        }
+
+        std::deque<const surface_patch<surface_type> *> patchs;
+        indexs.clear();
+        if (patch_root->split_direction == ENUM_DIRECTION::U_DIRECTION)
+        {
+            if (patch_root->left == patch)
+            {
+                indexs.push_back(patch->point_index[1]);
+                const surface_patch<surface_type> *current = patch;
+                
+                while (current->left && current->split_direction == ENUM_DIRECTION::U_DIRECTION)
+                {
+                    current = current->right;
+                }
+                if (current->right != nullptr)
+                    patchs.push_back(current->right);
+                // else
+                //     patchs.push_back(current);
+                current = current->left ? current->left : current;
+                
+                while (true)
+                {
+                    if (current->left == nullptr)
+                    {
+                        indexs.push_back(current->point_index[2]);
+                        if (patchs.empty() == false)
+                        {
+                            current = patchs.back();
+                            patchs.pop_back();
+                        }      
+                        else
+                            break;
+                        // current = patchs.back();
+                        // patchs.pop_back();
+                    }
+                    else
+                    {
+                        if (current->split_direction == ENUM_DIRECTION::U_DIRECTION)
+                        {
+                            current = current->right;
+                        }
+                        else
+                        {
+                            patchs.push_back(current->right);
+                            current = current->left;
+                        }
+                    }
+                }
+                
+            }
+            else
+            {
+                indexs.push_back(patch->point_index[0]);
+                const surface_patch<surface_type> *current = patch;
+                
+                while (current->left && current->split_direction == ENUM_DIRECTION::U_DIRECTION)
+                {
+                    current = current->left;
+                }
+
+                if (current->right != nullptr)
+                    patchs.push_back(current->right);
+                // else
+                //     patchs.push_back(current);
+                current = current->left ? current->left : current;
+                
+                // patchs.push_back(current->right);
+                // current = current->left;
+                
+                while (true)
+                {
+                    if (current->left == nullptr)
+                    {
+                        indexs.push_back(current->point_index[3]);
+                        
+                        if (patchs.empty() == false)
+                        {
+                            current = patchs.back();
+                            patchs.pop_back();
+                        }      
+                        else
+                            break;
+                    }
+                    else
+                    {
+                        if (current->split_direction == ENUM_DIRECTION::U_DIRECTION)
+                        {
+                            current = current->left;
+                        }
+                        else
+                        {
+                            patchs.push_back(current->right);
+                            current = current->left;
+                        }
+                    }
+                }
+           
+            }
+        }
+        else
+        {
+            if (patch_root->left == patch)
+            {
+                indexs.push_back(patch->point_index[3]);
+                const surface_patch<surface_type> *current = patch;
+                
+                while (current->left && current->split_direction == ENUM_DIRECTION::V_DIRECTION)
+                {
+                    current = current->right;
+                }
+
+                if (current->right != nullptr)
+                    patchs.push_back(current->right);
+                // else
+                //     patchs.push_back(current);
+                current = current->left ? current->left : current;
+
+                // patchs.push_back(current->right);
+                // current = current->left;
+                
+                while (true)
+                {
+                    if (current->left == nullptr)
+                    {
+                        indexs.push_back(current->point_index[2]);
+                        if (patchs.empty() == false)
+                        {
+                            current = patchs.back();
+                            patchs.pop_back();
+                        }      
+                        else
+                            break;
+                    }
+                    else
+                    {
+                        if (current->split_direction == ENUM_DIRECTION::V_DIRECTION)
+                        {
+                            current = current->right;
+                        }
+                        else
+                        {
+                            patchs.push_back(current->right);
+                            current = current->left;
+                        }
+                    }
+                }
+                
+            }
+            else
+            {
+                indexs.push_back(patch->point_index[0]);
+                const surface_patch<surface_type> *current = patch;
+                
+                while (current->left && current->split_direction == ENUM_DIRECTION::V_DIRECTION)
+                {
+                    current = current->left;
+                }
+                
+                if (current->right != nullptr)
+                    patchs.push_back(current->right);
+                // else
+                //     patchs.push_back(current);
+                current = current->left ? current->left : current;
+                // patchs.push_back(current->right);
+                // current = current->left;
+                
+                while (true)
+                {
+                    if (current->left == nullptr)
+                    {
+                        indexs.push_back(current->point_index[1]);
+                        if (patchs.empty() == false)
+                        {
+                            current = patchs.back();
+                            patchs.pop_back();
+                        }      
+                        else
+                            break;
+                    }
+                    else
+                    {
+                        if (current->split_direction == ENUM_DIRECTION::V_DIRECTION)
+                        {
+                            current = current->left;
+                        }
+                        else
+                        {
+                            patchs.push_back(current->right);
+                            current = current->left;
+                        }
+                    }
+                }
+           
+            }
+        }
+
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    template<typename surface_type, typename T = typename surface_type::Type, int dim = surface_type::dimension>
+    ENUM_NURBS eval_mesh_from_mh(surface_mesh_helper<surface_type> &mh, mesh<2, T, dim> &surface_mesh)
+    {
+        // surface_mesh.m_ders = mh.ders;
+        int ders_count = mh.ders.size();
+        surface_mesh.m_ders.reserve(ders_count);
+        for (auto &der : mh.ders)
+            surface_mesh.m_ders.push_back(der);
+        surface_patch<surface_type> *current = mh.root;
+        if (mh.root == nullptr)
+        {
+            std::vector<int> indexs(mh.root->point_index.begin(), mh.root->point_index.end());
+            surface_mesh.m_indexs.push_back(indexs);
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+        while (current)
+        {
+            if (current->left)
+                current = current->left;
+            else
+                break;
+        }
+
+        int count_loop = 0;
+        while (current)
+        {
+            count_loop += 1;
+
+            std::vector<int> indexs;
+            surface_patch<surface_type> *temp = current->root, *temp2 = current;
+            //edge u_bottom
+            while (temp)
+            {
+                if (temp->split_direction == ENUM_DIRECTION::V_DIRECTION && temp->right == temp2)
+                {
+                    break;
+                }
+                else
+                {
+                    temp2 = temp;
+                    temp = temp->root;
+                }
+            }
+            int a1 = current->point_index[0];
+            int a2 = current->point_index[1];
+            if (temp == nullptr)
+            {
+                indexs.push_back(current->point_index[0]);
+            }
+            else
+            {
+                std::vector<int> temp_indexs;
+                eval_boundary_index(temp->left, temp_indexs);
+                auto begin_it = std::find(temp_indexs.begin(), temp_indexs.end(), current->point_index[0]);
+                auto end_it = std::find(temp_indexs.begin(), temp_indexs.end(), current->point_index[1]);
+                
+                if (begin_it == temp_indexs.end() || end_it == temp_indexs.end())
+                    indexs.push_back(current->point_index[0]);
+                else
+                    indexs.insert(indexs.end(), begin_it, end_it);
+            }
+            
+            //edge v_right
+            temp = current->root, temp2 = current;
+            while (temp)
+            {
+                if (temp->split_direction == ENUM_DIRECTION::U_DIRECTION && temp->left == temp2)
+                {
+                    break;
+                }
+                else
+                {
+                    temp2 = temp;
+                    temp = temp->root;
+                }
+            }
+            a1 = current->point_index[1];
+            a2 = current->point_index[2];
+            if (temp == nullptr)
+            {
+                indexs.push_back(current->point_index[1]);
+            }
+            else
+            {
+                std::vector<int> temp_indexs;
+                eval_boundary_index(temp->right, temp_indexs);
+                auto begin_it = std::find(temp_indexs.begin(), temp_indexs.end(), current->point_index[1]);
+                auto end_it = std::find(temp_indexs.begin(), temp_indexs.end(), current->point_index[2]);
+                
+                if (begin_it == temp_indexs.end() || end_it == temp_indexs.end())
+                    indexs.push_back(current->point_index[1]);
+                else
+                    indexs.insert(indexs.end(), begin_it, end_it);
+            }
+            //edge u_up
+            temp = current->root, temp2 = current;
+            while (temp)
+            {
+                if (temp->split_direction == ENUM_DIRECTION::V_DIRECTION && temp->left == temp2)
+                {
+                    break;
+                }
+                else
+                {
+                    temp2 = temp;
+                    temp = temp->root;
+                }
+            }
+            a1 = current->point_index[2];
+            a2 = current->point_index[3];
+            if (temp == nullptr)
+            {
+                indexs.push_back(current->point_index[2]);
+            }
+            else
+            {
+                std::vector<int> temp_indexs;
+                eval_boundary_index(temp->right, temp_indexs);
+                std::reverse(temp_indexs.begin(), temp_indexs.end());
+                auto begin_it = std::find(temp_indexs.begin(), temp_indexs.end(), current->point_index[2]);
+                auto end_it = std::find(temp_indexs.begin(), temp_indexs.end(), current->point_index[3]);
+                
+                if (begin_it == temp_indexs.end() || end_it == temp_indexs.end())
+                    indexs.push_back(current->point_index[2]);
+                else
+                    indexs.insert(indexs.end(), begin_it, end_it);
+            }
+            //edge v_left
+            temp = current->root, temp2 = current;
+            while (temp)
+            {
+                if (temp->split_direction == ENUM_DIRECTION::U_DIRECTION && temp->right == temp2)
+                {
+                    break;
+                }
+                else
+                {
+                    temp2 = temp;
+                    temp = temp->root;
+                }
+            }
+            a1 = current->point_index[3];
+            a2 = current->point_index[0];
+            if (temp == nullptr)
+            {
+                indexs.push_back(current->point_index[3]);
+            }
+            else
+            {
+                std::vector<int> temp_indexs;
+                eval_boundary_index(temp->left, temp_indexs);
+                std::reverse(temp_indexs.begin(), temp_indexs.end());
+                auto begin_it = std::find(temp_indexs.begin(), temp_indexs.end(), current->point_index[3]);
+                auto end_it = std::find(temp_indexs.begin(), temp_indexs.end(), current->point_index[0]);
+                
+                if (begin_it == temp_indexs.end() || end_it == temp_indexs.end())
+                    indexs.push_back(current->point_index[3]);
+                else
+                    indexs.insert(indexs.end(), begin_it, end_it);
+            }
+            surface_mesh.m_indexs.push_back(indexs);
+
+            //寻找下一个叶子节点
+            if (current->root == nullptr)
+                break;
+            if (current == current->root->left)
+            {
+                current = current->root->right;
+                while (current->left)
+                {
+                    current = current->left;
+                }
+            }
+            else
+            {
+                surface_patch<surface_type> *temp = current->root;
+                while (temp != nullptr && current == temp->right)
+                {
+                    current = temp;
+                    temp = temp->root;
+                }
+                if (temp == nullptr)
+                    break;
+                else
+                    current = temp->right;
+                while (current->left)
+                {
+                    current = current->left;
+                }
+                
+                
+            }
+
+           
+
+        }
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    template<typename surface_type, typename T = typename surface_type::Type, int dim = surface_type::dimension>
+    ENUM_NURBS mesh_help_to_mesh(surface_mesh_helper<surface_type> &mh, mesh<2, T, dim> &surface_mesh)
+    {
+        remove_multiple_point(mh);
+        eval_mesh_from_mh(mh, surface_mesh);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
 
 
 }
