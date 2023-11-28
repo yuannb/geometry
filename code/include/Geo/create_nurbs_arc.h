@@ -227,8 +227,6 @@ namespace tnurbs
             nurbs.set_control_points(control_points);
             nurbs.set_knots_vector(knots_vector);
             nurbs.set_degree(2);
-            std::cout << control_points << std::endl;
-            std::cout << knots_vector << std::endl;
             return ENUM_NURBS::NURBS_SUCCESS;
         }
         Eigen::Vector<T, dim> Q1, S, R1;

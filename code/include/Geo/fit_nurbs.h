@@ -7,6 +7,7 @@
 #include <Eigen/Sparse>
 #include <array>
 #include <set>
+#include "nearest.h"
 
 namespace tnurbs
 {
@@ -1920,14 +1921,16 @@ namespace tnurbs
         Eigen::VectorX<T> knots(6);
         knots << 0.0, 0.0, 0.0, 1.0, 1.0, 1.0;
         nurbs_curve<T, dim, true, -1, -1> new_nurbs(knots, control_points);
+        curve_nearest<nurbs_curve<T, dim, true, -1, -1>> curve_nearest_tool;
+        curve_nearest_tool.init(&new_nurbs);
         for (int index = ks + 1; index < ke; ++index)
         {
-            T u;
-            Eigen::Vector<T, dim> nearst_ponts;
-            flag = new_nurbs.find_nearst_point_on_curve(points.col(index), u, nearst_ponts);
+            T u, min_dis;
+            Eigen::Vector<T, dim> nearest_point;
+            flag = curve_nearest_tool.find_nearst_point_on_curve(points.col(index), u, nearest_point, min_dis);
             if (flag != ENUM_NURBS::NURBS_SUCCESS)
                 return ENUM_NURBS::NURBS_ERROR;
-            T dis = (nearst_ponts - points.col(index)).norm();
+            T dis = (nearest_point - points.col(index)).norm();
             if (dis > E)
                 return ENUM_NURBS::NURBS_ERROR;
         }
@@ -2149,6 +2152,20 @@ namespace tnurbs
         Eigen::VectorX<T> knots(8);
         knots.template block<4, 1>(0, 0).setConstant(0.0);
         knots.template block<4, 1>(4, 0).setConstant(1.0);
+
+
+        Eigen::Matrix<T, dim, Eigen::Dynamic> matrix(dim, 4);
+        matrix.col(0) = points.col(ks);
+        matrix.col(1) = P1;
+        matrix.col(2) = P2;
+        matrix.col(3) = points.col(ke);
+        Eigen::VectorX<T> temp_knots(8);
+        temp_knots << 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0;
+        nurbs_curve<T, dim, false, -1, -1> temp_nurbs(temp_knots, matrix);
+
+        curve_nearest<nurbs_curve<double, 3, false, -1, -1>> curve_nearest_tool;
+        curve_nearest_tool.init(&temp_nurbs);
+
         for (int k = 1; k < dk; ++k)
         {
             T b1, b2;
@@ -2157,17 +2174,11 @@ namespace tnurbs
             T dis = ((alphas[k - 1] - alpha) * b1 * ts - (betas[k - 1] - beta) * te).norm();
             if (dis <= E)
                 continue;
-            Eigen::Matrix<T, dim, Eigen::Dynamic> matrix(dim, 4);
-            matrix.col(0) = points.col(ks);
-            matrix.col(1) = P1;
-            matrix.col(2) = P2;
-            matrix.col(3) = points.col(ke);
-            Eigen::VectorX<T> temp_knots(8);
-            temp_knots << 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0;
-            nurbs_curve<T, dim, false, -1, -1> temp_nurbs(temp_knots, matrix);
-            T u;
+            
+            T u, min_dis;
             Eigen::Vector<T, dim> nearst_point;
-            temp_nurbs.find_nearst_point_on_curve(points.col(k + ks), u, nearst_point);
+            curve_nearest_tool.find_nearst_point_on_curve(points.col(k + ks), u, nearst_point, min_dis);
+            // temp_nurbs.find_nearst_point_on_curve(points.col(k + ks), u, nearst_point);
             dis = (nearst_point - points.col(k + ks)).norm();
             if (dis > E)
                 return ENUM_NURBS::NURBS_ERROR;

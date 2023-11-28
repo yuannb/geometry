@@ -1772,6 +1772,8 @@ namespace tnurbs
 
                 Eigen::Vector<T, 1> point{current_knot}, nearst_point;
                 T u;
+
+                //TODO : 将find_nearst_point_on_curve换成效率高的
                 reparameter_function.find_nearst_point_on_curve(point, u, nearst_point, KNOTS_VECTOR_ERROR);
                 T distacne = (point - nearst_point).squaredNorm();
                 if (distacne > KNOTS_VECTOR_ERROR * KNOTS_VECTOR_ERROR)
@@ -1956,6 +1958,8 @@ namespace tnurbs
 
                 Eigen::Vector<T, 1> point{current_knot}, nearst_point;
                 T u;
+
+                //TODO : 将find_nearst_point_on_curve换成效率高的
                 reparameter_function.find_nearst_point_on_curve(point, u, nearst_point, KNOTS_VECTOR_ERROR);
                 T distacne = (point - nearst_point).squaredNorm();
                 if (distacne > KNOTS_VECTOR_ERROR * KNOTS_VECTOR_ERROR)

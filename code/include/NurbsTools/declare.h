@@ -122,7 +122,7 @@ template<typename T>
         Eigen::Vector<T, dim> Min;
         Eigen::Vector<T, dim> Max;
         Box() = default;
-
+        Box(T min, T max) : Min(min), Max(max) { };
         Box& operator=(const Box<T, dim> &other)
         {
             if (this != &other)
@@ -133,7 +133,7 @@ template<typename T>
             return *this;
         }
 
-        bool is_contain_point(const Eigen::Vector<T, dim> &point)
+        bool is_contain_point(const Eigen::Vector<T, dim> &point) const
         {
             for (int index = 0; index < dim; ++index)
             {

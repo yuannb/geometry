@@ -10,6 +10,7 @@
 #include "debug_used.h"
 #include "nurbs_build.h"
 #include "discret.h"
+#include "nearest.h"
 // #include <memory>
 using namespace tnurbs;
 
@@ -291,7 +292,7 @@ TEST_F(CreateNurbsCurve, InterpolateWithEndsTangent)
     ASSERT_TRUE(true == true);
 }
 
-TEST_F(CreateNurbsCurve2, InterpolateWithEndsTangent2)
+TEST_F(CreateNurbsCurve2, FitWithConic)
 {
     Eigen::Matrix<double, 3, Eigen::Dynamic> points(3, 100);
     Eigen::Matrix<double, 3, Eigen::Dynamic> tangents(3, 100);
@@ -303,14 +304,19 @@ TEST_F(CreateNurbsCurve2, InterpolateWithEndsTangent2)
         points.col(i) = p[0];
         tangents.col(i) = p[1];
     }
+
     nurbs_curve<double, 3, true, -1, -1> test_nurbs;
     fit_with_conic<double, 3>(points, tangents, test_nurbs, 0.5);
+    curve_nearest<nurbs_curve<double, 3, true, -1, -1>> curve_neareast_tool;
+    // curve_neareast_tool.set_dis_eps(0.1);
+    curve_neareast_tool.init(&test_nurbs);
+    double temp_u, temp_min_dis;
+    Eigen::Vector3d temp_point;
     for (int i = 0; i < 100; ++i)
     {
-        Eigen::Vector3d p;
-        double u;
-        test_nurbs.find_nearst_point_on_curve(points.col(i), u, p);
-        double d = (p - points.col(i)).norm();
+        curve_neareast_tool.find_nearst_point_on_curve(points.col(i), temp_u, temp_point, temp_min_dis);
+        // std::cout << i << std::endl;
+        double d = (temp_point - points.col(i)).norm();
         EXPECT_NEAR(d, 0.0, 0.5);
     }
 }
@@ -359,14 +365,19 @@ TEST_F(CreateNurbsCurve2, InterpolateWithEndsTangent4)
     }
     nurbs_curve<double, 3, false, -1, -1> test_nurbs;
     fit_with_cubic<double, 3>(points, tangents, test_nurbs, 0.1);
+
+    curve_nearest<nurbs_curve<double, 3, false, -1, -1>> curve_neareast_tool;
+    curve_neareast_tool.init(&test_nurbs);
+    double temp_u, temp_min_dis;
+    Eigen::Vector3d temp_point;
+    
     for (int i = 0; i < 10; ++i)
     {
-        Eigen::Vector3d p;
-        double u;
-        test_nurbs.find_nearst_point_on_curve(points.col(i), u, p);
-        double d = (p - points.col(i)).norm();
+        curve_neareast_tool.find_nearst_point_on_curve(points.col(i), temp_u, temp_point, temp_min_dis);
+        double d = (temp_point - points.col(i)).norm();
         EXPECT_NEAR(d, 0.0, 0.1);
     }
+
 }
 
 
@@ -669,6 +680,9 @@ TEST_F(CreateNurbsSurface, LoacalInterpolateSurface)
     nurbs_surface<double, 3, -1, -1, -1, -1, false> new_nurbs;
 
     local_bi3degree_interpolate<double, 3, ENPARAMETERIEDTYPE::CHORD>(points, new_nurbs);
+    surface_nearest<nurbs_surface<double, 3, -1, -1, -1, -1, false>> surface_nearest_tool;
+    surface_nearest_tool.init(&new_nurbs);
+    double temp_min_dis;
     for (int i = 0; i < 5; ++i)
     {
         for (int j = 0; j < 5; ++j)
@@ -676,11 +690,10 @@ TEST_F(CreateNurbsSurface, LoacalInterpolateSurface)
             Eigen::Vector3d point;
             double u, v;
             Eigen::Vector3d p;
-            ENUM_NURBS flag = new_nurbs.find_nearst_point_on_surface(points[i].col(j), u, v, p);
+            ENUM_NURBS flag = surface_nearest_tool.find_nearst_point_on_surface(points[i].col(j), u, v, p, temp_min_dis);
             ASSERT_EQ(ENUM_NURBS::NURBS_SUCCESS, flag);
-            new_nurbs.point_on_surface(u, v, point);
 
-            double distance = (point - points[i].col(j)).norm();
+            double distance = (p - points[i].col(j)).norm();
             EXPECT_NEAR(distance, 0.0, DEFAULT_ERROR);
         }
     }
@@ -694,7 +707,10 @@ TEST_F(CreateNurbsSurface, InterpolateSurface)
     nurbs_surface<double, 3, -1, -1, -1, -1, false> new_nurbs;
 
     global_surface_interpolate<double, 3, ENPARAMETERIEDTYPE::CHORD>(points, 3, 4, new_nurbs);
-
+    surface_nearest<nurbs_surface<double, 3, -1, -1, -1, -1, false>> surface_nearest_tool;
+    
+    surface_nearest_tool.init(&new_nurbs);
+    double temp_min_dis;
     for (int i = 0; i < 5; ++i)
     {
         for (int j = 0; j < 5; ++j)
@@ -702,11 +718,10 @@ TEST_F(CreateNurbsSurface, InterpolateSurface)
             Eigen::Vector3d point;
             double u, v;
             Eigen::Vector3d p;
-            ENUM_NURBS flag = new_nurbs.find_nearst_point_on_surface(points[i].col(j), u, v, p);
-            ASSERT_EQ(ENUM_NURBS::NURBS_SUCCESS, flag);
-            new_nurbs.point_on_surface(u, v, point);
+            ENUM_NURBS flag = surface_nearest_tool.find_nearst_point_on_surface(points[i].col(j), u, v, p, temp_min_dis);
+            EXPECT_EQ(ENUM_NURBS::NURBS_SUCCESS, flag);
 
-            double distance = (point - points[i].col(j)).norm();
+            double distance = (p - points[i].col(j)).norm();
             EXPECT_NEAR(distance, 0.0, DEFAULT_ERROR);
         }
     }
@@ -973,7 +988,6 @@ TEST_F(CreateNurbsCurve2, FindNearstPoint1)
     nurbs_surface<double, 3, -1, -1, -1, -1, true> test_surface(u_knots_vector, v_knots_vector, control_points);
 
 
-    std::vector<Eigen::Vector3d> pointss;
     std::vector<Eigen::Vector3d> points22;
     Eigen::Vector<Eigen::Vector3d, 2> normals;
     normals[0] = Eigen::Vector3d(0, 0, 1);
@@ -982,20 +996,17 @@ TEST_F(CreateNurbsCurve2, FindNearstPoint1)
     {
         for (int j = 50; j < 55; ++j)
         {
-            std::cout << i << " " << j << std::endl;
             Eigen::Vector3d point;
             test_surface.point_on_surface(0.05 * i, 0.03 * j, point);
-            Eigen::Vector3d p = point + 1 * normals[i % 2], nearst_point;
-            pointss.push_back(p);
         }
 
     }
-    std::vector<Eigen::Vector3d> nearst_points;
-    std::vector<double> us, vs;
-    clock_t start_time = clock();
-    find_nearst_point_on_surface(test_surface, pointss, us, vs, nearst_points);
+
+    surface_nearest<nurbs_surface<double, 3, -1, -1, -1, -1, true>> surface_nearest_tool;
+    surface_nearest_tool.init(&test_surface);
+    double temp_u, temp_v, temp_min_dis;
+    Eigen::Vector3d temp_min_point;
     
-    clock_t start_time2 = clock();
     for (int i = 30; i < 35; ++i)
     {
         for (int j = 50; j < 55; ++j)
@@ -1004,12 +1015,14 @@ TEST_F(CreateNurbsCurve2, FindNearstPoint1)
             test_surface.point_on_surface(0.05 * i, 0.03 * j, point);
             Eigen::Vector3d p = point + 1 * normals[i % 2], nearst_point;
             double u_p, v_p;
+            surface_nearest_tool.find_nearst_point_on_surface(p, temp_u, temp_v, temp_min_point, temp_min_dis);
             test_surface.find_nearst_point_on_surface(p, u_p, v_p, nearst_point);
             double d1 = (nearst_point - p).norm();
-            double d2 = (nearst_points[(i - 30) * 5 + (j - 50)] - p).norm();
+            double d2 = (temp_min_point - p).norm();
             double dis = d1 - d2;
-            std::cout << dis << std::endl;
-            ASSERT_TRUE(std::abs(dis) < 1e-4);
+            // std::cout << dis << std::endl;
+            EXPECT_NEAR(dis, 0.0, 1e-4);
+            // ASSERT_TRUE(std::abs(dis) < 1e-4);
             
         }
     } 
@@ -1077,34 +1090,26 @@ TEST_F(CreateNurbsCurve2, FindNearstPoint2)
     Eigen::VectorX<double> knots_vector(7);
     knots_vector << 0, 0, 0, 0.4, 1, 1, 1;
     nurbs_curve<double, 3, false, -1, -1> curve1(knots_vector, mat);
-    std::vector<Eigen::Vector3d> pointss;
-    std::vector<Eigen::Vector3d> points2;
     Eigen::Vector<Eigen::Vector3d, 2> normals;
     normals[0] = Eigen::Vector3d(1, -1, 0);
     normals[1] = Eigen::Vector3d(-1, 1, 0);
-    std::vector<double> us;
-    std::vector<Eigen::Vector3d> nearst_points;
-    for (int i = 0; i < 100; ++i)
-    {
-        Eigen::Vector3d point;
-        curve1.point_on_curve((double)0.01 * i, point);
-        Eigen::Vector3d p = point + 1 * normals[i % 2], nearst_point;
-        pointss.push_back(p);
-    }
-    find_nearst_point_on_curve(curve1, pointss, us, nearst_points);
+    
+    curve_nearest<nurbs_curve<double, 3, false, -1, -1>> curve_neareast_tool;
+    curve_neareast_tool.set_dis_eps(0.1);
+    curve_neareast_tool.init(&curve1);
+    double temp_u, temp_min_dis;
+    Eigen::Vector3d temp_point;
     
     for (int i = 0; i < 100; ++i)
     {
         Eigen::Vector3d point;
         curve1.point_on_curve((double)0.01 * i, point);
         Eigen::Vector3d p = point + 1 * normals[i % 2], nearst_point;
+        curve_neareast_tool.find_nearst_point_on_curve(p, temp_u, temp_point, temp_min_dis);
         double u_p;
         curve1.find_nearst_point_on_curve(p, u_p, nearst_point);
-        double d1 = (nearst_point - p).norm();
-        double d2 = (nearst_points[i] - p).norm();
-        std::cout << (d1 - d2) << std::endl;
-        std::cout << i << std::endl;
-        ASSERT_TRUE(std::abs(d1 - d2) < 1e-4);
+        double d1 = (temp_point - nearst_point).norm();
+        EXPECT_NEAR(d1, 0.0, 1e-4);
     }
 
 }
@@ -1129,6 +1134,6 @@ int main(int argc, char **argv)
 {
     testing::InitGoogleTest(&argc, argv);
     
-    ::testing::FLAGS_gtest_filter = "CreateNurbsCurve2.FindNearstPoint*";
+    // ::testing::FLAGS_gtest_filter = "CreateNurbsSurface.LoacalInterpolateSurface";
     return RUN_ALL_TESTS();
 }

@@ -708,6 +708,8 @@ namespace tnurbs
     public:
         static constexpr int point_size = is_rational ? dim + 1 : dim;
         static constexpr int dimension = dim;
+        //等参线曲线类型
+        using iso_curve_type = nurbs_curve<T, dim, is_rational, -1, -1>;
         using Type = T;
     private:
         
@@ -1201,7 +1203,7 @@ namespace tnurbs
                 return ENUM_NURBS::NURBS_SUCCESS;
             if (direction == ENUM_DIRECTION::V_DIRECTION)
                 reverse_uv();
-            int degree = direction == ENUM_DIRECTION::V_DIRECTION ? m_v_degree : m_u_degree;
+            // int degree =  m_u_degree;
             int rows = m_control_points.rows();
             // int cols = m_control_points[0].cols();
             // int knots_size = m_u_knots_vector.size();
@@ -1211,7 +1213,7 @@ namespace tnurbs
             for (int row_index = 0; row_index < rows; ++row_index)
             {
                 auto control_points = m_control_points[row_index];
-                refine_knots_vector_curve<T, point_size>(knots_vector_size, degree, m_u_knots_vector, control_points,
+                refine_knots_vector_curve<T, point_size>(knots_vector_size, m_u_degree, m_u_knots_vector, control_points,
                     insert_knots, new_knots_vector, new_control_points);
                 m_control_points[row_index] = new_control_points;
             }
@@ -1860,6 +1862,8 @@ namespace tnurbs
         {
             T u, v;
             Eigen::Vector<T, dim> nearst_point;
+
+            //TODO: 将find_nearst_point_on_surface换成效率高的
             find_nearst_point_on_surface(point, u, v, nearst_point);
             if ((nearst_point - point).squaredNorm() < DEFAULT_ERROR * DEFAULT_ERROR)
             {
