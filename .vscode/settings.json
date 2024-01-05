@@ -72,7 +72,9 @@
         "iomanip": "cpp",
         "mutex": "cpp",
         "span": "cpp",
-        "variant": "cpp"
+        "variant": "cpp",
+        "future": "cpp",
+        "valarray": "cpp"
     },
     "cmake.enabledOutputParsers": [],
     "cmake.exportCompileCommandsFile": true,

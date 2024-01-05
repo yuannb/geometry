@@ -26,7 +26,7 @@
         "name": "(gdb) 启动",
         "type": "cppdbg",
         "request": "launch",
-        "program": "/home/yuanbk/Downloads/geometry/build/GWB",
+        "program": "/home/yuanbk/Downloads/geometry/build/service",
         "args": [],
         "stopAtEntry": false,
         "cwd": "${fileDirname}",

@@ -1199,6 +1199,67 @@ namespace tnurbs
     }
 
 
+    template<typename curve_type, typename T = typename curve_type::Type, int dim = curve_type::dimension>
+    ENUM_NURBS mesh_help_to_mesh(curve_mesh_helper<curve_type> &mh, mesh<1, T, dim> &curve_mesh)
+    {
+        curve_mesh.m_ders.clear();
+        for (auto it = mh.ders.begin(); it != mh.ders.end(); ++it)
+        {
+            Eigen::Matrix<Eigen::Vector<T, dim>, 1, 1> vec;
+            vec(0, 0) = (*it)[0];
+            curve_mesh.m_ders.push_back(vec);
+        }
+        curve_mesh.m_indexs.clear();
+
+        curve_patch<curve_type> *current = mh.root;
+        while (current)
+        {
+            if (current->left == nullptr && current->right == nullptr)
+            {        
+                curve_patch<curve_type> *temp = current;
+                current = current->root;
+                std::vector<int> indexs(2);
+                indexs[0] = temp->point_index[0];
+                indexs[1] = temp->point_index[1];
+                curve_mesh.m_indexs.push_back(indexs);
+                if (current == nullptr)
+                {
+                    // delete temp;
+                    break;
+                }
+                
+
+                if (temp == current->left)
+                    current = current->right;
+                else
+                {
+                    while (current)
+                    {
+                        if (current->root && current->root->right == current)
+                            current = current->root;
+                        else
+                        {
+                            current = nullptr;
+                            break;
+                        }                     
+                    }
+                    if (current == nullptr)
+                        break;
+                    else
+                    {
+                        current = current->root->right;
+                    }
+                }
+            }
+            else if (current->left != nullptr)
+                current = current->left;
+            else
+                current = current->right;
+        }
+        return ENUM_NURBS::NURBS_SUCCESS;    
+    }
+
+
 
 }
 

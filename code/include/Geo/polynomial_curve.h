@@ -4,13 +4,13 @@ namespace tnurbs
 {
     using namespace tnurbs;
     template<typename T, int dim, bool is_rational, int points_count, int degree>
-    class polynomial_curve : public curve<polynomial_curve<T, dim, is_rational, points_count, degree>>
+    class polynomial_curve : public curve<T, dim>
     {
 
     };
 
     template<typename T, int dim, bool is_rational>
-    class polynomial_curve<T, dim, is_rational, -1, -1> : public curve<polynomial_curve<T, dim, is_rational, -1, -1>>
+    class polynomial_curve<T, dim, is_rational, -1, -1> : public curve<T, dim>
     {
     private:
         static constexpr int point_size = is_rational ? dim + 1 : dim;

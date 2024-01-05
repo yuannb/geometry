@@ -2,6 +2,23 @@
 #include "array"
 namespace tnurbs
 {
+
+    // enum ENGEOMETRYTYPE
+    // {
+
+    // }
+
+    enum ENGEOMETRYTYPE
+    {
+        UNKOWN = -1,
+        //无理nurbs曲线
+        NUNBS_CURVE = 0,
+        //有理nurbs曲线
+        NURBS_CURVE = 1
+    };
+
+
+
     template<typename T> struct geo_traits;
 
     template<typename T> struct geo_traits<const T> : geo_traits<T> {};

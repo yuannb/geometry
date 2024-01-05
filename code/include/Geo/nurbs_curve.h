@@ -16,7 +16,7 @@ namespace tnurbs
     /// @tparam points_count : 控制点个数
     /// @tparam degree : nurbs的阶数
     template<typename T, int dim, bool is_rational, int points_count, int degree>
-    class nurbs_curve : public curve<nurbs_curve<T, dim, is_rational, points_count, degree>>
+    class nurbs_curve : public curve<T, dim>
     {
         static int constexpr order = degree + 1;
         static int constexpr rows = is_rational ? dim + 1 : dim;
@@ -473,11 +473,11 @@ namespace tnurbs
     };
 
     template<typename T, int dim, bool is_rational, int degree>
-    class nurbs_curve<T, dim, is_rational, -1, degree> : public curve<nurbs_curve<T, dim, is_rational, -1, degree>>
+    class nurbs_curve<T, dim, is_rational, -1, degree> : public curve<T, dim>
     {
     public:
         using Type = T;
-        static constexpr int dimension = dim;
+        // static constexpr int dimension = dim;
     private:
         static int constexpr order = degree + 1;
         static int constexpr rows = is_rational ? dim + 1 : dim;
@@ -926,11 +926,11 @@ namespace tnurbs
     /// @tparam dim 
     /// @tparam is_rational 
     template<typename T, int dim, bool is_rational>
-    class nurbs_curve<T, dim, is_rational, -1, -1> : public curve<nurbs_curve<T, dim, is_rational, -1, -1>>
+    class nurbs_curve<T, dim, is_rational, -1, -1> : public curve<T, dim>
     {
     public:
         using Type = T;
-        static constexpr int dimension = dim;
+        
 
     private:
         static int constexpr rows = is_rational ? dim + 1 : dim;
@@ -963,6 +963,18 @@ namespace tnurbs
         //     nurbs_curve<T, dim, false, -1, -1> *id_nurbs = new nurbs_curve<T, dim, false, -1, -1>(knots, control_points);
         //     return id_nurbs;
         // }
+
+        constexpr virtual ENGEOMETRYTYPE  get_type() const override
+        {
+            if constexpr (is_rational == true)
+            {
+                return ENGEOMETRYTYPE::NURBS_CURVE;
+            }
+            else
+            {
+                return ENGEOMETRYTYPE::NUNBS_CURVE;
+            }
+        }
 
         ENUM_NURBS get_ends_knots(std::array<T, 2> &ends_knots) const
         {
@@ -1211,7 +1223,7 @@ namespace tnurbs
         /// @param u 曲线参数
         /// @param point out_put_param nurbs曲线参数u对应的像
         /// @return ENUM_NURBS错误码
-        ENUM_NURBS point_on_curve(T u, Eigen::Vector<T, dim> &point) const
+        virtual ENUM_NURBS point_on_curve(T u, Eigen::Vector<T, dim> &point) const override
         {
             int index = -1;
             find_span<T>(u,m_degree, m_knots_vector, index);
@@ -2642,6 +2654,8 @@ namespace tnurbs
     };
 
 
+    using nunbs3d = nurbs_curve<double, 3, false, -1, -1>;
+    using nurbs3d = nurbs_curve<double, 3, true, -1, -1>;
 
 }
 

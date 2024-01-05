@@ -17,41 +17,26 @@ public:
 
 namespace tnurbs
 {
-    using namespace tnurbs;
-    //是否需要加tag来让码农确定是什么类型的曲线, 或者加一个geometry基类, 在此类里面作处理?
-    template<typename curve_type>
+    template<typename T, int dim>
     class curve
     {
     public:
-        // using derived_type = typename geo_traits<curve_type>::type;
-        using point_number_type = typename geo_traits<curve_type>::point_number_type;
-        using point_type = typename geo_traits<curve_type>::point_type;
+        using Type = T;
+        static constexpr int dimension = dim;
     protected:
 
-        Interval<point_number_type> m_interval;
+        //辅助计算使用, 一般不用
+        Box<T, 1> m_interval;
 
     public:
-
-        // curve() = delete;
-
         virtual  ~curve() { };
 
-        ENUM_NURBS point_on_curve(point_number_type u, point_type &point)
-        {
-            static_cast<curve_type*>(this)->point_on_curve(u, point);
-            return ENUM_NURBS::NURBS_SUCCESS;
-        }
+        constexpr virtual ENGEOMETRYTYPE get_type() const { return ENGEOMETRYTYPE::UNKOWN; }
 
-        curve_type* get_derived()
-        {
-            return static_cast<curve_type*>(this);
-        }
-
-        const curve_type *get_derived() const
-        {
-            return static_cast<const curve_type*>(this);
-        }
+        virtual ENUM_NURBS point_on_curve(T u, Eigen::Vector<T, dim> &point) const = 0;
 
     };
+
+    using curve3d = curve<double, 3>;
 
 }
