@@ -12,6 +12,9 @@
 #include "discret.h"
 #include "nearest.h"
 // #include <memory>
+#include "convex_hell.h"
+#include "bezier_curve_int.h"
+#include "vodes.h"
 using namespace tnurbs;
 
 class CreateNurbsCurve : public testing::Test
@@ -1127,13 +1130,144 @@ TEST_F(CreateNurbsCurve2, DiscCurve)
     ASSERT_TRUE(true);
 }
 
-  
+TEST(CONVEXHELL, test1)
+{
+    std::vector<Eigen::Vector2<double>> test{ {0, 0}, { 1, 4}, {3, 3}, { 3, 1}, {5, 5}, { 5, 2 }, {7, 0}, {9, 6} };
+    std::vector<Eigen::Vector2<double>> result = graham_scan(test);
+    for (auto elem : result)
+    {
+        std::cout << "[" << elem[0] << " " << elem[1] << "], ";
+    }
+    std::cout << std::endl;
+} 
 
+TEST(BEZIER_INT, test1)
+{
+    Eigen::Matrix<double, 2, Eigen::Dynamic> mat1(2, 2);
+    mat1 << -1, 1,
+            -1, 1;
+    Eigen::Matrix<double, 2, Eigen::Dynamic> mat2(2, 2);
+    mat2 << -1.5, 1,
+            0, 0;
+
+    bezier_curve<double, 2, false, -1> b1(mat1);
+    bezier_curve<double, 2, false, -1> b2(mat2);
+    std::vector<Eigen::Vector<double, 2>> int_params = beziers_int(b1, b2);
+    for (auto param : int_params)
+    {
+        std::cout << "[" << param[0] << " " << param[1] << "], ";
+    }
+    std::cout << std::endl;
+}  
+
+TEST(BEZIER_INT, test2)
+{
+    Eigen::VectorX<double> u_knots_vector2(8);
+    u_knots_vector2<< 0, 0, 0, 0, 1, 1, 1, 1;
+    Eigen::VectorX<double> v_knots_vector2(8);
+    v_knots_vector2 << 0, 0, 0, 0, 1, 1, 1, 1;
+
+    Eigen::VectorX<double> u_knots_vector(6);
+    u_knots_vector<< 0, 0, 0, 1, 1, 1;
+    Eigen::VectorX<double> v_knots_vector(6);
+    v_knots_vector << 0, 0, 0, 1, 1, 1;
+
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points1(3, 3);
+    points1 << -10, 0, 10,
+               -30, -30, -30,
+               3, -3, 3;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points2(3, 3);
+    points2 << -10, 0, 10,
+               -10, -10, -10,
+               3, -3, 3;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points3(3, 3);
+    points3 << -10, 0, 10,
+               10, 10, 10,
+               3, -3, 3;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points4(3, 3);
+    points4 << -10, 0, 10,
+               30,  30, 15,
+               3,  -3,  3;
+
+    Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> control_points(4);
+    control_points(0) = points1;
+    control_points(1) = points2;
+    control_points(2) = points3;
+    control_points(3) = points4;
+    nurbs_surface<double, 3, -1, -1, -1, -1, false> *test_surface = new nurbs_surface<double, 3, -1, -1, -1, -1, false>(u_knots_vector, v_knots_vector2, control_points);
+    
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points11(3, 4);
+    points11 << 20,  10, -10, -20,
+                -10, -10, -10, -10,
+                3,  3, 3, 3;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points12(3, 4);
+    points12 << 20,  10, -10, -20,
+                -10, -10, -10, -10,
+                -1,  -1, -1, -1;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points13(3, 4);
+    points13 << 20,  10, -10, -20,
+                10, 10, 10, 10,
+                -1,  -1, -1, -1;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points14(3, 4);
+    points14 << 20,  10, -10, -20,
+                10, 10,  10,  10,
+                3,  3, 3, 3;
+
+    Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> control_points2(4);
+    control_points2(0) = points11;
+    control_points2(1) = points12;
+    control_points2(2) = points13;
+    control_points2(3) = points14;
+    nurbs_surface<double, 3, -1, -1, -1, -1, false> *test_surface2 = new nurbs_surface<double, 3, -1, -1, -1, -1, false>(u_knots_vector2, v_knots_vector2, control_points2);
+
+    surface_mesh_helper<nurbs_surface<double, 3, -1, -1, -1, -1, false>> mh;
+    disc_surface(test_surface, mh, TDEFAULT_ERROR<double>::value, 10.0, 0.1, 1.0);
+    mesh<2> surface_mesh;
+    mesh_help_to_mesh(mh, surface_mesh);
+
+    save_obj(&surface_mesh, "xx1.obj");
+
+    surface_mesh_helper<nurbs_surface<double, 3, -1, -1, -1, -1, false>> mh2;
+    disc_surface(test_surface2, mh2, TDEFAULT_ERROR<double>::value, 10.0, 0.1, 1.0);
+    mesh<2> surface_mesh2;
+    mesh_help_to_mesh(mh2, surface_mesh2);
+    save_obj(&surface_mesh2, "xx2.obj");
+
+    Box<double, 4> initial_box;
+    initial_box.Min = Eigen::Vector4d(0.0, 0.666, 0.7, 0.8);
+    initial_box.Max = Eigen::Vector4d(0.02, 0.67, 0.8, 1.0);
+    
+    surf_surf_int<nurbs_surface<double, 3, -1, -1, -1, -1, false>> *temp = new surf_surf_int<nurbs_surface<double, 3, -1, -1, -1, -1, false>>();
+    surf_surf_intersect_point<double, 3> *temp2 = new surf_surf_intersect_point<double, 3>();
+    temp2->m_point = Eigen::Vector3d(0, 0, 5);
+    temp->m_intersect_points.push_back(temp2);
+    ODESolver<nurbs_surface<double, 3, -1, -1, -1, -1, false>, false>(initial_box, test_surface, test_surface2, temp, 10.0);
+    
+    int count = temp->m_intersect_points_count[0];
+    Eigen::Matrix<double, 3, Eigen::Dynamic> mat(3, count);
+
+    
+    for (int index = 0; index < count; ++index)
+    {
+        mat.col(index) = temp2->m_point;
+        temp2 = temp2->m_next;
+    }
+    save_obj(mat, "intersect.obj");
+
+    std::cout << 1 << std::endl;
+}  
 
 int main(int argc, char **argv)
 {
     testing::InitGoogleTest(&argc, argv);
     
-    // ::testing::FLAGS_gtest_filter = "CreateNurbsSurface.LoacalInterpolateSurface";
+    ::testing::FLAGS_gtest_filter = "BEZIER_INT.test2";
     return RUN_ALL_TESTS();
 }

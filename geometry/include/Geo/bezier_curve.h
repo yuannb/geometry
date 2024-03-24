@@ -19,6 +19,8 @@ namespace tnurbs
                 m_control_points.col(col_index) = points[col_index];
             }
         }
+
+        int get_degree() const { return m_control_points.cols() - 1; }
         ENUM_NURBS point_on_curve(T u, Eigen::Vector<T, dim> &point) const
         {
             if (u < 0.0 || u > 1.0)
@@ -98,6 +100,23 @@ namespace tnurbs
                 m_control_points.col(col_index) = points[col_index];
             }
         }
+        bezier_curve(const Eigen::Matrix<T, row_size, Eigen::Dynamic> &points)
+        {
+            m_control_points = points;
+        }
+
+        bezier_curve(const bezier_curve *curve)
+        {
+            size_t col_size = curve->m_control_points.size(); 
+            m_control_points.resize(row_size, col_size);
+            for (size_t col_index = 0; col_index < col_size; ++col_index)
+            {
+                m_control_points.col(col_index) = curve->m_control_points[col_index];
+            }
+        }
+
+        int get_degree() const { return m_control_points.cols() - 1; }
+
         ENUM_NURBS point_on_curve(T u, Eigen::Vector<T, dim> &point) const
         {
             if (u < 0.0 || u > 1.0)

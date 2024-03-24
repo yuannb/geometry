@@ -686,7 +686,7 @@ namespace tnurbs
             Box<T, 1> temp_u_box;
             if (m_uv_box != nullptr)
             {
-                temp_u_box = Box<T, 1>(m_uv_box->Min[0], m_uv_box->Max[0]);
+                temp_u_box = Box<T, 1>( Eigen::Vector<T, 1> (m_uv_box->Min[0]), Eigen::Vector<T, 1> { m_uv_box->Max[0] });
                 u_box = &temp_u_box;
             }
 
@@ -701,7 +701,7 @@ namespace tnurbs
             Box<T, 1> temp_v_box;
             if (m_uv_box != nullptr)
             {
-                temp_v_box = Box<T, 1>(m_uv_box->Min[1], m_uv_box->Max[1]);
+                temp_v_box = Box<T, 1>(Eigen::Vector<T, 1>{ m_uv_box->Min[1] } , Eigen::Vector<T, 1> { m_uv_box->Max[1] } );
                 v_box = &temp_v_box;
             }
             for (int index = 0; index < v_curves_count; ++index)

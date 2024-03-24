@@ -60,6 +60,7 @@ namespace tnurbs
         ENUM_NURBS derivative_on_surface(T u, T v, Eigen::Matrix<Eigen::Vector<T, dim>, n + 1, n + 1> &result) const;
         ENUM_NURBS decompose_to_nurbs(Eigen::MatrixX<nurbs_surface<T, dim, -1, -1, -1, -1, is_rational>*> &surfs) const;
         ENUM_NURBS get_c0_isoparameter_curve(const std::vector<nurbs_curve<T, dim, is_rational, -1, -1>*> u_iosparameter_curve, std::vector<T> &us, std::vector<T> &vs, const std::vector<nurbs_curve<T, dim, is_rational, -1, -1>*> v_iosparameter_curve) const;
+        ENUM_NURBS sub_divide(Box<T, 2> &uv_box);
     };
 
 
@@ -703,7 +704,7 @@ namespace tnurbs
     /// @tparam dim : nurbs所在欧氏空间的维数
     /// @tparam is_rational : 是否时有理nurbs
     template<typename T, int dim, bool is_rational>
-    class nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> : public surface<nurbs_surface<T, dim, -1, -1, -1, -1, is_rational>>
+    class nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> : public surface<T, dim>
     {
     public:
         static constexpr int point_size = is_rational ? dim + 1 : dim;
@@ -729,7 +730,18 @@ namespace tnurbs
         {
             m_v_degree = m_v_knots_vector.size() - m_control_points.rows() - 1;
             m_u_degree = m_u_knots_vector.size() - m_control_points[0].cols() - 1;
+            
+            this->m_interval.Min = Eigen::Vector2<T>(u_knots_vector[0], v_knots_vector[0]);
+            this->m_interval.Max = Eigen::Vector2<T>(u_knots_vector[u_knots_vector.size() - 1], v_knots_vector[v_knots_vector.size() - 1]);
+            // set_interval(u_knots_vector[0], u_knots_vector[u_knots_vector.size() - 1], v_knots_vector[0], v_knots_vector[v_knots_vector.size() - 1]);
         }
+
+        // bool set_interval2(const Box<T, 2> &bx) const 
+        // {  
+        //     // m_interval = bx;
+        //     this->m_interval = bx;
+        //     return true;
+        // }
 
         nurbs_surface(const Eigen::VectorX<T> &u_knots_vector, const Eigen::VectorX<T> &v_knots_vector,
         const Eigen::MatrixX<Eigen::Vector<T, point_size>> &control_points) :
@@ -748,6 +760,9 @@ namespace tnurbs
             }
             m_v_degree = m_v_knots_vector.size() - m_control_points.rows() - 1;
             m_u_degree = m_u_knots_vector.size() - m_control_points[0].cols() - 1;
+            this->m_interval.Min = Eigen::Vector2<T>(u_knots_vector[0], v_knots_vector[0]);
+            this->m_interval.Max = Eigen::Vector2<T>(u_knots_vector[u_knots_vector.size() - 1], v_knots_vector[v_knots_vector.size() - 1]);
+            // set_interval(u_knots_vector[0], u_knots_vector[u_knots_vector.size() - 1], v_knots_vector[0], v_knots_vector[v_knots_vector.size() - 1]);
         }
 
         ENUM_NURBS get_uv_knots_end(std::array<T, 2> &u_knots_end, std::array<T, 2> &v_knots_end) const
@@ -775,6 +790,10 @@ namespace tnurbs
             m_control_points = surf.get_control_points();
             m_u_knots_vector = surf.get_u_knots();
             m_v_knots_vector = surf.get_v_knots();
+            // this->m_interval.Min = Eigen::Vector2<T>(surf.u_knots_vector[0], surf.v_knots_vector[0]);
+            // this->m_interval.Max = Eigen::Vector2<T>(surf.u_knots_vector[surf.u_knots_vector.size() - 1], surf.v_knots_vector[surf.v_knots_vector.size() - 1]);
+            // set_interval(surf.get_interval());
+            this->m_interval = surf.get_interval();
         }
 
         int get_u_degree() const 
@@ -1123,6 +1142,44 @@ namespace tnurbs
         }
 
 
+        ENUM_NURBS tangent_u_surface(nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> &surf) const
+        {
+            Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> PK(2);
+            int row_points_count = m_control_points.rows();
+            Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> new_control_points(row_points_count);
+            for (int index = 0; index < row_points_count; ++index)
+            {
+                curve_deriv_cpts<T, point_size>(m_u_degree, 1, 0, m_control_points[0].cols() - 1, m_u_knots_vector, m_control_points[index], PK);
+                new_control_points[index] = PK[1].block(0, 0, point_size, m_control_points[0].cols() - 1);
+            }
+            Eigen::VectorX<T> u_knots_vector = m_u_knots_vector.block(1, 0, m_u_knots_vector.size() - 2, 1);
+            surf.set_control_points(new_control_points);
+            surf.set_uv_knots(u_knots_vector, m_v_knots_vector);
+            surf.set_uv_degree(m_u_degree - 1, m_v_degree);
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+
+        //TODO: 加const
+        ENUM_NURBS tangent_v_surface(nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> &surf)
+        {
+            reverse_uv();
+            tangent_u_surface(surf);
+            // Eigen::Vector<Eigen::Matrix<T, point_size, Eigen::Dynamic>, 2> PK;
+            // int row_points_count = m_control_points.rows();
+            // Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> new_control_points(row_points_count);
+            // for (int index = 0; index < row_points_count; ++index)
+            // {
+            //     curve_deriv_cpts<T, point_size>(m_u_degree, 1, 0, m_control_points[0].cols() - 1, m_u_knots_vector, m_control_points[index], PK);
+            //     new_control_points[index] = PK[1].block(0, 0, point_size, m_control_points[0].cols() - 1);
+            // }
+            // Eigen::VectorX<T> u_knots_vector = m_u_knots_vector.block(1, 0, m_u_knots_vector.size() - 2, 1);
+            // surf.set_control_points(new_control_points);
+            // surf.set_uv_knots(u_knots_vector, m_v_knots_vector);
+            // surf.set_uv_degree(m_u_degree - 1, m_v_degree);
+            reverse_uv();
+            surf.reverse_uv();
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
 
         ENUM_NURBS tangent_vector_u(double u, double v,  Eigen::Vector<T, dim> &tangent_vector) const
         {
@@ -1962,7 +2019,7 @@ namespace tnurbs
         }
 
 
-        // u = f(s) = alpha * s + beta
+        // u = f(s) = alpha * s + beta(s是新的参数)
         ENUM_NURBS surface_reparameter_with_linear_function(T alpha, T beta, ENUM_DIRECTION direction, 
             nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> &new_nurbs_surface) const
         {

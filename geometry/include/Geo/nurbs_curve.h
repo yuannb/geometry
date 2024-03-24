@@ -57,6 +57,7 @@ namespace tnurbs
         ENUM_NURBS get_weight(int index, T &w) const;
         ENUM_NURBS set_nonhome_control_points(const Eigen::Matrix<T, dim, points_count> &control_points);
         ENUM_NURBS sub_divide(Box<T, 1> &u_box, nurbs_curve<T, dim, is_rational, -1, -1> &sub_nurbs) const;
+        // Eigen::VectorX<T> get_knots_vector() const;
         ENUM_NURBS sub_divide(Box<T, 1> &u_box);
         ENUM_NURBS decompose_to_nurbs(std::vector<nurbs_curve<T, dim, is_rational, -1, -1>*> &curves) const;
         int get_knots_count() const
@@ -952,6 +953,16 @@ namespace tnurbs
             m_degree = nurbs_curve_to_copy.get_degree();
             m_control_points = nurbs_curve_to_copy.get_control_points();
         }
+
+        //bezier curve
+        nurbs_curve(const Eigen::Matrix<T, rows, Eigen::Dynamic> &control_points) : m_control_points(control_points) 
+                    { 
+                        m_degree = m_control_points.cols() - 1;
+                        m_knots_vector.resize(m_degree * 2 + 2);
+                        m_knots_vector.block(0, 0, m_degree + 1, 1).setConstant(0.0);
+                        m_knots_vector.block(m_degree + 1, 0, m_degree + 1, 1).setConstant(1.0);
+                    }
+
 
         // //生成值全为1的一阶的nurbs曲线
         // static nurbs_curve<T, dim, false, -1, -1> *make_identity_nurbs(T low, T high) const

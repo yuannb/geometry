@@ -1,4 +1,0 @@
-2023-12-28 21:47:20.389 INFO  http server listening on 0.0.0.0:8080 [HttpServer.cpp:178:http_server_run]
-2023-12-28 21:47:20.390 INFO  EventLoop started, pid=46831 tid=46862 [HttpServer.cpp:151:loop_thread]
-2023-12-28 21:49:28.879 INFO  [46831-46862][127.0.0.1:36952][POST /echo]=>[200 OK] [HttpHandler.cpp:321:onMessageComplete]
-2023-12-28 21:50:24.606 WARN  keepalive timeout [127.0.0.1:8080] <=> [127.0.0.1:36952] [hevent.c:640:__keepalive_timeout_cb]

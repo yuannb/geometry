@@ -24,10 +24,21 @@ namespace tnurbs
     struct Interval
     {
         Eigen::Vector2<T> m_interval;
-        Interval() = default;
+        Interval() : m_interval {0, 0} { };
         Interval(T low, T high) { m_interval[0] = low; m_interval[1] = high; }
+        Interval(const Interval &interval) { m_interval = interval.m_interval; }
         T get_low() const { return m_interval[0]; }
         T get_high() const { return m_interval[1]; }
+        Interval &operator=(const Interval &rhs)
+        {
+            m_interval = rhs.m_interval;
+            return *this;
+        }
+        Interval &operator+=(const Interval &rhs)
+        {
+            m_interval += rhs.m_interval;
+            return *this;
+        }
         ENUM_NURBS set_interval(T low, T high)
         {
             if (low > high)

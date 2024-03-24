@@ -5,13 +5,13 @@ namespace tnurbs
 {
     using namespace tnurbs;
     template<typename T, int dim, int u_degree, int v_degree, bool is_rational>
-    class polynomial_surface : public surface<polynomial_surface<T, dim, u_degree, v_degree, is_rational>>
+    class polynomial_surface : public surface<T, dim>
     {
 
     };
 
     template<typename T, int dim , bool is_rational>
-    class polynomial_surface<T, dim, -1, -1, is_rational> : public surface<polynomial_surface<T, dim, -1, -1, is_rational>>
+    class polynomial_surface<T, dim, -1, -1, is_rational> : public surface<T, dim>
     {
         static constexpr int point_size = is_rational ? dim + 1 : dim;
         int m_u_degree;
