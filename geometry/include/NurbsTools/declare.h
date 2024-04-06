@@ -2,6 +2,8 @@
 #include "array"
 #include <Eigen/Dense>
 #include <Eigen/Core>
+#include <math.h>
+// using M_PI
 namespace tnurbs
 {
     constexpr int MAXINTERSETORPOINTNUMBER = 100000;
@@ -10,6 +12,9 @@ namespace tnurbs
     // {
 
     // }
+
+    
+
 
     enum ENGEOMETRYTYPE
     {
@@ -44,6 +49,22 @@ namespace tnurbs
     };
 
 
+    template<typename T>
+    struct SPACE_PARAM_TIMES
+    {
+    };
+
+    template<>
+    struct SPACE_PARAM_TIMES<double>
+    {
+        constexpr static double value = 1e-4;
+    };
+
+    template<>
+    struct SPACE_PARAM_TIMES<float>
+    {
+        constexpr static float value = 1e-3;
+    };
 
 
     template<typename T>
@@ -162,7 +183,6 @@ namespace tnurbs
         Eigen::Vector<T, dim> Min;
         Eigen::Vector<T, dim> Max;
 
-
         Box() = default;
         Box(const Box &box): Min(box.Min), Max(box.Max) { }
         // Box(T min, T max) : Min(min), Max(max) { };
@@ -246,8 +266,21 @@ namespace tnurbs
     
         Box &scale(T s)
         {
-            Min *= s;
-            Max *= s;
+            for (int index = 0; index < dim; ++index)
+            {
+                T l1 = Min[index] * s;
+                T l2 = Max[index] * s;
+                if (l1 > l2)
+                {
+                    Min[index] = l2;
+                    Max[index] = l1;
+                }
+                else
+                {
+                    Min[index] = l1;
+                    Max[index] = l2;
+                }
+            }
             return *this;
         }
 
@@ -283,7 +316,17 @@ namespace tnurbs
 
     };
 
-
+    template<typename T, int dim>
+    ENUM_NURBS create_box(const Eigen::Vector<T, dim>& center, T len, Box<T, dim> &box)
+    {
+        if (len < 0)
+            return ENUM_NURBS::NURBS_ERROR;
+        Eigen::Vector<T, dim> len_vec;
+        len_vec.setConstant(len);
+        box.Min = center - len_vec;
+        box.Max = center + len_vec;
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
 
 }
 

@@ -31,6 +31,8 @@ namespace tnurbs
     template<typename T, int dim, int rows, int cols, int u_degree, int v_degree, bool is_rational>
     class nurbs_surface
     {
+    public:
+        static constexpr int dimension = dim;
         static constexpr int point_size = is_rational ? dim + 1 : dim;
         //TODO:
         int get_u_degree();
@@ -61,6 +63,7 @@ namespace tnurbs
         ENUM_NURBS decompose_to_nurbs(Eigen::MatrixX<nurbs_surface<T, dim, -1, -1, -1, -1, is_rational>*> &surfs) const;
         ENUM_NURBS get_c0_isoparameter_curve(const std::vector<nurbs_curve<T, dim, is_rational, -1, -1>*> u_iosparameter_curve, std::vector<T> &us, std::vector<T> &vs, const std::vector<nurbs_curve<T, dim, is_rational, -1, -1>*> v_iosparameter_curve) const;
         ENUM_NURBS sub_divide(Box<T, 2> &uv_box);
+        Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> get_control_points() const;
     };
 
 
@@ -73,6 +76,8 @@ namespace tnurbs
     template<typename T, int dim, int u_degree, int v_degree, bool is_rational>
     class nurbs_surface<T, dim, -1, -1, u_degree, v_degree, is_rational>
     {
+    public:
+        static constexpr int dimension = dim;
     private:
         static constexpr int point_size = is_rational ? dim + 1 : dim;
         Eigen::VectorX<T> m_u_knots_vector;

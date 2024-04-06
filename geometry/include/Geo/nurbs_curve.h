@@ -2664,7 +2664,6 @@ namespace tnurbs
         using point_type = typename  Eigen::Vector<T, dim> ;
     };
 
-
     using nunbs3d = nurbs_curve<double, 3, false, -1, -1>;
     using nurbs3d = nurbs_curve<double, 3, true, -1, -1>;
 

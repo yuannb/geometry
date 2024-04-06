@@ -321,7 +321,7 @@ namespace tnurbs
         Eigen::Vector3d ve;
         ve.transpose();
         new_points.template block<1, dim>(1, 0) = D0.transpose() * (knots_vector[degree + 1] * inverse_degree);
-        new_points.template block(2, 0, params_size - 2, dim) = (points.block(0, 1, dim, params_size - 2)).transpose();
+        new_points.block(2, 0, params_size - 2, dim) = (points.block(0, 1, dim, params_size - 2)).transpose();
         new_points.template block<1, dim>(params_size, 0) = D1.transpose() * ((1.0 - knots_vector[params_size + 1]) * inverse_degree);
         new_points.template block<1, dim>(params_size + 1, 0) = (points.col(params_size - 1)).transpose();
 

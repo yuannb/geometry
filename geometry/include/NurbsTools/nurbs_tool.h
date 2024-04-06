@@ -14,7 +14,7 @@
 #define ANGLE_ERROR       1e-3
 #define MAX_ITERATE_DEEP 1e5
 #define MAX_SURFACE_ITERATE_DEEP 100
-#define SURFACE_ITERATE_DEEP 10
+constexpr int SURFACE_ITERATE_DEEP = 10;
 #define MAX_ITERATE_STEP    1e-3
 #define INDEX_IS_OUTSIDE_OF_KNOTS_VECTOR    -1
 
@@ -4071,7 +4071,7 @@ namespace tnurbs
     }
 
 
-
+#include "math.h"
     template<typename T, int dim>
     T angle_between_tow_vector(const Eigen::Vector<T, dim> &v1, const Eigen::Vector<T, dim> &v2)
     {

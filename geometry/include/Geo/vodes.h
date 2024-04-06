@@ -2,6 +2,7 @@
 #include "nurbs_surface.h"
 #include "interval_alogrithm.h"
 #include <memory>
+#include "bezier_curve_int.h"
 namespace tnurbs
 {
     //check uniqueness and existence
@@ -37,112 +38,6 @@ namespace tnurbs
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
-
-    template<typename surface_type, typename T = typename surface_type::Type, int dim = surface_type::dimension>
-    bool eval_priori_enclosure(const surface_type *u_surface_left, const surface_type *v_surface_left,
-                                        const surface_type *u_surface_right, const surface_type *v_surface_right, const Box<T, 4> &box_domain,
-                                        const Box<T, 4> &initial_box, Box<T, 4> &priori_enclosure, const T &step_size, T param_space_eps)
-    {
-        //目前仅仅支持三维
-        static_assert(3 == dim, "dim != 3 is not supported");
-        std::array<Interval<T>, (unsigned)dim> left_normal_interval, right_normal_interval;
-        std::array<Interval<T>, (unsigned)dim> left_u_tangent_interval, left_v_tangent_interval;
-        std::array<Interval<T>, (unsigned)dim> right_u_tangent_interval, right_v_tangent_interval;
-
-        Box<T, 2> left_param_box(initial_box.Min.template block<2, 1>(0, 0), initial_box.Max.template block<2, 1>(0, 0));
-        Box<T, 2> right_param_box(initial_box.Min.template block<2, 1>(2, 0), initial_box.Max.template block<2, 1>(2, 0));
-        eval_normal_and_tangent_interval<surface_type>(u_surface_left, v_surface_left, left_param_box, left_normal_interval, left_u_tangent_interval, left_v_tangent_interval);
-        eval_normal_and_tangent_interval<surface_type>(u_surface_right, v_surface_right, right_param_box, right_normal_interval, right_u_tangent_interval, right_v_tangent_interval);
-
-        Interval<T> u_normal_dot = dot_product(left_normal_interval, left_normal_interval);
-        Interval<T> v_normal_dot = dot_product(right_normal_interval, right_normal_interval);
-
-        std::array<Interval<T>, (unsigned)dim> c = vector_product(left_normal_interval, right_normal_interval);
-
-        T len = std::sqrt(u_normal_dot.m_interval[1]) * std::sqrt(v_normal_dot.m_interval[1]);
-        Interval<T> len_interval(len, len);
-        std::array<Interval<T>, (unsigned)dim> temp;
-         if (false == divide<T, dim>(c, len_interval, temp))
-            return false;
-
-
-        int count = 0;
-        for (int index = 0; index < dim; ++index)
-        {
-            if (0.0 >= temp[index].m_interval[0] - TDEFAULT_ERROR<T>::value &&  0.0 <= temp[index].m_interval[1] + PRECISION<T>::value)
-                ++count;
-        }
-        
-        //奇异点
-        if (count == dim)
-            return false;
-
-        Interval<T> c_dot = dot_product(c, c);
-        c_dot.m_interval[0] = std::sqrt(c_dot.m_interval[0]);
-        c_dot.m_interval[1] = std::sqrt(c_dot.m_interval[1]);
-        if (divide<T, (unsigned)dim>(c, c_dot, c) == false)
-            return false;
-
-
-        Interval<T> alpha, beta, u, v;
-        if (false == divide(dot_product(left_normal_interval, vector_product(c, left_v_tangent_interval)), u_normal_dot, alpha))
-            return false;
-        if (false == divide(dot_product(left_normal_interval, vector_product(left_u_tangent_interval, c)), u_normal_dot, beta))
-            return false;
-        if (false == divide(dot_product(right_normal_interval, vector_product(c, right_v_tangent_interval)), v_normal_dot, u))
-            return false;
-        if (false == divide(dot_product(right_normal_interval, vector_product(right_u_tangent_interval, c)), v_normal_dot, v))
-            return false;
-
-
-        Box<T, 4> box_interval, box_interval2;
-        box_interval2.Min[0] = alpha.m_interval[0];
-        box_interval2.Min[1] = beta.m_interval[0];
-        box_interval2.Min[2] = u.m_interval[0];
-        box_interval2.Min[3] = v.m_interval[0];
-
-        box_interval2.Max[0] = alpha.m_interval[1];
-        box_interval2.Max[1] = beta.m_interval[1];
-        box_interval2.Max[2] = u.m_interval[1];
-        box_interval2.Max[3] = v.m_interval[1];
-        box_interval2.scale(step_size);
-        
-
-        Interval<T> step_box(0.0, step_size);
-        alpha = mutilply(alpha, step_box);
-        beta = mutilply(beta, step_box);
-        u = mutilply(u, step_box);
-        v = mutilply(v, step_box);
-
-
-        box_interval.Min[0] = alpha.m_interval[0];
-        box_interval.Min[1] = beta.m_interval[0];
-        box_interval.Min[2] = u.m_interval[0];
-        box_interval.Min[3] = v.m_interval[0];
-
-        box_interval.Max[0] = alpha.m_interval[1];
-        box_interval.Max[1] = beta.m_interval[1];
-        box_interval.Max[2] = u.m_interval[1];
-        box_interval.Max[3] = v.m_interval[1];
-
-        Eigen::Vector4<T> param_dis = box_interval.Max - box_interval.Min;
-        if (param_dis[0] + param_dis[1] > param_space_eps || param_dis[2] + param_dis[3] > param_space_eps)
-            return false;
-
-        Box<T, 4> param_box;
-        initial_box.plus(box_interval, PRECISION<T>::value).intersect(box_domain, param_box);
-        if (priori_enclosure.is_contain_box(param_box))
-        {
-            if (initial_box.plus(box_interval2, PRECISION<T>::value).intersect(box_domain, priori_enclosure))
-                return true;
-        }
-             
-        //else
-        priori_enclosure = param_box;
-        return false;
-    }
-
-
     //计算第一基本型和第二基本型
     template<typename T, int dim>
     ENUM_NURBS eval_first_and_second_fundenmental(const Eigen::Matrix<Eigen::Vector<T, dim>, 3, 3> ders, const Eigen::Vector<T, dim> &normal, 
@@ -158,7 +53,6 @@ namespace tnurbs
         second(1, 1) = ders(0, 2).dot(normal);
         return ENUM_NURBS::NURBS_SUCCESS;
     }
-
     
     /// @brief 计算两个曲面交线在各自参数域的原像曲线的1-2阶微分
     /// @tparam surface_type 曲面类型
@@ -259,72 +153,6 @@ namespace tnurbs
     }
     
 
-    template<typename T, int dim>
-    ENUM_NURBS guess_step_size(const Eigen::Matrix<T, dim, 3> &ders, T eps, T &step_size)
-    {
-        T y_norm = ders.col(0).norm();
-        T y_d_norm = ders.col(1).norm();
-        T y_dd_norm = ders.col(2).norm();
-        step_size = std::sqrt(eps * y_norm / (2.0 * y_dd_norm));
-        if (y_norm < step_size * y_d_norm || step_size < eps)
-        {
-            step_size = eps * y_d_norm / (2.0 * y_dd_norm);
-        } 
-        return ENUM_NURBS::NURBS_SUCCESS;
-    }
-
-
-    //TODO: 参数域边界需要处理
-    template<typename surface_type, bool direction, typename T = typename surface_type::Type, int dim = surface_type::dimension>
-    ENUM_NURBS eval_step_size_and_yBox(const surface_type *left_surf, const surface_type *right_surf, 
-                                        const surface_type *left_u_tangent_surface, const surface_type *left_v_tangent_surface, 
-                                        const surface_type *right_u_tangent_surface, const surface_type *right_v_tangent_surface, const Box<T, 4> & box_domain,
-                                        const Box<T, 4> &initial_box, Box<T, 4> &priori_enclosure, Eigen::Vector<T, 4> &next_initinal_param, T param_space_eps, T &step_size)
-    {
-        Eigen::Vector<T, 4> param = (initial_box.Min + initial_box.Max) / 2.0;
-
-        Eigen::Matrix<T, 4, 2> params_ders;
-        Eigen::Matrix<T, dim, 3> space_ders;
-        eval_preiamge_ders(left_surf, right_surf, param[0], param[1], param[2], param[3], params_ders, space_ders);
-
-        //此处需要修改
-        T temp = direction == true ? (2.0 * param_space_eps) / params_ders.col(0).norm() : (-2.0 * param_space_eps) / params_ders.col(0).norm();
-        if (std::abs(temp) < std::abs(step_size))
-            step_size = temp;
-
-        //TODO : 10为最大循环次数, 以后整理一下
-        priori_enclosure = initial_box;
-        int index = 0;
-        for (;index < 10; ++index)
-        {
-            //需要修改一点点
-            if (true == eval_priori_enclosure(left_u_tangent_surface, left_v_tangent_surface, right_u_tangent_surface, right_v_tangent_surface, box_domain, initial_box, priori_enclosure, step_size, param_space_eps))
-            {
-                break;
-            }
-                
-            step_size /= 2.0;
-            if (std::abs(step_size) < TDEFAULT_ERROR<T>::value)
-                return ENUM_NURBS::NURBS_ERROR;
-        }
-        if (index == 10)
-            return ENUM_NURBS::NURBS_ERROR;
-        
-        next_initinal_param = params_ders.col(0) * step_size + param;
-        for (int j = 0; j < 4; ++j)
-        {
-            if (next_initinal_param[j] < 0.0)
-                next_initinal_param[j] = 0.0;
-            else if (next_initinal_param[j] > 1.0)
-                next_initinal_param[j] = 1.0;
-        }
-
-
-        return ENUM_NURBS::NURBS_SUCCESS;
-    }
-
-
-
     //intersect points
     //surf_surf_int 负责释放内存
     template<typename T, int dim>
@@ -332,26 +160,25 @@ namespace tnurbs
     {
         surf_surf_intersect_point<T, dim> *m_next;
         Eigen::Vector<T, dim> m_point;
-        Eigen::Vector2<T> m_left_uv;
-        Eigen::Vector2<T> m_right_uv;
+        Eigen::Vector4<T> m_uv;
         
-        //是否相切
+        //是否相切.TODO:几阶接触
         bool m_is_tangent;
 
         //是否时孤立交点
         bool m_is_isolate;
 
         //奇异点必然为起始点或者终止点
+        //奇异点的意思是在此点的切平面上存在至少两个方向v1, v2, 使得两个相交的平面在这两个方向上任意阶偏导数相等(弧长参数下), 奇异点必然相切
         bool m_is_singular;
         std::vector<surf_surf_intersect_point*> m_connect_points;
 
-        //TODO:几阶接触
     };
 
     //面面相交的结果
     template<typename surface_type, typename T = typename surface_type::Type, int dim = surface_type::dimension>
     struct surf_surf_int
-    {
+    {        
         surface_type* m_left_surf;
         surface_type* m_right_surf;
         std::vector<surf_surf_intersect_point<T, dim>*> m_intersect_points;
@@ -377,210 +204,466 @@ namespace tnurbs
         }
     };
 
-
-    //迭代加细交点(周期性曲面待处理)
     template<typename surface_type, typename T = typename surface_type::Type, int dim = surface_type::dimension>
-    ENUM_NURBS intersect_point_iteration(const surface_type *left_surf, const surface_type *right_surf, 
-                                        const surface_type *left_u_tangent_surface, const surface_type *left_v_tangent_surface, 
-                                        const surface_type *right_u_tangent_surface, const surface_type *right_v_tangent_surface,
-                                        const Box<T, 4> &domian, Eigen::Vector<T, 4> current_param, Eigen::Vector<T, 4> &intersect_param, T eps)
+    class trace_nurbs_surface
     {
-        // bool left_surf_u_closed = left_surf->is_u_closed();
-        // bool left_surf_v_closed = left_surf->is_v_closed();
-        // bool right_surf_u_closed = right_surf->is_u_closed();
-        // bool right_surf_v_closed = right_surf->is_v_closed();
+    private:
+        surface_type* m_left_surface;
+        surface_type* m_right_surface;
+        
+        //ders of left surface
+        surface_type* m_left_u_tangent_surface;
+        surface_type* m_left_v_tangent_surface;
+        
+        //ders of right surface
+        surface_type* m_right_u_tangent_surface;
+        surface_type* m_right_v_tangent_surface;
 
-        Eigen::Vector<T, dim> left_point, right_point;
-        left_surf->point_on_surface(current_param[0], current_param[1], left_point);
-        right_surf->point_on_surface(current_param[2], current_param[3], right_point);
-        Eigen::Vector<T, dim> vec = right_point - left_point;
-        T min_distance = vec.squaredNorm();
-        intersect_param = current_param;
+        T m_param_space_eps;
 
-        //迭代次数需要修改
-        for (int loop_index = 0; loop_index < 10 * SURFACE_ITERATE_DEEP; ++loop_index)
+        Eigen::Vector<T, 4> m_box_size;
+
+        Box<T, 4> m_product_box;
+
+        Interval<T> m_alpha;
+        Interval<T> m_beta;
+        Interval<T> m_u;
+        Interval<T> m_v;
+
+    public:
+        trace_nurbs_surface() = delete;
+        trace_nurbs_surface(surface_type* left_surface, surface_type* right_surface) : m_left_surface(left_surface), m_right_surface(right_surface) { }
+        ~trace_nurbs_surface() 
+        { 
+            //delete m_left_surface;
+            //delete m_right_surface;
+            delete m_left_u_tangent_surface;
+            delete m_left_v_tangent_surface;
+            delete m_right_u_tangent_surface;
+            delete m_right_v_tangent_surface;
+        }
+        ENUM_NURBS init(T space_eps)
         {
-            Eigen::Matrix<T, dim, 4> mat;
-            Eigen::Vector<T, dim> temp;
-            left_u_tangent_surface->point_on_surface(current_param[0], current_param[1], temp);
-            mat.col(0) = temp;
-            left_v_tangent_surface->point_on_surface(current_param[0], current_param[1], temp);
-            mat.col(1) = temp;
-            right_u_tangent_surface->point_on_surface(current_param[2], current_param[3], temp);
-            mat.col(2) = -1.0 * temp;
-            right_v_tangent_surface->point_on_surface(current_param[2], current_param[3], temp);
-            mat.col(3) = -1.0 * temp;
+            m_left_u_tangent_surface = new surface_type();
+            m_left_v_tangent_surface = new surface_type();
+            m_right_u_tangent_surface = new surface_type();
+            m_right_v_tangent_surface = new surface_type();
 
-            Eigen::JacobiSVD<Eigen::Matrix<T, dim, 4>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(mat);
-            Eigen::Vector<T, 4> delta = matSvd.solve(vec);
-            if (matSvd.info() !=  Eigen::Success)
+            m_left_surface->tangent_u_surface(*m_left_u_tangent_surface);
+            m_left_surface->tangent_v_surface(*m_left_v_tangent_surface);
+            m_right_surface->tangent_u_surface(*m_right_u_tangent_surface);
+            m_right_surface->tangent_v_surface(*m_right_v_tangent_surface);
+
+            Box<T, dim> left_u_tangent_surface_box, left_v_tangent_surface_box, right_u_tangent_surface_box, right_v_tangent_surface_box;
+            m_left_u_tangent_surface->get_box(left_u_tangent_surface_box);
+            m_left_v_tangent_surface->get_box(left_v_tangent_surface_box);
+            m_right_u_tangent_surface->get_box(right_u_tangent_surface_box);
+            m_right_v_tangent_surface->get_box(right_v_tangent_surface_box);
+
+            Eigen::Vector<T, dim> origin;
+            origin.setConstant(0.0);
+            T l1 = left_u_tangent_surface_box.eval_maximal_distance(origin);
+            T l2 = left_v_tangent_surface_box.eval_maximal_distance(origin);
+            T l3 = right_u_tangent_surface_box.eval_maximal_distance(origin);
+            T l4 = right_v_tangent_surface_box.eval_maximal_distance(origin);
+            T l = std::max({ l1, l2, l3, l4 });
+            m_param_space_eps = space_eps / l;
+            if (m_param_space_eps <= PRECISION<T>::value)
                 return ENUM_NURBS::NURBS_ERROR;
-            
-            Eigen::Vector<T, 4> next_param = current_param + delta;
-            for (int index = 0; index < 4; ++index)
+
+
+            m_product_box = m_left_surface->get_interval().product_box(m_right_surface->get_interval());
+
+            T box_size_num = std::min(SPACE_PARAM_TIMES<T>::value * PRECISION<T>::value, m_param_space_eps / 16.0);
+            m_box_size.setConstant(box_size_num);
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+
+        bool eval_priori_enclosure_inner(const Box<T, 4>& initial_box, T step_size, Box<T, 4>& priori_enclosure, T param_space_eps)
+        {
+            //目前仅仅支持三维
+            static_assert(3 == dim, "dim != 3 is not supported");
+
+            //计算交线的切向, 两个曲面非相切的时候; TODO:相切的时候
+            std::array<Interval<T>, (unsigned)dim> left_normal_interval, right_normal_interval;
+            std::array<Interval<T>, (unsigned)dim> left_u_tangent_interval, left_v_tangent_interval;
+            std::array<Interval<T>, (unsigned)dim> right_u_tangent_interval, right_v_tangent_interval;
+
+            Box<T, 2> left_param_box(priori_enclosure.Min.template block<2, 1>(0, 0), priori_enclosure.Max.template block<2, 1>(0, 0));
+            Box<T, 2> right_param_box(priori_enclosure.Min.template block<2, 1>(2, 0), priori_enclosure.Max.template block<2, 1>(2, 0));
+            eval_normal_and_tangent_interval<surface_type>(m_left_u_tangent_surface, m_left_v_tangent_surface, left_param_box, left_normal_interval, left_u_tangent_interval, left_v_tangent_interval);
+            eval_normal_and_tangent_interval<surface_type>(m_right_u_tangent_surface, m_right_v_tangent_surface, right_param_box, right_normal_interval, right_u_tangent_interval, right_v_tangent_interval);
+
+            Interval<T> u_normal_dot = dot_product(left_normal_interval, left_normal_interval);
+            Interval<T> v_normal_dot = dot_product(right_normal_interval, right_normal_interval);
+            std::array<Interval<T>, (unsigned)dim> c = vector_product(left_normal_interval, right_normal_interval);
+
+            Interval<T> c_dot = dot_product(c, c);
+
+            //正常不应该在此return false
+            if (c_dot.m_interval[0] <= TDEFAULT_ERROR<T>::value * TDEFAULT_ERROR<T>::value)
+                return false;
+
+            c_dot.m_interval[0] = std::sqrt(c_dot.m_interval[0]);
+            c_dot.m_interval[1] = std::sqrt(c_dot.m_interval[1]);
+            if (divide<T, (unsigned)dim>(c, c_dot, c) == false)
+                return false;
+
+            if (false == divide(dot_product(left_normal_interval, vector_product(c, left_v_tangent_interval)), u_normal_dot, m_alpha))
+                return false;
+            if (false == divide(dot_product(left_normal_interval, vector_product(left_u_tangent_interval, c)), u_normal_dot, m_beta))
+                return false;
+            if (false == divide(dot_product(right_normal_interval, vector_product(c, right_v_tangent_interval)), v_normal_dot, m_u))
+                return false;
+            if (false == divide(dot_product(right_normal_interval, vector_product(right_u_tangent_interval, c)), v_normal_dot, m_v))
+                return false;
+
+            Interval<T> alpha, beta, u, v;
+            Interval<T> step_box(0.0, step_size);
+            alpha = mutilply(m_alpha, step_box);
+            beta = mutilply(m_beta, step_box);
+            u = mutilply(m_u, step_box);
+            v = mutilply(m_v, step_box);
+
+            Box<T, 4> box_interval;
+            box_interval.Min[0] = alpha.m_interval[0];
+            box_interval.Min[1] = beta.m_interval[0];
+            box_interval.Min[2] = u.m_interval[0];
+            box_interval.Min[3] = v.m_interval[0];
+
+            box_interval.Max[0] = alpha.m_interval[1];
+            box_interval.Max[1] = beta.m_interval[1];
+            box_interval.Max[2] = u.m_interval[1];
+            box_interval.Max[3] = v.m_interval[1];
+
+            Eigen::Vector4<T> param_dis = box_interval.Max - box_interval.Min;
+            if (param_dis[0] + param_dis[1] > m_param_space_eps || param_dis[2] + param_dis[3] > m_param_space_eps)
+                return false;
+
+            Box<T, 4> temp_priori_enclosure;
+            if (true == initial_box.plus(box_interval, PRECISION<T>::value).intersect(m_product_box, temp_priori_enclosure))
             {
-                if (next_param[index] < domian.Min[index])
-                    next_param[index] = domian.Min[index];
-                else if (next_param[index] > domian.Max[index])
-                    next_param[index] = domian.Max[index];
+                priori_enclosure = temp_priori_enclosure;
+                return true;
+            }
+            return false;
+        }
+
+        //TODO:删掉
+        bool check_priori_enclosure(const Box<T, 4>& next_priori_enclosure, Box<T, 4>& priori_enclosure) 
+        {
+            if (priori_enclosure.is_contain_box(next_priori_enclosure))
+            {
+                return true;
+            }
+            return false;
+        }
+
+        bool eval_priori_enclosure(const Box<T, 4>& initial_box, T &step_size, Box<T, 4>& priori_enclosure, T param_space_eps) 
+        {
+            if (false == eval_priori_enclosure_inner(initial_box, step_size, priori_enclosure, param_space_eps))
+            {
+                return false;
+            }
+            Box<T, 4> next_priori_enclosure = priori_enclosure;
+            step_size /= 2.0;
+            if (false == eval_priori_enclosure_inner(initial_box, step_size, next_priori_enclosure, param_space_eps))
+            {
+                return false;
+            }
+            if (check_priori_enclosure(next_priori_enclosure, priori_enclosure))
+            {
+                Box<T, 4> box_interval;
+                box_interval.Min[0] = m_alpha.m_interval[0];
+                box_interval.Min[1] = m_beta.m_interval[0];
+                box_interval.Min[2] = m_u.m_interval[0];
+                box_interval.Min[3] = m_v.m_interval[0];
+
+                box_interval.Max[0] = m_alpha.m_interval[1];
+                box_interval.Max[1] = m_beta.m_interval[1];
+                box_interval.Max[2] = m_u.m_interval[1];
+                box_interval.Max[3] = m_v.m_interval[1];
+                box_interval.scale(step_size);
+
+                Box<T, 4> temp_priori_enclosure;
+                if (true == initial_box.plus(box_interval, PRECISION<T>::value).intersect(m_product_box, temp_priori_enclosure))
+                {
+                    priori_enclosure = temp_priori_enclosure;
+                    return true;
+                }
+                return false;
+            }
+            return false;
+
+
+        }
+
+        //TODO: 参数域边界需要处理
+        template<bool direction>
+        ENUM_NURBS eval_step_size_and_yBox(const Box<T, 4>& initial_box, const Eigen::Vector<T, 4> &param, Box<T, 4>& priori_enclosure, Eigen::Vector<T, 4>& next_initinal_param, T param_space_eps)
+        {
+            Eigen::Matrix<T, 4, 2> params_ders;
+            params_ders.setConstant(0.0);
+            Eigen::Matrix<T, dim, 3> space_ders;
+            space_ders.setConstant(0.0);
+            eval_preiamge_ders<surface_type, typename surface_type::Type, surface_type::dimension>(m_left_surface, m_right_surface, param[0], param[1], param[2], param[3], params_ders, space_ders);
+
+            T step_size = direction == true ? param_space_eps / (2.0 * params_ders.col(0).norm()) : param_space_eps / (-2.0 * params_ders.col(0).norm());
+
+            if (false == eval_priori_enclosure(initial_box, step_size, priori_enclosure, param_space_eps))
+                return ENUM_NURBS::NURBS_ERROR;
+
+            next_initinal_param = priori_enclosure.get_middle_point();
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+
+        //迭代加细交点(周期性曲面待处理)
+        ENUM_NURBS intersect_point_iteration(const Box<T, 4>& domian, Eigen::Vector<T, 4> current_param, Eigen::Vector<T, 4>& intersect_param) 
+        {
+            // bool left_surf_u_closed = left_surf->is_u_closed();
+            // bool left_surf_v_closed = left_surf->is_v_closed();
+            // bool right_surf_u_closed = right_surf->is_u_closed();
+            // bool right_surf_v_closed = right_surf->is_v_closed();
+
+            Eigen::Vector<T, dim> left_point, right_point;
+            m_left_surface->point_on_surface(current_param[0], current_param[1], left_point);
+            m_right_surface->point_on_surface(current_param[2], current_param[3], right_point);
+            Eigen::Vector<T, dim> vec = right_point - left_point;
+            T min_distance = vec.squaredNorm();
+            intersect_param = current_param;
+
+            //迭代次数需要修改
+            for (int loop_index = 0; loop_index < SURFACE_ITERATE_DEEP; ++loop_index)
+            {
+                Eigen::Matrix<T, dim, 4> mat;
+                Eigen::Vector<T, dim> temp;
+                m_left_u_tangent_surface->point_on_surface(current_param[0], current_param[1], temp);
+                mat.col(0) = temp;
+                m_left_v_tangent_surface->point_on_surface(current_param[0], current_param[1], temp);
+                mat.col(1) = temp;
+                m_right_u_tangent_surface->point_on_surface(current_param[2], current_param[3], temp);
+                mat.col(2) = -1.0 * temp;
+                m_right_v_tangent_surface->point_on_surface(current_param[2], current_param[3], temp);
+                mat.col(3) = -1.0 * temp;
+
+                Eigen::JacobiSVD<Eigen::Matrix<T, dim, 4>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(mat);
+                Eigen::Vector<T, 4> delta = matSvd.solve(vec);
+                if (matSvd.info() != Eigen::Success)
+                    return ENUM_NURBS::NURBS_ERROR;
+
+                Eigen::Vector<T, 4> next_param = current_param + delta;
+                for (int index = 0; index < 4; ++index)
+                {
+                    if (next_param[index] < domian.Min[index])
+                        next_param[index] = domian.Min[index];
+                    else if (next_param[index] > domian.Max[index])
+                        next_param[index] = domian.Max[index];
+                }
+
+
+                // bool is_closed_flag = cur->is_closed();
+                // if (left_surf_u_closed)
+                // {
+                //     if (next_u < min)
+                //         next_u = max - (min - next_u);
+                //     else if (next_u > max)
+                //         next_u = min + (next_u - max);
+                // }
+                // else
+                // {
+                //     if (next_u < min)
+                //         next_u = min;
+                //     else if (next_u > max)
+                //         next_u = max;
+                // }
+
+                current_param = next_param;
+
+
+                m_left_surface->point_on_surface(current_param[0], current_param[1], left_point);
+                m_right_surface->point_on_surface(current_param[2], current_param[3], right_point);
+                vec = right_point - left_point;
+                T distance = vec.squaredNorm();
+                if (distance < min_distance)
+                {
+                    min_distance = distance;
+                    intersect_param = current_param;
+
+                    bool flag = true;
+                    for (int index = 0; index < dim; ++index)
+                    {
+                        if (vec[index] > PRECISION<T>::value)
+                        {
+                            flag = false;
+                            break;
+                        }
+                    }
+                    if (flag == true)
+                        return ENUM_NURBS::NURBS_SUCCESS;
+                }
             }
 
+            return ENUM_NURBS::NURBS_ERROR;
+        }
 
-            // bool is_closed_flag = cur->is_closed();
-            // if (left_surf_u_closed)
-            // {
-            //     if (next_u < min)
-            //         next_u = max - (min - next_u);
-            //     else if (next_u > max)
-            //         next_u = min + (next_u - max);
-            // }
-            // else
-            // {
-            //     if (next_u < min)
-            //         next_u = min;
-            //     else if (next_u > max)
-            //         next_u = max;
-            // }
-
-            current_param = next_param;
-
-
-            left_surf->point_on_surface(current_param[0], current_param[1], left_point);
-            right_surf->point_on_surface(current_param[2], current_param[3], right_point);
-            vec = right_point - left_point;
-            T distance = vec.squaredNorm();
-            if (distance < min_distance)
+        template<bool direction>
+        ENUM_NURBS trace_point(Box<T, 4> &initial_box, const Eigen::Vector<T, 4> &param ,surf_surf_intersect_point<T, dim>& next_point, Box<T, 4>& next_initial_box)
+        {
+            //TODO:应在调用函数外部确保
+            if (false == initial_box.intersect(m_product_box, initial_box))
+                return ENUM_NURBS::NURBS_ERROR;
+            int count1 = 0, count2 = 0;
+            Eigen::Vector<T, 4> next_init_param;
+            Box<T, 4> priori_enclosure;
+            T param_space_eps = 2.0 * m_param_space_eps;
+            Eigen::Vector<T, 4> intersect_param;
+            priori_enclosure = initial_box;
+            while (true)
             {
-                min_distance = distance;
-                intersect_param = current_param;
-
-                bool flag = true;
-                for (int index = 0; index < dim; ++index)
+                if (ENUM_NURBS::NURBS_SUCCESS == eval_step_size_and_yBox<direction>(initial_box, param, priori_enclosure, next_init_param, param_space_eps))
                 {
-                    if (vec[index] > PRECISION<T>::value)
+                    if (ENUM_NURBS::NURBS_SUCCESS == intersect_point_iteration(priori_enclosure, next_init_param, intersect_param))
                     {
-                        flag = false;
                         break;
                     }
+                    count2++;
                 }
-                if (flag == true)
+                count1++;
+                if (count2 >= 2)
+                {
+                    std::cout << "count1: " << count1 << std::endl;
+                    std::cout << "count2: " << count1 << std::endl;
+                }
+                
+                param_space_eps /= 2.0;
+                if (param_space_eps < TDEFAULT_ERROR<T>::value)
+                {
+                    return ENUM_NURBS::NURBS_ERROR;
+                }
+            }
+
+            m_left_surface->point_on_surface(intersect_param[0], intersect_param[1], next_point.m_point);
+            next_point.m_uv = intersect_param;
+
+            next_initial_box.Min = intersect_param - m_box_size;
+            next_initial_box.Max = intersect_param + m_box_size;
+            
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+
+        template<bool direction>
+        ENUM_NURBS trace_curve_by_point(const Box<T, 4>& initial_box, surf_surf_int<surface_type>* intersection)
+        {
+            Box<T, 4> current_box = initial_box;
+            Eigen::Vector<T, 4> initial_param = initial_box.get_middle_point();
+            Box<T, 4> next_initial_box;
+
+            surf_surf_intersect_point<T, dim>* current_intersection = new surf_surf_intersect_point<T, dim>();
+            Eigen::Vector<T, dim> initial_point;
+            m_left_surface->point_on_surface(initial_param[0], initial_param[1], initial_point);
+            current_intersection->m_point = initial_point;
+            current_intersection->m_uv = initial_param;
+            intersection->m_intersect_points.push_back(current_intersection);
+
+            int index = 0;
+
+            for (; index < MAXINTERSETORPOINTNUMBER; ++index)
+            {
+                std::cout << index << std::endl;
+                surf_surf_intersect_point<T, dim>* next_point = new surf_surf_intersect_point<T, dim>();
+                if (trace_point<direction>(current_box, current_intersection->m_uv, *next_point, next_initial_box) != ENUM_NURBS::NURBS_SUCCESS)
+                {
+                    intersection->m_intersect_points_count.push_back(index);
                     return ENUM_NURBS::NURBS_SUCCESS;
+                }
+                current_box = next_initial_box;
+
+                if ((current_intersection->m_uv - next_point->m_uv).norm() < 0.1 * TDEFAULT_ERROR<T>::value)
+                {
+                    intersection->m_intersect_points_count.push_back(index);
+                    return ENUM_NURBS::NURBS_SUCCESS;
+                }
+
+                current_intersection->m_next = next_point;
+                current_intersection = next_point;
+
             }
-        }
-
-        return ENUM_NURBS::NURBS_ERROR;
-    }
-
-
-    //TODO: surface_type参数前面加const
-    template<typename surface_type, bool direction = true, typename T = typename surface_type::Type, int dim = surface_type::dimension>
-    ENUM_NURBS ODESolver(Box<T, 4> initial_box,  surface_type *left, surface_type *right, surf_surf_int<surface_type> *intersection, T eps = TDEFAULT_ERROR<T>::value)
-    {
-        surface_type *left_u_tangent_surface = new surface_type();
-        surface_type *left_v_tangent_surface = new surface_type();
-        surface_type *right_u_tangent_surface = new surface_type();
-        surface_type *right_v_tangent_surface = new surface_type();
-        std::unique_ptr<surface_type> raii = std::unique_ptr<surface_type>(left_u_tangent_surface);
-        std::unique_ptr<surface_type> raii2 = std::unique_ptr<surface_type>(left_v_tangent_surface);
-        std::unique_ptr<surface_type> raii3 = std::unique_ptr<surface_type>(right_u_tangent_surface);
-        std::unique_ptr<surface_type> raii4 = std::unique_ptr<surface_type>(right_v_tangent_surface);
-
-        left->tangent_u_surface(*left_u_tangent_surface);
-        left->tangent_v_surface(*left_v_tangent_surface);
-        right->tangent_u_surface(*right_u_tangent_surface);
-        right->tangent_v_surface(*right_v_tangent_surface);
-
-        Box<T, dim> left_u_tangent_surface_box, left_v_tangent_surface_box, right_u_tangent_surface_box, right_v_tangent_surface_box;
-        left_u_tangent_surface->get_box(left_u_tangent_surface_box);
-        left_v_tangent_surface->get_box(left_v_tangent_surface_box);
-        right_u_tangent_surface->get_box(right_u_tangent_surface_box);
-        right_v_tangent_surface->get_box(right_v_tangent_surface_box);
-
-        Eigen::Vector<T, dim> origin;
-        origin.setConstant(0.0);
-        T l1 = left_u_tangent_surface_box.eval_maximal_distance(origin);
-        T l2 = left_v_tangent_surface_box.eval_maximal_distance(origin);
-        T l3 = right_u_tangent_surface_box.eval_maximal_distance(origin);
-        T l4 = right_v_tangent_surface_box.eval_maximal_distance(origin);
-        T l = std::max({l1, l2, l3, l4});
-        T param_space_eps = eps / l;
-        if (param_space_eps <= PRECISION<T>::value)
-            return ENUM_NURBS::NURBS_ERROR;
-
-        Box<T, 4> priori_enclosure;
-        Eigen::Vector<T, 4> box_size;
-        T box_size_num = std::min(TDEFAULT_ERROR<T>::value, param_space_eps / 4.0);
-        box_size.setConstant(box_size_num);
-
-        surf_surf_intersect_point<T, dim> *current_intersection = intersection->m_intersect_points.back();
-        Box<T, 4> product_box = left->get_interval().product_box(right->get_interval());
-
-        //加细测试用例, 后面需要删除
-        Eigen::Vector<T, 4> intersect_param2;
-        Eigen::Vector<T, 4> x(0.02, 0.66630158097819048, 0.71793367976331557, 0.97999999999999987);
-        intersect_point_iteration<surface_type>(left, right, left_u_tangent_surface, left_v_tangent_surface, right_u_tangent_surface, right_v_tangent_surface, 
-                                        initial_box, x, intersect_param2, eps);
-
-
-        initial_box.Min = intersect_param2 - box_size;
-        initial_box.Max = intersect_param2 + box_size;
-
-        Box<T, 4> x_box2;
-        initial_box.intersect(product_box, x_box2);
-
-        int index = 0;
-
-        //需要修改
-        T step_size = direction == true ? MAX_ITERATE_DEEP : -MAX_ITERATE_DEEP;
-        // T step_size = direction == true ? eps : -eps;
-        for (; index < MAXINTERSETORPOINTNUMBER; ++index)
-        {
-            Eigen::Vector<T, 4> next_init_param;
-            ENUM_NURBS flag = eval_step_size_and_yBox<surface_type, direction>(left, right, left_u_tangent_surface, left_v_tangent_surface, right_u_tangent_surface, right_v_tangent_surface, product_box, 
-                                                initial_box, priori_enclosure, next_init_param, param_space_eps, step_size);
-
-            if (flag != ENUM_NURBS::NURBS_SUCCESS)
+            if (index == MAXINTERSETORPOINTNUMBER)
             {
-                intersection->m_intersect_points_count.push_back(index);
-                return ENUM_NURBS::NURBS_SUCCESS;
+                //TODO:析构内存
+                return ENUM_NURBS::NURBS_ERROR;
             }
-
-            Eigen::Vector<T, 4> intersect_param;
-            flag = intersect_point_iteration<surface_type>(left, right, left_u_tangent_surface, left_v_tangent_surface, right_u_tangent_surface, right_v_tangent_surface, 
-                                        priori_enclosure, next_init_param, intersect_param, eps);
-            if (flag != ENUM_NURBS::NURBS_SUCCESS)
-            {
-                step_size /= 2.0;
-                index--;
-                continue;
-            }
-            step_size = direction == true ? MAX_ITERATE_DEEP : -MAX_ITERATE_DEEP;
-            // step_size = direction == true ? eps : -eps;
-            surf_surf_intersect_point<T, dim> *new_intersect = new surf_surf_intersect_point<T, dim>();
-            left->point_on_surface(intersect_param[0], intersect_param[1], new_intersect->m_point);
-            new_intersect->m_left_uv = intersect_param.block(0, 0, 2, 1);
-            new_intersect->m_right_uv = intersect_param.block(2, 0, 2, 1);
-
-            current_intersection->m_next = new_intersect;
-            current_intersection = new_intersect;
-
-            initial_box.Min = intersect_param - box_size;
-            initial_box.Max = intersect_param + box_size;
-
-            Box<T, 4> x_box;
-            initial_box.intersect(product_box, x_box);
-            initial_box = x_box;
-
+            intersection->m_intersect_points_count.push_back(index);
+            return ENUM_NURBS::NURBS_SUCCESS;
         }
-        if (index == MAXINTERSETORPOINTNUMBER)
+
+        //暂时不处理相交为环的情况(目前只支持bezier情况)
+        ENUM_NURBS surafces_intersection(surf_surf_int<surface_type>** intersection)
         {
-            //TODO:析构内存
-            return ENUM_NURBS::NURBS_ERROR;
+            if (*intersection != nullptr)
+            {
+                return ENUM_NURBS::NURBS_ERROR;
+            }
+            *intersection = new surf_surf_int<surface_type>();
+
+            //先取等参线和曲面求交(非闭合)
+            //using curve_type = template surface_type::iso_curve_type;
+            typename surface_type::iso_curve_type curve1;
+            typename surface_type::iso_curve_type curve2;
+            typename surface_type::iso_curve_type curve3;
+            typename surface_type::iso_curve_type curve4;
+
+            m_right_surface->get_isoparameter_curve<ENUM_DIRECTION::U_DIRECTION>(0.0, curve1);
+            m_right_surface->get_isoparameter_curve<ENUM_DIRECTION::U_DIRECTION>(1.0, curve2);
+            m_right_surface->get_isoparameter_curve<ENUM_DIRECTION::V_DIRECTION>(0.0, curve3);
+            m_right_surface->get_isoparameter_curve<ENUM_DIRECTION::V_DIRECTION>(1.0, curve4);
+
+            std::vector<Eigen::Vector<T, 3>> int_params1 = bezier_curve_int_bezier_surface(curve1, *m_left_surface);
+            std::vector<Eigen::Vector<T, 3>> int_params2 = bezier_curve_int_bezier_surface(curve2, *m_left_surface);
+            std::vector<Eigen::Vector<T, 3>> int_params3 = bezier_curve_int_bezier_surface(curve3, *m_left_surface);
+            std::vector<Eigen::Vector<T, 3>> int_params4 = bezier_curve_int_bezier_surface(curve4, *m_left_surface);
+
+            //TODO:去重, 加细; 另一个曲面的四条边界
+            std::vector<Box<T, 4>> int_params;
+            for (auto& param : int_params1)
+            {
+                Eigen::Vector<T, 4> initial_param = Eigen::Vector<T, 4>{ param[1], param[2], 0.0, param[0] };
+                Box<T, 4> box;
+                create_box(initial_param, TDEFAULT_ERROR<T>::value, box);
+                int_params.push_back(box);
+            }
+            for (auto& param : int_params2)
+            {
+                Eigen::Vector<T, 4> initial_param = Eigen::Vector<T, 4>{ param[1], param[2], 1.0, param[0]};
+                Box<T, 4> box;
+                create_box(initial_param, TDEFAULT_ERROR<T>::value, box);
+                int_params.push_back(box);
+            }
+            for (auto& param : int_params3)
+            {
+                Eigen::Vector<T, 4> initial_param = Eigen::Vector<T, 4>{ param[1], param[2], param[0], 0.0 };
+                Box<T, 4> box;
+                create_box(initial_param, TDEFAULT_ERROR<T>::value, box);
+                int_params.push_back(box);
+            }
+            for (auto& param : int_params4)
+            {
+                Eigen::Vector<T, 4> initial_param = Eigen::Vector<T, 4>{ param[1], param[2], param[0], 1.0 };
+                Box<T, 4> box;
+                create_box(initial_param, TDEFAULT_ERROR<T>::value, box);
+                int_params.push_back(box);
+            }
+
+            for (auto &box : int_params)
+            {
+                trace_curve_by_point<true>(box, *intersection);
+                trace_curve_by_point<false>(box, *intersection);
+            }
+            return ENUM_NURBS::NURBS_SUCCESS;
+
         }
-        intersection->m_intersect_points_count.push_back(index);
-        return ENUM_NURBS::NURBS_SUCCESS;
-    }
 
 
+};
 
 }

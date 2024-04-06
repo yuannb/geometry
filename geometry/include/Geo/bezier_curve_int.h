@@ -1,5 +1,6 @@
 #pragma once
 #include "bezier_curve.h"
+#include "bezier_surface.h"
 #include "nurbs_curve.h"
 #include "nurbs_surface.h"
 #include <array>
@@ -24,18 +25,18 @@ namespace tnurbs
         
         bool add_one()
         {
-            m_index[0] += 1;
-            for (int i = 0; i < variaty_count - 1; ++i)
+            m_index[variaty_count - 1] += 1;
+            for (int i = variaty_count - 1; i > 0; --i)
             {
                 if (m_index[i] != m_bounds[i] + 1)
                     break;
                 else
                 {
                     m_index[i] = 0;
-                    m_index[i + 1] += 1;
+                    m_index[i - 1] += 1;
                 }
             }
-            if (m_index[variaty_count - 1] == m_bounds[variaty_count - 1] + 1)
+            if (m_index[0] == m_bounds[0] + 1)
                 return false;
             return true;
         }
@@ -43,55 +44,56 @@ namespace tnurbs
         //保持第index个数不变，最小位加1
         bool add_one(int index)
         {
+            static_assert(variaty_count > 1, "variaty_count <= 1");
             switch (index)
             {
             case 0:
-                m_index[1] += 1;
-                for (int i = 1; i < variaty_count - 1; ++i)
+                m_index[variaty_count - 1] += 1;
+                for (int i = variaty_count - 1; i > 1; --i)
                 {
-                    if (m_index[i] != m_bounds[i] + 1)
+                    if (m_index[i] < m_bounds[i] + 1)
                         break;
                     else
                     {
                         m_index[i] = 0;
-                        m_index[i + 1] += 1;
+                        m_index[i - 1] += 1;
                     }
                 }
-                if (m_index[variaty_count - 1] == m_bounds[variaty_count - 1] + 1)
+                if (m_index[1] >= m_bounds[1] + 1)
                     return false;
                 break;
             case variaty_count - 1:
-                m_index[0] += 1;
-                for (int i = 1; i < variaty_count - 2; ++i)
+                m_index[variaty_count - 2] += 1;
+                for (int i = variaty_count - 2; i > 0; --i)
                 {
-                    if (m_index[i] != m_bounds[i] + 1)
+                    if (m_index[i] < m_bounds[i] + 1)
                         break;
                     else
                     {
                         m_index[i] = 0;
-                        m_index[i + 1] += 1;
+                        m_index[i - 1] += 1;
                     }
                 }
-                if (m_index[variaty_count - 2] == m_bounds[variaty_count - 2] + 1)
+                if (m_index[0] >= m_bounds[0] + 1)
                     return false;
                 break;
             
             default:
-                m_index[0] += 1;
-                for (int i = 1; i < variaty_count - 2; ++i)
+                m_index[variaty_count - 1] += 1;
+                for (int i = variaty_count - 1; i > 0; --i)
                 {
-                    if (m_index[i] != m_bounds[i] + 1)
+                    if (m_index[i] < m_bounds[i] + 1)
                         break;
                     else
                     {
                         m_index[i] = 0;
-                        if (i + 1 == index)
-                            m_index[i + 2] += 1;
+                        if (i - 1 == index)
+                            m_index[i - 2] += 1;
                         else
-                            m_index[i + 1] += 1;
+                            m_index[i - 1] += 1;
                     }
                 }
-                if (m_index[variaty_count - 1] == m_bounds[variaty_count - 1] + 1)
+                if (m_index[0] >= m_bounds[0] + 1)
                     return false;
                 break;
             }
@@ -104,7 +106,7 @@ namespace tnurbs
             if (index > variaty_count - 1 || index < 0) return false; 
             m_bounds[index] = bound; return true; 
         }
-        bool set_bounds(const std::array<int, variaty_count> &degrees)
+        bool set_bounds(const std::array<int, (unsigned)variaty_count> &degrees)
         {
             m_bounds = degrees;
             return true;
@@ -153,7 +155,6 @@ namespace tnurbs
     class smspe
     {
     private:
-        // std::array<Eigen::Matrix<T, variaty_count, Eigen::Dynamic>, equation_count> m_coeff;
         Eigen::Matrix<T, equation_count, Eigen::Dynamic> m_coeff;
         mutable Index<variaty_count> m_index;
     public:
@@ -178,28 +179,18 @@ namespace tnurbs
         {
             if (sign_change(m_coeff) == false)
                 return true;
-           
-            //将多项式正交
-            Eigen::Matrix<T, equation_count, equation_count> Q = fi_fj_mat(m_coeff);
-            Eigen::EigenSolver<Eigen::Matrix<T, equation_count, equation_count>> solver(Q);
-            //因为E为对称矩阵, 因此可以用下面的函数计算特征向量
-            Eigen::Matrix<T, equation_count, equation_count> E = solver.pseudoEigenvectors();
-            for (int index = 0; index < equation_count; ++index)
-            {
-                E.col(index).normalize();
-            }
-            m_coeff = E * m_coeff;
-
-            //init interval
-            
+            //init interval 
             Eigen::Vector<T, variaty_count> min, max;
             min.setConstant(0.0);
             max.setConstant(1.0);
             Box<T, variaty_count> init_box(min, max);
             std::deque<Box<T, variaty_count>> boxes { init_box };
 
+            //int loop_count = 0;
             while (boxes.empty() == false)
             {
+                //std::cout << "loop count: " << loop_count << std::endl;
+                //++loop_count;
                 Box<T, variaty_count> current_box = boxes.back();
                 boxes.pop_back();
                 if ((current_box.Max - current_box.Min).norm() < TDEFAULT_ERROR<T>::value)
@@ -214,17 +205,26 @@ namespace tnurbs
                 for (int index = 0; index < variaty_count; ++index)
                 {
                     int bezier_control_points_count = m_index.m_bounds[index] + 1;
+                    //std::cout << "index: " << index << std::endl;
                     Eigen::Matrix<T, equation_count, Eigen::Dynamic> bezier_control_points(equation_count, bezier_control_points_count);
+                    //int x = 0;
                     do
                     {
+                        //std::cout << "x: " << x << std::endl;
+                        //++x;
                         int step = 1;
-                        for (int j = 0; j < index; ++j)
+                        for (int j = index + 1; j < variaty_count; ++j)
                             step *= (m_index.m_bounds[j] + 1);
-                        int first_index = m_index.m_index[0];
-                        for (int j = 1; j < variaty_count; ++j)
-                            first_index += m_index.m_index[j] * (m_index.m_bounds[j - 1] + 1);
+                        int first_index = m_index.m_index[variaty_count - 1];
+
+                        int temp = m_index.m_bounds[variaty_count - 1] + 1;
+                        for (int j = variaty_count - 2; j >= 0 ; --j)
+                        {
+                            first_index += m_index.m_index[j] * temp;
+                            temp *= (m_index.m_bounds[j] + 1);
+                        }
+                            
                         //构造bezier曲线
-                        // Eigen::Matrix<T, equation_count, Eigen::Dynamic> points(equation_count, bezier_control_points_count);
                         for (int i = 0; i < bezier_control_points_count; ++i)
                         {
                             bezier_control_points.col(i) = control_points.col(first_index + i * step);
@@ -233,27 +233,43 @@ namespace tnurbs
                         // std::cout << bezier_control_points << std::endl;
                         // std::cout << control_points << std::endl;
                         Box<T, 1> sub_box(Eigen::Vector<T, 1>(current_box.Min[index]), Eigen::Vector<T, 1>(current_box.Max[index]));
-                        nurbs.sub_divide(sub_box);
-                        bezier_control_points = nurbs.get_control_points();
-                        // std::cout << bezier_control_points << std::endl;
-                        for (int i = 0; i < bezier_control_points_count; ++i)
+
+                        if (sub_box.Max[0] - sub_box.Min[0] < KNOTS_EPS<T>::value)
                         {
-                            control_points.col(first_index + i * step) = bezier_control_points.col(i);
+                            Eigen::Vector<T, equation_count> point;
+                            nurbs.point_on_curve((sub_box.Max[0] + sub_box.Min[0]) / 2.0, point);
+                            for (int i = 0; i < bezier_control_points_count; ++i)
+                            {
+                                control_points.col(first_index + i * step) = point;
+                            }
                         }
+                        else
+                        {
+                            nurbs.sub_divide(sub_box);
+                            bezier_control_points = nurbs.get_control_points();
+                            // std::cout << bezier_control_points << std::endl;
+                            for (int i = 0; i < bezier_control_points_count; ++i)
+                            {
+                                control_points.col(first_index + i * step) = bezier_control_points.col(i);
+                            }
+                        }
+                        
                     } while (m_index.add_one(index));
                     m_index.reset();
                 }
 
-                if (sign_change(control_points) == false)
+                Box<T, variaty_count> project_box; 
+                if (interval_projected_polyhedron(control_points, project_box) == false)
+                {
+                    //boxes.pop_back();
                     continue;
-
-                //TODO: locally transform control_points(对n * n的矩阵才可以)
-                Box<T, variaty_count> project_box = interval_projected_polyhedron(control_points);
-                
+                }
+                //std::cout << control_points << std::endl;
+                //control_points.setConstant(0.0);
                 //cut box
                 std::vector<Box<T, variaty_count>> split_boxes;
-                split_box_by_ratio(project_box, split_boxes);
-                for (auto b : split_boxes)
+                split_box_by_ratio(project_box, current_box, split_boxes);
+                for (const auto &b : split_boxes)
                 {
                     Box<T, variaty_count> cbox = current_box;
                     cut_box(cbox, b);
@@ -262,10 +278,10 @@ namespace tnurbs
             }
             
             //TODO: 去重
-            std::unordered_set<help<T, equation_count>, hash_help<T, equation_count>> remove_mult;
-            for (Eigen::Vector<T, equation_count> param : int_params)
+            std::unordered_set<help<T, variaty_count>, hash_help<T, variaty_count>> remove_mult;
+            for (const Eigen::Vector<T, variaty_count> &param : int_params)
             {
-                help<T, equation_count> h(param);
+                help<T, variaty_count> h(param);
                 remove_mult.insert(h);
             }
             int_params.clear();
@@ -273,7 +289,7 @@ namespace tnurbs
             {
                 int_params.push_back(it->m_point);
             }
-            // int_params.insert(int_params.end(), remove_mult.begin(), remove_mult.end());
+
             return true;
         }
     
@@ -304,7 +320,7 @@ namespace tnurbs
             {
                 for (int i = 1; i < count; ++i)
                 {
-                    if (control_points(index, i) * control_points(index, i - 1) < 0)
+                    if (control_points(index, i) * control_points(index, i - 1) <= 0)
                     {
                         flag = true;
                         break;
@@ -319,13 +335,12 @@ namespace tnurbs
             return true;
         }
       
-        Box<T, variaty_count> interval_projected_polyhedron(const Eigen::Matrix<T, equation_count, Eigen::Dynamic> &control_points) const
+        bool interval_projected_polyhedron(const Eigen::Matrix<T, equation_count, Eigen::Dynamic> &control_points, Box<T, variaty_count> &reuslt) const
         {
             int points_count = control_points.cols();
-            Eigen::Vector<T, variaty_count> min, max;
-            min.setConstant(0.0);
-            max.setConstant(1.0);
-            Box<T, variaty_count> reuslt(min, max);
+            reuslt.Min.setConstant(0.0);
+            reuslt.Max.setConstant(1.0);
+
             m_index.reset();
             for (int f_index = 0; f_index < equation_count; ++f_index)
             {
@@ -334,7 +349,7 @@ namespace tnurbs
                 {
                     for (int j = 0; j < variaty_count; ++j)
                     {
-                        current(j, i) = m_index.m_index[j] / m_index.m_bounds[j];
+                        current(j, i) = static_cast<T>(m_index.m_index[j]) / static_cast<T>(m_index.m_bounds[j]);
                     }
                     current(variaty_count, i) = control_points(f_index, i);
                     m_index.add_one();
@@ -351,21 +366,29 @@ namespace tnurbs
                         project_point.push_back(p);
                     }
                     std::vector<Eigen::Vector2<T>> convex_hell = graham_scan(project_point);
-                    std::array<T, 2> interval = convex_hell_int_xaxis(convex_hell);
-                    reuslt.Min[index] = std::max(reuslt.Min[index], interval[0]);
-                    reuslt.Max[index] = std::min(reuslt.Max[index], interval[1]);
+                    std::array<T, 2> interval; 
+                    if (convex_hell_int_xaxis(convex_hell, interval) == true)
+                    {
+                        reuslt.Min[index] = std::max(reuslt.Min[index], interval[0]);
+                        reuslt.Max[index] = std::min(reuslt.Max[index], interval[1]);
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                    
                 }
             }
-            return reuslt;
+            return true;
         }
     
-        bool split_box_by_ratio(const Box<T, variaty_count> &box, std::vector<Box<T, variaty_count>> &split_boxes) const
+        bool split_box_by_ratio(const Box<T, variaty_count> &box, const Box<T, variaty_count> &origin_box, std::vector<Box<T, variaty_count>> &split_boxes) const
         {
             split_boxes.push_back(box);
             for (int index = 0; index < variaty_count; ++index)
             {
                 bool flag = box.Max[index] - box.Min[index] < 0.8;
-                if (flag == false)
+                if (flag == false && origin_box.Max[index] - origin_box.Min[index] > TDEFAULT_ERROR<T>::value * 10)
                 {
                     std::vector<Box<T, variaty_count>> current_split_boxes;
                     for (Box<T, variaty_count> &box : split_boxes)
@@ -390,34 +413,41 @@ namespace tnurbs
             return true;
         }
         
-        std::array<T, 2> convex_hell_int_xaxis(const std::vector<Eigen::Vector2<T>> &convex_hell) const
+        bool convex_hell_int_xaxis(const std::vector<Eigen::Vector2<T>> &convex_hell, std::array<T, 2> &intersect_interval) const
         {
             Interval<T> result;
             int count = 2;
             size_t points_count = convex_hell.size();
             size_t point_index = 0;
             std::array<T, 2> nums;
-            while (count > 0 && point_index <= points_count)
+            while (count > 0 && point_index < points_count)
             {
                 int next_point_index = (point_index + 1) % points_count;
                 if (std::abs(convex_hell[point_index][1] - 0.0) < KNOTS_EPS<T>::value)
                 {
-                    nums[count - 1] = convex_hell[point_index][0];
+                    intersect_interval[count - 1] = convex_hell[point_index][0];
                     --count;
                 }
                 else if (std::abs(convex_hell[next_point_index][1] - 0.0) > KNOTS_EPS<T>::value && convex_hell[point_index][1] * convex_hell[next_point_index][1] < 0.0)
                 {
                     T t = convex_hell[point_index][1] / (convex_hell[point_index][1] - convex_hell[next_point_index][1]);
                     T num = t * (convex_hell[next_point_index][0] - convex_hell[point_index][0]) + convex_hell[point_index][0];
-                    nums[count - 1] = num;
+                    intersect_interval[count - 1] = num;
                     --count;
                 }
                 ++point_index;
-            }    
+            }
+            if (count == 2)
+                return false;
+            else if (count == 1)
+            {
+                intersect_interval[0] = intersect_interval[1];
+                return true;
+            }
 
-            if (nums[0] > nums[1])
-                std::swap(nums[0], nums[1]);
-            return nums;
+            if (intersect_interval[0] > intersect_interval[1])
+                std::swap(intersect_interval[0], intersect_interval[1]);
+            return true;
         }    
     };
 
@@ -447,5 +477,66 @@ namespace tnurbs
         solver.compute_ipp(int_params);
         return int_params;
     }
+
+    //TODO: is_rationl = true
+    template<typename T, int dim, bool is_rational = false>
+    std::vector<Eigen::Vector<T, 3>> bezier_curve_int_bezier_surface(const bezier_curve<T, dim, is_rational, -1>& left, const bezier_surface<T, dim, -1, -1, is_rational>& right)
+    {
+        int left_degree = left.get_degree();
+        Eigen::MatrixX<Eigen::Vector<T, is_rational ? dim + 1 : dim>> right_control_points;
+        right.get_control_points(right_control_points);
+        int v_right_degree = right_control_points.cols() - 1;
+        int u_right_degree = right_control_points.rows() - 1;
+        std::array<int, 3> degrees{ left_degree, u_right_degree, v_right_degree };
+        Eigen::Matrix<T, dim, Eigen::Dynamic> left_control_points;
+        left.get_control_points(left_control_points);
+
+        int count = (left_degree + 1) * (u_right_degree + 1) * (v_right_degree + 1);
+        Eigen::Matrix<T, dim, Eigen::Dynamic> coeff(dim, count);
+        Index<3> index;
+        index.reset();
+        index.set_bounds(degrees);
+        for (int i = 0; i < count; ++i)
+        {
+            //std::cout << "i: " << i << std::endl;
+            coeff.col(i) = left_control_points.col(index.m_index[0]) - right_control_points(index.m_index[1], index.m_index[2]);
+            index.add_one();
+        }
+        
+        smspe<T, dim, 3> solver;
+        solver.init(coeff, degrees);
+        std::vector<Eigen::Vector<T, 3>> int_params;
+        solver.compute_ipp(int_params);
+        return int_params;
+    }
+
+    template<typename T, int dim, bool is_rational = false>
+    std::vector<Eigen::Vector<T, 3>> bezier_curve_int_bezier_surface(const nurbs_curve<T, dim, is_rational, -1, -1>& left, const nurbs_surface<T, dim, -1, -1, -1, -1, is_rational>& right)
+    {
+        int left_degree = left.get_degree();
+        auto right_control_points = right.get_control_points();
+        int u_right_degree = right_control_points[0].cols() - 1;
+        int v_right_degree = right_control_points.rows() - 1;
+        std::array<int, 3> degrees{ left_degree, u_right_degree, v_right_degree };
+        auto left_control_points = left.get_control_points();
+        
+        int count = (left_degree + 1) * (u_right_degree + 1) * (v_right_degree + 1);
+        Eigen::Matrix<T, dim, Eigen::Dynamic> coeff(dim, count);
+        Index<3> index;
+        index.reset();
+        index.set_bounds(degrees);
+        for (int i = 0; i < count; ++i)
+        {
+            coeff.col(i) = left_control_points.col(index.m_index[0]) - right_control_points[index.m_index[2]].col(index.m_index[1]);
+            index.add_one();
+        }
+
+        smspe<T, dim, 3> solver;
+        solver.init(coeff, degrees);
+        std::vector<Eigen::Vector<T, 3>> int_params;
+        solver.compute_ipp(int_params);
+        return int_params;
+    }
+
 
 }

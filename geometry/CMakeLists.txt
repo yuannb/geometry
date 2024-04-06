@@ -3,16 +3,21 @@ cmake_minimum_required(VERSION 3.14)
 project(GWB VERSION 1.0)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
-add_compile_options(-fPIC)
+add_definitions(-D_USE_MATH_DEFINES)
+# set (CMAKE_C_COMPILER "C:/msys64/mingw32.exe")
+# set (CMAKE_CXX_COMPILER "C:/msys64/mingw32.exe")
 
-SET(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -Wall -g -ggdb ")
-SET(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
+# add_compile_options(-fPIC)
+
+#SET(CMAKE_CXX_FLAGS_DEBUG "$ENV{CXXFLAGS} -O0 -Wall -g -ggdb ")
+#SET(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
 
 #将编译的汇编保存
 # SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -save-temps=obj")
 
 set(gwb_global_dir "${PROJECT_SOURCE_DIR}")
 string(REGEX REPLACE "(.+)\\geometry.*" "\\1" PROJECT_INIT_PATH ${PROJECT_SOURCE_DIR})
+message(${PROJECT_INIT_PATH})
 set(pre_gwb_global_dir "${PROJECT_INIT_PATH}")
 
 add_subdirectory(${PROJECT_SOURCE_DIR}/src/Topo)
@@ -27,11 +32,12 @@ list(APPEND EXTRA_LIBS geo)
 list(APPEND EXTRA_LIBS tools)
 list(APPEND EXTRA_LIBS gtest_main)
 
+list(APPEND EXTRA_INCLUDES "${PROJECT_INIT_PATH}/3rd/eigen/include/eigen3")
 list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/include/Topo")
 list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/include/Geo")
 list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/include/tools")
 list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/include/NurbsTools")
-list(APPEND EXTRA_INCLUDES "${PROJECT_INIT_PATH}/3rd/eigen/include/eigen3")
+
 list(APPEND EXTRA_INCLUDES "${PROJECT_INIT_PATH}/3rd/googletest/googletest/include")
 
 add_executable(GWB nurbs_test.cpp debug_used.cpp)

@@ -36,9 +36,9 @@ namespace tnurbs
             Eigen::Vector2<T> v1 = first - start_point;
             Eigen::Vector2<T> v2 = second - start_point;
             T d = v1[0] * v2[1] - v1[1] * v2[0];
-            if (d < 0)
+            if (d < -PRECISION<T>::value)
                 return false;
-            else if (d > 0)
+            else if (d > PRECISION<T>::value)
                 return true;
             else
             {

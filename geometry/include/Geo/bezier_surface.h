@@ -1,5 +1,6 @@
 #pragma once
 #include "nurbs_tool.h"
+#include "bezier_curve.h"
 
 namespace tnurbs
 {
@@ -34,7 +35,7 @@ namespace tnurbs
                     m_control_points(row_index, col_index) = points[index++];
             }
         }
-        ENUM_NURBS point_on_surface(T u,T v, Eigen::Vector<T, dim> &point)
+        ENUM_NURBS point_on_surface(T u,T v, Eigen::Vector<T, dim> &point) const
         {
             if (u < 0.0 || u > 1.0)
                 return NURBS_PARAM_IS_OUT_OF_DOMAIN;
@@ -45,6 +46,9 @@ namespace tnurbs
             point = project_point<T, is_rational, row_size>::project_point_to_euclidean_space(vec);
             return NURBS_SUCCESS;
         }
+
+        ENUM_NURBS get_control_points(Eigen::MatrixX<Eigen::Vector<T, row_size>>& control_points) const;
+    
     };
 
     /// @brief bezier curve class
@@ -58,6 +62,9 @@ namespace tnurbs
         constexpr static int row_size = is_rational ? dim + 1: dim;
         Eigen::Matrix<Eigen::Vector<T, row_size>, Eigen::Dynamic, Eigen::Dynamic> m_control_points; //p_ij(i : row, j : col)
     public:
+
+        using iso_curve_type = bezier_curve<T, dim, is_rational, -1>;
+
         bezier_surface(int rows, int cols, std::vector<Eigen::Vector<T, row_size>> &points)
         {
             m_control_points.resize(rows, cols);
@@ -71,6 +78,20 @@ namespace tnurbs
         bezier_surface(Eigen::MatrixX<Eigen::Vector<T, row_size>> &points)
         {
             m_control_points = points;
+        }
+
+        bezier_surface(const Eigen::VectorX<Eigen::Matrix<T, row_size, Eigen::Dynamic>>& points)
+        {
+            int rows = points.rows();
+            int cols = points[0].cols();
+            m_control_points.resize(cols, rows);
+            for (int v_index = 0; v_index < rows; ++v_index)
+            {
+                for (int u_index = 0; u_index < cols; ++u_index)
+                {
+                    m_control_points(u_index, v_index) = points[v_index].col(u_index);
+                }
+            }
         }
         
         ENUM_NURBS point_on_surface(T u,T v, Eigen::Vector<T, dim> &point)
@@ -86,6 +107,13 @@ namespace tnurbs
             point = project_point<T, is_rational, row_size>::project_point_to_euclidean_space(vec);
             return NURBS_SUCCESS;
         }
+    
+        ENUM_NURBS get_control_points(Eigen::MatrixX<Eigen::Vector<T, row_size>>& control_points) const
+        {
+            control_points = m_control_points;
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+    
     };
 
 

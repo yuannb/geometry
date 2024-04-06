@@ -3,7 +3,7 @@
 
 namespace tnurbs
 {
-    using namespace tnurbs;
+    //using namespace tnurbs;
     template<typename T, int dim, bool is_rational, int points_count>
     class bezier_curve
     {

@@ -17,6 +17,53 @@
 #include "vodes.h"
 using namespace tnurbs;
 
+
+ENUM_NURBS save_obj(const mesh<1>* cur, const char* path)
+{
+    std::ofstream outfile2(path);
+    for (auto point : cur->m_ders)
+    {
+        outfile2 << "v " << point(0, 0)[0] << " " <<
+            point(0, 0)[1] << " " << point(0, 0)[2] << std::endl;
+    }
+    for (auto index : cur->m_indexs)
+    {
+        int count = index.size();
+        outfile2 << "l ";
+        for (int i = 0; i < count; ++i)
+        {
+            outfile2 << index[i] + 1 << " ";
+        }
+        outfile2 << std::endl;
+    }
+    outfile2.close();
+    return ENUM_NURBS::NURBS_SUCCESS;
+}
+
+ENUM_NURBS save_obj2(const nurbs_surface<double, 3, -1, -1, -1, -1, false>& surf, const char* path)
+{
+    surface_mesh_helper<nurbs_surface<double, 3, -1, -1, -1, -1, false>> mh;
+    disc_surface(&surf, mh, TDEFAULT_ERROR<double>::value, 10.0, 0.1, 1.0);
+    mesh<2> surface_mesh;
+    mesh_help_to_mesh(mh, surface_mesh);
+
+    save_obj(&surface_mesh, path);
+    return ENUM_NURBS::NURBS_SUCCESS;
+}
+
+ENUM_NURBS save_obj2(const nurbs_curve<double, 3, false, -1, -1>& curv, const char* path)
+{
+    curve_mesh_helper<nurbs_curve<double, 3, false, -1, -1>> mh;
+    disc_curve(&curv, mh, TDEFAULT_ERROR<double>::value, 10.0, 0.1, 1.0);
+    mesh<1> curve_mesh;
+    mesh_help_to_mesh(mh, curve_mesh);
+
+    save_obj(&curve_mesh, path);
+    return ENUM_NURBS::NURBS_SUCCESS;
+}
+
+
+
 class CreateNurbsCurve : public testing::Test
 {
 protected:
@@ -1147,7 +1194,7 @@ TEST(BEZIER_INT, test1)
     mat1 << -1, 1,
             -1, 1;
     Eigen::Matrix<double, 2, Eigen::Dynamic> mat2(2, 2);
-    mat2 << -1.5, 1,
+    mat2 << -0.75, 1,
             0, 0;
 
     bezier_curve<double, 2, false, -1> b1(mat1);
@@ -1159,6 +1206,10 @@ TEST(BEZIER_INT, test1)
     }
     std::cout << std::endl;
 }  
+
+
+
+
 
 TEST(BEZIER_INT, test2)
 {
@@ -1227,39 +1278,25 @@ TEST(BEZIER_INT, test2)
     control_points2(3) = points14;
     nurbs_surface<double, 3, -1, -1, -1, -1, false> *test_surface2 = new nurbs_surface<double, 3, -1, -1, -1, -1, false>(u_knots_vector2, v_knots_vector2, control_points2);
 
-    surface_mesh_helper<nurbs_surface<double, 3, -1, -1, -1, -1, false>> mh;
-    disc_surface(test_surface, mh, TDEFAULT_ERROR<double>::value, 10.0, 0.1, 1.0);
-    mesh<2> surface_mesh;
-    mesh_help_to_mesh(mh, surface_mesh);
-
-    save_obj(&surface_mesh, "xx1.obj");
-
-    surface_mesh_helper<nurbs_surface<double, 3, -1, -1, -1, -1, false>> mh2;
-    disc_surface(test_surface2, mh2, TDEFAULT_ERROR<double>::value, 10.0, 0.1, 1.0);
-    mesh<2> surface_mesh2;
-    mesh_help_to_mesh(mh2, surface_mesh2);
-    save_obj(&surface_mesh2, "xx2.obj");
-
-    Box<double, 4> initial_box;
-    initial_box.Min = Eigen::Vector4d(0.0, 0.666, 0.7, 0.8);
-    initial_box.Max = Eigen::Vector4d(0.02, 0.67, 0.8, 1.0);
-    
-    surf_surf_int<nurbs_surface<double, 3, -1, -1, -1, -1, false>> *temp = new surf_surf_int<nurbs_surface<double, 3, -1, -1, -1, -1, false>>();
-    surf_surf_intersect_point<double, 3> *temp2 = new surf_surf_intersect_point<double, 3>();
-    temp2->m_point = Eigen::Vector3d(0, 0, 5);
-    temp->m_intersect_points.push_back(temp2);
-    ODESolver<nurbs_surface<double, 3, -1, -1, -1, -1, false>, false>(initial_box, test_surface, test_surface2, temp, 10.0);
-    
-    int count = temp->m_intersect_points_count[0];
-    Eigen::Matrix<double, 3, Eigen::Dynamic> mat(3, count);
-
-    
-    for (int index = 0; index < count; ++index)
+    trace_nurbs_surface<nurbs_surface<double, 3, -1, -1, -1, -1, false>> ts(test_surface, test_surface2);
+    ts.init(0.1);
+    surf_surf_int<nurbs_surface<double, 3, -1, -1, -1, -1, false>>* intersection = nullptr;
+    ts.surafces_intersection(&intersection);
+    for (int index = 0; index < 8; ++index)
     {
-        mat.col(index) = temp2->m_point;
-        temp2 = temp2->m_next;
+        int count = intersection->m_intersect_points_count[index];
+        Eigen::Matrix<double, 3, Eigen::Dynamic> mat(3, count);
+        auto temp = intersection->m_intersect_points[index];
+        for (int j = 0; j < count; ++j)
+        {
+            mat.col(j) = temp->m_point;
+            temp = temp->m_next;
+        }
+
+        std::string path = "intersect" + std::to_string(index) + ".obj";
+        save_obj(mat, path.data());
     }
-    save_obj(mat, "intersect.obj");
+
 
     std::cout << 1 << std::endl;
 }  

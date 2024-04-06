@@ -1,0 +1,7 @@
+geometry/build/*
+geometry/out/*
+geometry/.vs/*
+geometry/CMakeSettings.json
+.vs/*
+.vscode/*
+.vscode/launch.json

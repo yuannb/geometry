@@ -251,7 +251,7 @@ namespace tnurbs
 
         do
         {
-            bool flag = check_patch(*current, mh.ders, dist_eps, angle_eps, chord_eps);
+            bool flag = check_patch<curve_type, typename curve_type::Type, curve_type::dimension>(*current, mh.ders, dist_eps, angle_eps, chord_eps);
             
             if (flag == true)
             {
@@ -362,6 +362,7 @@ namespace tnurbs
                     if (current == nullptr)
                     {
                         delete current;
+                        current = nullptr;
                         break;
                     }
 
@@ -598,7 +599,7 @@ namespace tnurbs
             // ++countt;
             std::vector<Eigen::Matrix<Eigen::Vector<T, dim>, 2, 2>> new_ders;
             ENUM_DIRECTION dir;
-            bool flag = check_patch(*curent, mh.ders, dir, new_ders, dist_eps, angle_eps, chord_eps);
+            bool flag = check_patch<surface_type, typename surface_type::Type, surface_type::dimension>(*curent, mh.ders, dir, new_ders, dist_eps, angle_eps, chord_eps);
             if (flag == true)
             {
                 // num += 1;
@@ -1237,18 +1238,23 @@ namespace tnurbs
                     {
                         if (current->root && current->root->right == current)
                             current = current->root;
-                        else
+                        else if (current->root == nullptr)
                         {
                             current = nullptr;
                             break;
-                        }                     
+                        }
+                        else
+                        {
+                            current = current->root->right;
+                            break;
+                        }
                     }
-                    if (current == nullptr)
-                        break;
-                    else
-                    {
-                        current = current->root->right;
-                    }
+                    //if (current == nullptr)
+                    //    break;
+                    //else
+                    //{
+                    //    current = current->root->right;
+                    //}
                 }
             }
             else if (current->left != nullptr)
