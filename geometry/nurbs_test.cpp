@@ -1,3 +1,4 @@
+
 #include <iostream>
 #include <Eigen/Core>
 #include <Eigen/Dense>
@@ -17,6 +18,8 @@
 #include "vodes.h"
 using namespace tnurbs;
 
+//vs中assert中止调试查看堆栈在代码中添加下面的函数
+//_set_error_mode(_OUT_TO_MSGBOX);
 
 ENUM_NURBS save_obj(const mesh<1>* cur, const char* path)
 {
@@ -1208,9 +1211,6 @@ TEST(BEZIER_INT, test1)
 }  
 
 
-
-
-
 TEST(BEZIER_INT, test2)
 {
     Eigen::VectorX<double> u_knots_vector2(8);
@@ -1277,9 +1277,9 @@ TEST(BEZIER_INT, test2)
     control_points2(2) = points13;
     control_points2(3) = points14;
     nurbs_surface<double, 3, -1, -1, -1, -1, false> *test_surface2 = new nurbs_surface<double, 3, -1, -1, -1, -1, false>(u_knots_vector2, v_knots_vector2, control_points2);
-
+    _set_error_mode(_OUT_TO_MSGBOX);
     trace_nurbs_surface<nurbs_surface<double, 3, -1, -1, -1, -1, false>> ts(test_surface, test_surface2);
-    ts.init(0.1);
+    ts.init(1.0, 0.2);
     surf_surf_int<nurbs_surface<double, 3, -1, -1, -1, -1, false>>* intersection = nullptr;
     ts.surafces_intersection(&intersection);
     for (int index = 0; index < 8; ++index)
@@ -1301,10 +1301,194 @@ TEST(BEZIER_INT, test2)
     std::cout << 1 << std::endl;
 }  
 
+
+TEST(BEZIER_INT, test3)
+{
+    Eigen::VectorX<double> u_knots_vector2(8);
+    u_knots_vector2 << 0, 0, 0, 0, 1, 1, 1, 1;
+    Eigen::VectorX<double> v_knots_vector2(8);
+    v_knots_vector2 << 0, 0, 0, 0, 1, 1, 1, 1;
+
+    Eigen::VectorX<double> u_knots_vector(6);
+    u_knots_vector << 0, 0, 0, 1, 1, 1;
+    Eigen::VectorX<double> v_knots_vector(6);
+    v_knots_vector << 0, 0, 0, 1, 1, 1;
+
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points1(3, 3);
+    points1 << -150, 0, 150,
+                10, -10, 10,
+                0, 0, 0;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points2(3, 3);
+    points2 << -10, 20, 50,
+                40, 0, 40,
+                50, 50, 50;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points3(3, 3);
+    points3 << -10, 20, 50,
+                40, 0, 40,
+                110, 110, 110;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points4(3, 3);
+    points4 << -55, -25, 5,
+                -5, -45, -5,
+                200, 200, 200;
+
+    Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> control_points(4);
+    control_points(0) = points1;
+    control_points(1) = points2;
+    control_points(2) = points3;
+    control_points(3) = points4;
+    nurbs_surface<double, 3, -1, -1, -1, -1, false>* test_surface = new nurbs_surface<double, 3, -1, -1, -1, -1, false>(u_knots_vector, v_knots_vector2, control_points);
+    //save_obj2(*test_surface, "xxx.obj");
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points11(3, 3);
+    points11 << -50, 0, 50,
+                -50, 50, -50, 
+                0, 0, 0;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points12(3, 3);
+    points12 << -30, 20, 70,
+                -30, 70, -30,
+                50, 50, 50;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points13(3, 3);
+    points13 << -30, 20, 70, 
+                -30, 70, -30,
+                110, 110, 110;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points14(3, 3);
+    points14 << -75, -25, 25,
+                -75, 25, -75,
+                200, 200, 200;
+
+    Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> control_points2(4);
+    control_points2(0) = points11;
+    control_points2(1) = points12;
+    control_points2(2) = points13;
+    control_points2(3) = points14;
+    nurbs_surface<double, 3, -1, -1, -1, -1, false>* test_surface2 = new nurbs_surface<double, 3, -1, -1, -1, -1, false>(u_knots_vector, v_knots_vector2, control_points2);
+    _set_error_mode(_OUT_TO_MSGBOX);
+    trace_nurbs_surface<nurbs_surface<double, 3, -1, -1, -1, -1, false>> ts(test_surface, test_surface2);
+    ts.init(1.0, 0.2);
+    surf_surf_int<nurbs_surface<double, 3, -1, -1, -1, -1, false>>* intersection = nullptr;
+    ts.surafces_intersection(&intersection);
+    for (int index = 0; index < 2; ++index)
+    {
+        int count = intersection->m_intersect_points_count[index];
+        Eigen::Matrix<double, 3, Eigen::Dynamic> mat(3, count);
+        auto temp = intersection->m_intersect_points[index];
+        for (int j = 0; j < count; ++j)
+        {
+            mat.col(j) = temp->m_point;
+            temp = temp->m_next;
+        }
+
+        std::string path = "intersect" + std::to_string(index) + ".obj";
+        save_obj(mat, path.data());
+    }
+
+
+    std::cout << 1 << std::endl;
+}
+
+
+TEST(BEZIER_INT, test4)
+{
+    Eigen::VectorX<double> u_knots_vector2(8);
+    u_knots_vector2 << 0, 0, 0, 0, 1, 1, 1, 1;
+    Eigen::VectorX<double> v_knots_vector2(8);
+    v_knots_vector2 << 0, 0, 0, 0, 1, 1, 1, 1;
+
+    Eigen::VectorX<double> u_knots_vector(6);
+    u_knots_vector << 0, 0, 0, 1, 1, 1;
+    Eigen::VectorX<double> v_knots_vector(6);
+    v_knots_vector << 0, 0, 0, 1, 1, 1;
+
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points1(3, 3);
+    points1 << -10, 0, 10,
+        -30, -30, -30,
+        2.5, -3.5, 2.5;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points2(3, 3);
+    points2 << -10, 0, 10,
+        -10, -10, -10,
+        2.5, -3.5, 2.5;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points3(3, 3);
+    points3 << -10, 0, 10,
+        10, 10, 10,
+        2.5, -3.5, 2.5;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points4(3, 3);
+    points4 << -10, 0, 10,
+        30, 30, 15,
+        2.5, -3.5, 2.5;
+
+    Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> control_points(4);
+    control_points(0) = points1;
+    control_points(1) = points2;
+    control_points(2) = points3;
+    control_points(3) = points4;
+    nurbs_surface<double, 3, -1, -1, -1, -1, false>* test_surface = new nurbs_surface<double, 3, -1, -1, -1, -1, false>(u_knots_vector, v_knots_vector2, control_points);
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points11(3, 4);
+    points11 << 20, 10, -10, -20,
+        -10, -10, -10, -10,
+        3, 3, 3, 3;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points12(3, 4);
+    points12 << 20, 10, -10, -20,
+        -10, -10, -10, -10,
+        -1, -1, -1, -1;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points13(3, 4);
+    points13 << 20, 10, -10, -20,
+        10, 10, 10, 10,
+        -1, -1, -1, -1;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points14(3, 4);
+    points14 << 20, 10, -10, -20,
+        10, 10, 10, 10,
+        3, 3, 3, 3;
+
+    Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> control_points2(4);
+    control_points2(0) = points11;
+    control_points2(1) = points12;
+    control_points2(2) = points13;
+    control_points2(3) = points14;
+    nurbs_surface<double, 3, -1, -1, -1, -1, false>* test_surface2 = new nurbs_surface<double, 3, -1, -1, -1, -1, false>(u_knots_vector2, v_knots_vector2, control_points2);
+    save_obj2(*test_surface, "test_surface.obj");
+    save_obj2(*test_surface2, "test_surface2.obj");
+    _set_error_mode(_OUT_TO_MSGBOX);
+    trace_nurbs_surface<nurbs_surface<double, 3, -1, -1, -1, -1, false>> ts(test_surface2, test_surface);
+    ts.init(1.0, 0.2);
+    surf_surf_int<nurbs_surface<double, 3, -1, -1, -1, -1, false>>* intersection = nullptr;
+    ts.surafces_intersection(&intersection);
+    for (int index = 0; index < 4; ++index)
+    {
+        int count = intersection->m_intersect_points_count[index];
+        Eigen::Matrix<double, 3, Eigen::Dynamic> mat(3, count);
+        auto temp = intersection->m_intersect_points[index];
+        for (int j = 0; j < count; ++j)
+        {
+            mat.col(j) = temp->m_point;
+            temp = temp->m_next;
+        }
+
+        std::string path = "intersect" + std::to_string(index) + ".obj";
+        save_obj(mat, path.data());
+    }
+
+
+    std::cout << 1 << std::endl;
+}
+
 int main(int argc, char **argv)
 {
     testing::InitGoogleTest(&argc, argv);
     
-    ::testing::FLAGS_gtest_filter = "BEZIER_INT.test2";
+    ::testing::FLAGS_gtest_filter = "BEZIER_INT.test4";
     return RUN_ALL_TESTS();
 }

@@ -1,11 +1,13 @@
 cmake_minimum_required(VERSION 3.14)
-
 project(GWB VERSION 1.0)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
+
+# windows 编译
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
+set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /MTd")
+
 add_definitions(-D_USE_MATH_DEFINES)
-# set (CMAKE_C_COMPILER "C:/msys64/mingw32.exe")
-# set (CMAKE_CXX_COMPILER "C:/msys64/mingw32.exe")
 
 # add_compile_options(-fPIC)
 
@@ -41,6 +43,19 @@ list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/include/NurbsTools")
 list(APPEND EXTRA_INCLUDES "${PROJECT_INIT_PATH}/3rd/googletest/googletest/include")
 
 add_executable(GWB nurbs_test.cpp debug_used.cpp)
+
+# big obj
+if(CMAKE_COMPILER_IS_GNUCXX)
+  # 检查GNU编译是否支持 -Wa,-mbig-obj 
+  include(CheckCXXCompilerFlag)
+  check_cxx_compiler_flag("-Wa,-mbig-obj" GNU_BIG_OBJ_FLAG_ENABLE)
+  message(STATUS GNU_BIG_OBJ_FLAG_ENABLE=${GNU_BIG_OBJ_FLAG_ENABLE})
+endif()
+target_compile_options(GWB 
+	PRIVATE 
+	$<$<CXX_COMPILER_ID:MSVC>:/bigobj> 
+	$<$<AND:$<CXX_COMPILER_ID:GNU>,$<BOOL:${GNU_BIG_OBJ_FLAG_ENABLE}>>:-Wa,-mbig-obj>)
+
 add_executable(GWB1 test2.cpp)
 
 target_link_libraries(GWB PUBLIC ${EXTRA_LIBS})

@@ -15,13 +15,32 @@ namespace tnurbs
         return result;
     }
 
+    template<typename T, unsigned dim>
+    std::array<Interval<T>, (unsigned)dim> plus(const std::array<Interval<T>, (unsigned)dim>& left, const std::array<Interval<T>, (unsigned)dim>& right, T eps = PRECISION<T>::value)
+    {
+        std::array<Interval<T>, (unsigned)dim> result;
+        for (unsigned index = 0; index < dim; ++index)
+            result[index] = plus(left[index], right[index]);
+        return result;
+    }
+
+
     //两区间相减
     template<typename T>
     Interval<T> minus(const Interval<T> &left, const Interval<T> &right, T eps = PRECISION<T>::value)
     {
         Interval<T> result;
-        result.m_interval[0] = left.m_interval[0] - right.m_interval[0] - eps;
-        result.m_interval[1] = left.m_interval[1] - right.m_interval[1] + eps;
+        result.m_interval[0] = left.m_interval[0] - right.m_interval[1] - eps;
+        result.m_interval[1] = left.m_interval[1] - right.m_interval[0] + eps;
+        return result;
+    }
+
+    template<typename T, unsigned dim>
+    std::array<Interval<T>, (unsigned)dim> minus(const std::array<Interval<T>, (unsigned)dim>& left, const std::array<Interval<T>, (unsigned)dim>& right, T eps = PRECISION<T>::value)
+    {
+        std::array<Interval<T>, (unsigned)dim> result;
+        for (unsigned index = 0; index < dim; ++index)
+            result[index] = minus(left[index], right[index]);
         return result;
     }
 
@@ -37,6 +56,15 @@ namespace tnurbs
 
         result.m_interval[0] = std::min({x1, x2, x3, x4}) - eps;
         result.m_interval[1] = std::max({x1, x2, x3, x4}) + eps;
+        return result;
+    }
+
+    template<typename T, unsigned dim>
+    std::array<Interval<T>, (unsigned)dim> mutilply(const std::array<Interval<T>, (unsigned)dim>& left, const Interval<T>& right, T eps = PRECISION<T>::value)
+    {
+        std::array<Interval<T>, (unsigned)dim> result;
+        for (unsigned index = 0; index < dim; ++index)
+            result[index] = mutilply(left[index], right);
         return result;
     }
 

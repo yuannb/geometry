@@ -157,6 +157,7 @@ namespace tnurbs
     private:
         Eigen::Matrix<T, equation_count, Eigen::Dynamic> m_coeff;
         mutable Index<variaty_count> m_index;
+        std::vector<int> m_skip;
     public:
         smspe() = default;
         ~smspe() { }
@@ -189,6 +190,7 @@ namespace tnurbs
             //int loop_count = 0;
             while (boxes.empty() == false)
             {
+                m_skip.clear();
                 //std::cout << "loop count: " << loop_count << std::endl;
                 //++loop_count;
                 Box<T, variaty_count> current_box = boxes.back();
@@ -207,6 +209,11 @@ namespace tnurbs
                     int bezier_control_points_count = m_index.m_bounds[index] + 1;
                     //std::cout << "index: " << index << std::endl;
                     Eigen::Matrix<T, equation_count, Eigen::Dynamic> bezier_control_points(equation_count, bezier_control_points_count);
+                    Box<T, 1> sub_box(Eigen::Vector<T, 1>(current_box.Min[index]), Eigen::Vector<T, 1>(current_box.Max[index]));
+                    if (sub_box.Max[0] - sub_box.Min[0] < KNOTS_EPS<T>::value)
+                    {
+                        m_skip.push_back(index);
+                    }
                     //int x = 0;
                     do
                     {
@@ -232,26 +239,33 @@ namespace tnurbs
                         nurbs_curve<T, equation_count, false, -1, -1> nurbs(bezier_control_points);
                         // std::cout << bezier_control_points << std::endl;
                         // std::cout << control_points << std::endl;
-                        Box<T, 1> sub_box(Eigen::Vector<T, 1>(current_box.Min[index]), Eigen::Vector<T, 1>(current_box.Max[index]));
+                        //Box<T, 1> sub_box(Eigen::Vector<T, 1>(current_box.Min[index]), Eigen::Vector<T, 1>(current_box.Max[index]));
 
-                        if (sub_box.Max[0] - sub_box.Min[0] < KNOTS_EPS<T>::value)
+                        //if (sub_box.Max[0] - sub_box.Min[0] < KNOTS_EPS<T>::value)
+                        //{
+                        //    Eigen::Vector<T, equation_count> point;
+                        //    nurbs.point_on_curve((sub_box.Max[0] + sub_box.Min[0]) / 2.0, point);
+                        //    for (int i = 0; i < bezier_control_points_count; ++i)
+                        //    {
+                        //        control_points.col(first_index + i * step) = point;
+                        //    }
+                        //}
+                        //else
+                        //{
+                        //    nurbs.sub_divide(sub_box);
+                        //    bezier_control_points = nurbs.get_control_points();
+                        //    // std::cout << bezier_control_points << std::endl;
+                        //    for (int i = 0; i < bezier_control_points_count; ++i)
+                        //    {
+                        //        control_points.col(first_index + i * step) = bezier_control_points.col(i);
+                        //    }
+                        //}
+                        nurbs.sub_divide(sub_box);
+                        bezier_control_points = nurbs.get_control_points();
+                        // std::cout << bezier_control_points << std::endl;
+                        for (int i = 0; i < bezier_control_points_count; ++i)
                         {
-                            Eigen::Vector<T, equation_count> point;
-                            nurbs.point_on_curve((sub_box.Max[0] + sub_box.Min[0]) / 2.0, point);
-                            for (int i = 0; i < bezier_control_points_count; ++i)
-                            {
-                                control_points.col(first_index + i * step) = point;
-                            }
-                        }
-                        else
-                        {
-                            nurbs.sub_divide(sub_box);
-                            bezier_control_points = nurbs.get_control_points();
-                            // std::cout << bezier_control_points << std::endl;
-                            for (int i = 0; i < bezier_control_points_count; ++i)
-                            {
-                                control_points.col(first_index + i * step) = bezier_control_points.col(i);
-                            }
+                            control_points.col(first_index + i * step) = bezier_control_points.col(i);
                         }
                         
                     } while (m_index.add_one(index));
@@ -355,8 +369,13 @@ namespace tnurbs
                     m_index.add_one();
                 }
                 m_index.reset();
+                auto skip_it = m_skip.begin();
                 for (int index = 0; index < variaty_count; ++index)
                 {
+                    if (skip_it != m_skip.end() && f_index == *skip_it)
+                    {
+                        continue;
+                    }
                     //project(index, 2) to plane
                     std::vector<Eigen::Vector2<T>> project_point;
                     project_point.reserve(points_count);
@@ -371,6 +390,10 @@ namespace tnurbs
                     {
                         reuslt.Min[index] = std::max(reuslt.Min[index], interval[0]);
                         reuslt.Max[index] = std::min(reuslt.Max[index], interval[1]);
+                        if (reuslt.Max[index] < reuslt.Min[index])
+                        {
+                            return false;
+                        }
                     }
                     else
                     {
@@ -409,6 +432,8 @@ namespace tnurbs
                 T len = box.Max[index] - box.Min[index];
                 box.Max[index] = box.Min[index] + sub_box.Max[index] * len;
                 box.Min[index] += sub_box.Min[index] * len;
+                //box.Max[index] = box.Min[index] + sub_box.Max[index] * std::min(len + KNOTS_EPS<T>::value, 1.0);
+                //box.Min[index] += sub_box.Min[index] * std::max(0.0, len - KNOTS_EPS<T>::value);
             }
             return true;
         }
@@ -419,7 +444,7 @@ namespace tnurbs
             int count = 2;
             size_t points_count = convex_hell.size();
             size_t point_index = 0;
-            std::array<T, 2> nums;
+            //std::array<T, 2> extreams(0, 1);
             while (count > 0 && point_index < points_count)
             {
                 int next_point_index = (point_index + 1) % points_count;
@@ -432,6 +457,15 @@ namespace tnurbs
                 {
                     T t = convex_hell[point_index][1] / (convex_hell[point_index][1] - convex_hell[next_point_index][1]);
                     T num = t * (convex_hell[next_point_index][0] - convex_hell[point_index][0]) + convex_hell[point_index][0];
+                    //if (count == 2)
+                    //{
+                    //    num = std::min(std::max(convex_hell[point_index][0], convex_hell[next_point_index][0]), num + KNOTS_EPS<T>::value);
+                    //}
+                    //else
+                    //{
+                    //    num = std::max(std::min(convex_hell[point_index][0], convex_hell[next_point_index][0]), num - KNOTS_EPS<T>::value);
+                    //}
+                    
                     intersect_interval[count - 1] = num;
                     --count;
                 }
@@ -446,7 +480,12 @@ namespace tnurbs
             }
 
             if (intersect_interval[0] > intersect_interval[1])
+            {
                 std::swap(intersect_interval[0], intersect_interval[1]);
+            }
+            //intersect_interval[0] = std::max(0.0, intersect_interval[0] - KNOTS_EPS<T>::value);
+            //intersect_interval[1] = std::min(1.0, intersect_interval[1] + KNOTS_EPS<T>::value);
+                
             return true;
         }    
     };

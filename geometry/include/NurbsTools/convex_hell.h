@@ -60,12 +60,13 @@ namespace tnurbs
             Eigen::Vector2<T> dir1 = new_points.back() - new_points[0];
             Eigen::Vector2<T> dir2 = *it - new_points.back();
             T d = dir1[0] * dir2[1] - dir1[1] * dir2[0];
-            if (d != 0)
-                new_points.push_back(*it);
-            else if (d == 0)
+
+            if (std::abs(d) < PRECISION<T>::value)
             {
                 new_points.back() = *it;
             }
+            else
+                new_points.push_back(*it);
         }
 
         size_t new_points_count = new_points.size();

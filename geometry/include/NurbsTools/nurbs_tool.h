@@ -46,6 +46,14 @@ namespace tnurbs
             m_interval[0] = low;
             m_interval[1] = high;
         }
+        bool contain(T number, T tol) const
+        {
+            if (m_interval[0] - tol > number || m_interval[1] + tol < number)
+            {
+                return false;
+            }
+            return true;
+        }
     };
 
     /// @brief 查找节点矢量有几个不一样的数

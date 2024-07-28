@@ -50,6 +50,24 @@ namespace tnurbs
 
 
     template<typename T>
+    struct TDEFAULTANGLETOL
+    {
+    };
+
+    template<>
+    struct TDEFAULTANGLETOL<double>
+    {
+        constexpr static double value = 0.1;
+    };
+
+    template<>
+    struct TDEFAULTANGLETOL<float>
+    {
+        constexpr static float value = 0.3;
+    };
+
+
+    template<typename T>
     struct SPACE_PARAM_TIMES
     {
     };
@@ -119,6 +137,23 @@ namespace tnurbs
         constexpr static float value = 1e-4;
     };
 
+    template<typename T>
+    struct TINFINITE
+    {
+
+    };
+
+    template<>
+    struct TINFINITE<double>
+    {
+        constexpr static double value = 1e4;
+    };
+
+    template<>
+    struct TINFINITE<float>
+    {
+        constexpr static double value = 1e3;
+    };
 
     template<typename T>
     struct TDEFAULT_ERROR
@@ -173,7 +208,9 @@ namespace tnurbs
         NURBS_POINT_IS_ON_CURVE = 6,
         NURBS_POINT_IS_NOT_ON_CURVE = 7,
         NURBS_CHORD_IS_ZERO = 8,
-        NURBS_PARAM_IS_INVALID = 9
+        NURBS_PARAM_IS_INVALID = 9,
+        NURBS_ISOLATED_TANGENTIAL_POINT = 10,
+        NURBS_HIGH_ORDER_TANGENTIAL = 11
     };
 
 
@@ -207,11 +244,11 @@ namespace tnurbs
             return true;
         }
 
-        bool is_contain_box(const Box &bx) const
+        bool is_contain_box(const Box &bx, const T &tol = PRECISION<T>::value) const
         {
             for (int index = 0; index < dim; ++index)
             {
-                if (bx.Min[index] < Min[index] || bx.Max[index] > Max[index])
+                if (bx.Min[index] < Min[index] - tol || bx.Max[index] > Max[index] + tol)
                     return false;
             }
             return true;
@@ -312,6 +349,16 @@ namespace tnurbs
         {
             Eigen::Vector<T, dim> middle_point = (Min + Max) / 2.0;
             return middle_point;
+        }
+
+        T get_min_lenght() const
+        {
+            T min_length = Max[0] - Min[0];
+            for (int index = 1; index < dim; ++index)
+            {
+                min_length = std::min(min_length, Max[index] - Min[index]);
+            }
+            return min_length;
         }
 
     };

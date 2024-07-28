@@ -10,10 +10,12 @@ namespace tnurbs
     {
         int cols = mat.cols();
         std::ofstream outfile2(path);
+        outfile2.precision(16);
 
         for (int j = 0; j < cols; ++j)
         {
             Eigen::Vector3d point = mat.col(j);
+            
             outfile2 << "v " << point[0] << " " <<
             point[1] << " " << point[2] << std::endl;
         }
