@@ -2917,80 +2917,235 @@ namespace tnurbs
         }
 
 
-        // //先支持无理的, 目前此函数只支持3维空间的bezier
-        // ENUM_NURBS eval_normal_surface(nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> &normal_surface) const
-        // {
-        //     static_assert(dim == 3, "eval_normal_surface: 3 != dim");
-        //     static_assert(is_rational == false, "eval_normal_surface: is_rational == true");
-        //     int u_new_degree = 2 * m_u_degree - 1;
-        //     int v_new_degree = 2 * m_v_degree - 1;
-        //     Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> new_control_points(v_new_degree + 1);
-        //     for (int index = 0; index <= v_new_degree; ++index)
-        //     {
-        //         new_control_points[index].resize(point_size, u_new_degree + 1);
-        //     }
-        //     nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> u_tangent_surface, v_tangent_surface;
-        //     tangent_u_surface(u_tangent_surface);
-        //     tangent_v_surface(v_tangent_surface);
-        //     Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> u_surface_points = u_tangent_surface.get_control_points();
-        //     Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> v_surface_points = v_tangent_surface.get_control_points();
+         //先支持无理的, 目前此函数只支持3维空间的bezier
+         ENUM_NURBS eval_normal_surface(nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> &normal_surface) const
+         {
+             static_assert(dim == 3, "eval_normal_surface: 3 != dim");
+             static_assert(is_rational == false, "eval_normal_surface: is_rational == true");
 
-        //     int degree = std::max(u_new_degree, v_new_degree);
-        //     Eigen::MatrixX<int> bin = binary_coeff(degree + 1);
+             // 暂时只支持bezier曲面
+             if ((m_u_degree + 1) * (m_v_degree + 1) != m_control_points.rows() * m_control_points[0].cols())
+             {
+                 return ENUM_NURBS::NURBS_ERROR;
+             }
 
-        //     T temp = m_u_degree * m_v_degree;
-        //     for (int v_index = 0; v_index <= v_new_degree; ++v_index)
-        //     {
-        //         T pre_coeff = temp / bin(v_new_degree, v_index);
+             int u_new_degree = 2 * m_u_degree - 1;
+             int v_new_degree = 2 * m_v_degree - 1;
+             Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> new_control_points(v_new_degree + 1);
+             for (int index = 0; index <= v_new_degree; ++index)
+             {
+                 new_control_points[index].resize(point_size, u_new_degree + 1);
+             }
+             nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> u_tangent_surface, v_tangent_surface;
+             tangent_u_surface(u_tangent_surface);
+             tangent_v_surface(v_tangent_surface);
+             Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> u_surface_points = u_tangent_surface.get_control_points();
+             Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> v_surface_points = v_tangent_surface.get_control_points();
+
+             int degree = std::max(u_new_degree, v_new_degree);
+             Eigen::MatrixX<int> bin = binary_coeff(degree + 1);
+
+             T temp = 1.0 /*m_u_degree * m_v_degree*/;
+             for (int v_index = 0; v_index <= v_new_degree; ++v_index)
+             {
+                 T pre_coeff = temp / bin(v_new_degree, v_index);
                 
-        //         int l_max = std::min(v_index, m_v_degree);
-        //         int n_min = v_index - l_max;
+                 int l_max = std::min(v_index, m_v_degree);
+                 int n_min = v_index - l_max;
 
-        //         int n_max = std::min(v_index, m_v_degree - 1);
-        //         int l_min = v_index - n_max;
+                 int n_max = std::min(v_index, m_v_degree - 1);
+                 int l_min = v_index - n_max;
 
-        //         int v_len = l_max - l_min + 1;
-        //         assert(v_len > 0);
+                 int v_len = l_max - l_min + 1;
+                 assert(v_len > 0);
 
-        //         for (int u_index = 0; u_index <= u_new_degree; ++u_index)
-        //         {
-        //             T coeff = pre_coeff / bin(u_new_degree, u_index);
+                 for (int u_index = 0; u_index <= u_new_degree; ++u_index)
+                 {
+                     T coeff = pre_coeff / bin(u_new_degree, u_index);
                     
-        //             int k_max = std::min(u_index, m_u_degree - 1);
-        //             int m_min = u_index - k_max;
+                     int k_max = std::min(u_index, m_u_degree - 1);
+                     int m_min = u_index - k_max;
                     
-        //             int m_max = std::min(u_index, m_u_degree);
-        //             int k_min = u_index - m_max;
+                     int m_max = std::min(u_index, m_u_degree);
+                     int k_min = u_index - m_max;
                     
-        //             int u_len = n_max - n_min + 1;
-        //             Eigen::Vector<T, dim> result;
-        //             result.setConstant(0.0);
-        //             for (int i = 0; i < v_len; ++i)
-        //             {
-        //                 for (int j = 0; j < u_len; ++j)
-        //                 {
-        //                     T coeff = bin(m_u_degree - 1, k_min + i) * bin(m_u_degree, m_max - i) * bin(m_v_degree, l_min + j) * bin(m_v_degree - 1, n_max - j);
-        //                     result += coeff * u_surface_points(l_min + j, k_min + i).cross(v_surface_points(n_max - j, m_max - i));
-        //                 }
-        //             }
+                     int u_len = m_max - m_min + 1;
+                     Eigen::Vector<T, dim> result;
+                     result.setConstant(0.0);
+                     for (int i = 0; i < u_len; ++i)
+                     {
+                         for (int j = 0; j < v_len; ++j)
+                         {
+                             T coeff2 = bin(m_u_degree - 1, k_min + i) * bin(m_u_degree, m_max - i) * bin(m_v_degree, l_min + j) * bin(m_v_degree - 1, n_max - j);
+                             result += coeff2 * u_surface_points[l_min + j].col(k_min + i)/*(l_min + j, k_min + i)*/.cross(v_surface_points[n_max - j].col(m_max - i)/*(n_max - j, m_max - i)*/);
+                         }
+                     }
                     
-        //             new_control_points(v_index, u_index) = coeff * result;
-        //         }
-        //     }
+                     new_control_points[v_index].col(u_index)/*(v_index, u_index) */= coeff * result;
+                 }
+             }
             
-        //     Eigen::VectorX<T> new_u_knots(2 * u_new_degree + 2);
-        //     new_u_knots.block(0, 0, u_new_degree + 1, 1).setConstant(0.0);
-        //     new_u_knots.block(u_new_degree + 1, 0, u_new_degree + 1, 1).setConstant(1.0);
+             Eigen::VectorX<T> new_u_knots(2 * u_new_degree + 2);
+             new_u_knots.block(0, 0, u_new_degree + 1, 1).setConstant(0.0);
+             new_u_knots.block(u_new_degree + 1, 0, u_new_degree + 1, 1).setConstant(1.0);
 
-        //     Eigen::VectorX<T> new_v_knots(2 * v_new_degree + 2);
-        //     new_v_knots.block(0, 0, v_new_degree + 1, 1).setConstant(0.0);
-        //     new_v_knots.block(v_new_degree + 1, 0, v_new_degree + 1, 1).setConstant(1.0);
-        //     normal_surface.set_uv_knots(new_u_knots, new_v_knots);
-        //     normal_surface.set_uv_degree(u_new_degree, v_new_degree);
-        //     normal_surface.set_control_points(new_control_points);
+             Eigen::VectorX<T> new_v_knots(2 * v_new_degree + 2);
+             new_v_knots.block(0, 0, v_new_degree + 1, 1).setConstant(0.0);
+             new_v_knots.block(v_new_degree + 1, 0, v_new_degree + 1, 1).setConstant(1.0);
+             normal_surface.set_uv_knots(new_u_knots, new_v_knots);
+             normal_surface.set_uv_degree(u_new_degree, v_new_degree);
+             normal_surface.set_control_points(new_control_points);
             
-        //     return ENUM_NURBS::NURBS_SUCCESS;
-        // }
+             return ENUM_NURBS::NURBS_SUCCESS;
+         }
+
+         // 先支持无理的, 目前此函数只支持bezier
+         ENUM_NURBS cross(const nurbs_surface<T, dim, -1, -1, -1, -1, is_rational>& rhs, nurbs_surface<T, dim, -1, -1, -1, -1, is_rational>& cross_surface) const
+         {
+             static_assert(dim == 3, "rhs: 3 != dim");
+             static_assert(is_rational == false, "rhs: is_rational == true");
+
+             int u_new_degree = m_u_degree + rhs.m_u_degree;
+             int v_new_degree = m_v_degree + rhs.m_v_degree;
+             Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> new_control_points(v_new_degree + 1);
+             for (int index = 0; index <= v_new_degree; ++index)
+             {
+                 new_control_points[index].resize(point_size, u_new_degree + 1);
+             }
+             int degree = std::max(u_new_degree, v_new_degree);
+             Eigen::MatrixX<int> bin = binary_coeff(degree + 1);
+
+             Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> rhs_surface_points = rhs.get_control_points();
+             T temp = 1.0;
+             for (int v_index = 0; v_index <= v_new_degree; ++v_index)
+             {
+                 T pre_coeff = temp / bin(v_new_degree, v_index);
+
+                 int l_max = std::min(v_index, rhs.m_v_degree);
+                 int n_min = v_index - l_max;
+
+                 int n_max = std::min(v_index, m_v_degree);
+                 int l_min = v_index - n_max;
+
+                 int v_len = l_max - l_min + 1;
+                 assert(v_len > 0);
+
+                 for (int u_index = 0; u_index <= u_new_degree; ++u_index)
+                 {
+                     T coeff = pre_coeff / bin(u_new_degree, u_index);
+
+                     int k_max = std::min(u_index, m_u_degree);
+                     int m_min = u_index - k_max;
+
+                     int m_max = std::min(u_index, rhs.m_u_degree);
+                     int k_min = u_index - m_max;
+
+                     int u_len = m_max - m_min + 1;
+                     Eigen::Vector<T, dim> result;
+                     result.setConstant(0.0);
+                     for (int i = 0; i < u_len; ++i)
+                     {
+                         for (int j = 0; j < v_len; ++j)
+                         {
+                             T coeff2 = bin(m_u_degree, k_min + i) * bin(rhs.m_u_degree, m_max - i) * bin(rhs.m_v_degree, l_min + j) * bin(m_v_degree, n_max - j);
+                             result += coeff2 * m_control_points[l_min + j].col(k_min + i).cross(rhs_surface_points[n_max - j].col(m_max - i));
+                         }
+                     }
+
+                     new_control_points[v_index].col(u_index) = coeff * result;
+                 }
+             }
+
+             Eigen::VectorX<T> new_u_knots(2 * u_new_degree + 2);
+             new_u_knots.block(0, 0, u_new_degree + 1, 1).setConstant(0.0);
+             new_u_knots.block(u_new_degree + 1, 0, u_new_degree + 1, 1).setConstant(1.0);
+
+             Eigen::VectorX<T> new_v_knots(2 * v_new_degree + 2);
+             new_v_knots.block(0, 0, v_new_degree + 1, 1).setConstant(0.0);
+             new_v_knots.block(v_new_degree + 1, 0, v_new_degree + 1, 1).setConstant(1.0);
+             cross_surface.set_uv_knots(new_u_knots, new_v_knots);
+             cross_surface.set_uv_degree(u_new_degree, v_new_degree);
+             cross_surface.set_control_points(new_control_points);
+
+             return ENUM_NURBS::NURBS_SUCCESS;
+         }
+
+         // 先支持无理的, 目前此函数只支持bezier
+         ENUM_NURBS dot(const nurbs_surface<T, dim, -1, -1, -1, -1, is_rational>& rhs, nurbs_surface<T, 1, -1, -1, -1, -1, is_rational>& cross_surface) const
+         {
+             static_assert(dim == 3, "rhs: 3 != dim");
+             static_assert(is_rational == false, "rhs: is_rational == true");
+
+             int u_new_degree = m_u_degree + rhs.m_u_degree;
+             int v_new_degree = m_v_degree + rhs.m_v_degree;
+             constexpr int new_point_size = is_rational == true ? 2 : 1;
+             Eigen::VectorX<Eigen::Matrix<T, new_point_size, Eigen::Dynamic>> new_control_points(v_new_degree + 1);
+             for (int index = 0; index <= v_new_degree; ++index)
+             {
+                 new_control_points[index].resize(new_point_size, u_new_degree + 1);
+             }
+             int degree = std::max(u_new_degree, v_new_degree);
+             Eigen::MatrixX<int> bin = binary_coeff(degree + 1);
+
+             Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> rhs_surface_points = rhs.get_control_points();
+             T temp = 1.0;
+             for (int v_index = 0; v_index <= v_new_degree; ++v_index)
+             {
+                 T pre_coeff = temp / bin(v_new_degree, v_index);
+
+                 int l_max = std::min(v_index, rhs.m_v_degree);
+                 int n_min = v_index - l_max;
+
+                 int n_max = std::min(v_index, m_v_degree);
+                 int l_min = v_index - n_max;
+
+                 int v_len = l_max - l_min + 1;
+                 assert(v_len > 0);
+
+                 for (int u_index = 0; u_index <= u_new_degree; ++u_index)
+                 {
+                     T coeff = pre_coeff / bin(u_new_degree, u_index);
+
+                     int k_max = std::min(u_index, m_u_degree);
+                     int m_min = u_index - k_max;
+
+                     int m_max = std::min(u_index, rhs.m_u_degree);
+                     int k_min = u_index - m_max;
+
+                     int u_len = m_max - m_min + 1;
+                     Eigen::Vector<T, new_point_size> result;
+                     result.setConstant(0.0);
+                     for (int i = 0; i < u_len; ++i)
+                     {
+                         for (int j = 0; j < v_len; ++j)
+                         {
+                             T coeff2 = bin(m_u_degree, k_min + i) * bin(rhs.m_u_degree, m_max - i) * bin(rhs.m_v_degree, l_min + j) * bin(m_v_degree, n_max - j);
+                             result += coeff2 * m_control_points[l_min + j].col(k_min + i).dot(rhs_surface_points[n_max - j].col(m_max - i));
+                         }
+                     }
+                     new_control_points[v_index].col(u_index) = coeff * result;
+                 }
+             }
+
+             Eigen::VectorX<T> new_u_knots(2 * u_new_degree + 2);
+             new_u_knots.block(0, 0, u_new_degree + 1, 1).setConstant(0.0);
+             new_u_knots.block(u_new_degree + 1, 0, u_new_degree + 1, 1).setConstant(1.0);
+
+             Eigen::VectorX<T> new_v_knots(2 * v_new_degree + 2);
+             new_v_knots.block(0, 0, v_new_degree + 1, 1).setConstant(0.0);
+             new_v_knots.block(v_new_degree + 1, 0, v_new_degree + 1, 1).setConstant(1.0);
+             cross_surface.set_uv_knots(new_u_knots, new_v_knots);
+             cross_surface.set_uv_degree(u_new_degree, v_new_degree);
+             cross_surface.set_control_points(new_control_points);
+
+             return ENUM_NURBS::NURBS_SUCCESS;
+         }
+
+
+
+
+
+
 
 
     };

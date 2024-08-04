@@ -1459,8 +1459,8 @@ TEST(BEZIER_INT, test4)
     control_points2(2) = points13;
     control_points2(3) = points14;
     nurbs_surface<double, 3, -1, -1, -1, -1, false>* test_surface2 = new nurbs_surface<double, 3, -1, -1, -1, -1, false>(u_knots_vector2, v_knots_vector2, control_points2);
-    save_obj2(*test_surface, "test_surface.obj");
-    save_obj2(*test_surface2, "test_surface2.obj");
+    //save_obj2(*test_surface, "test_surface.obj");
+    //save_obj2(*test_surface2, "test_surface2.obj");
     _set_error_mode(_OUT_TO_MSGBOX);
     trace_nurbs_surface<nurbs_surface<double, 3, -1, -1, -1, -1, false>> ts(test_surface2, test_surface);
     ts.init(1.0, 0.2);
@@ -1484,6 +1484,67 @@ TEST(BEZIER_INT, test4)
 
     std::cout << 1 << std::endl;
 }
+
+TEST(BEZIER_NORMAL, test_normal)
+{
+    _set_error_mode(_OUT_TO_MSGBOX);
+    Eigen::VectorX<double> v_knots_vector2(8);
+    v_knots_vector2 << 0, 0, 0, 0, 1, 1, 1, 1;
+
+    Eigen::VectorX<double> u_knots_vector(6);
+    u_knots_vector << 0, 0, 0, 1, 1, 1;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points1(3, 3);
+    points1 << -10, 0, 10,
+        -30, -30, -30,
+        2.5, -3.5, 2.5;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points2(3, 3);
+    points2 << -10, 0, 10,
+        -10, -10, -10,
+        2.5, -3.5, 2.5;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points3(3, 3);
+    points3 << -10, 0, 10,
+        10, 10, 10,
+        2.5, -3.5, 2.5;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points4(3, 3);
+    points4 << -10, 0, 10,
+        30, 30, 15,
+        2.5, -3.5, 2.5;
+
+    Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> control_points(4);
+    control_points(0) = points1;
+    control_points(1) = points2;
+    control_points(2) = points3;
+    control_points(3) = points4;
+    nurbs_surface<double, 3, -1, -1, -1, -1, false>* test_surface = new nurbs_surface<double, 3, -1, -1, -1, -1, false>(u_knots_vector, v_knots_vector2, control_points);
+
+    nurbs_surface<double, 3, -1, -1, -1, -1, false> test_surface_normal;
+    test_surface->eval_normal_surface(test_surface_normal);
+    Eigen::MatrixX<Eigen::Vector<double, 3>> ders;
+    for (int i = 0; i <= 10; ++i)
+    {
+        for (int j = 0; j <= 10; ++j)
+        {
+            double u = 0.1 * i;
+            double v = 0.1 * j;
+            test_surface->derivative_on_surface(1, u, v, ders);
+            Eigen::Vector3d normal = ders(1, 0).cross(ders(0, 1));
+            Eigen::Vector3d point;
+            test_surface_normal.point_on_surface(u, v, point);
+            double len1 = normal.norm();
+            double len2 = point.norm();
+            normal.normalize();
+            point.normalize();
+            double dot_value = point.dot(normal);
+            EXPECT_NEAR(dot_value, 1.0, 1e-4);
+            EXPECT_NEAR(len1, len2, 1e-4);
+        }
+    }
+}
+
 
 int main(int argc, char **argv)
 {

@@ -214,6 +214,43 @@ namespace tnurbs
     };
 
 
+    template<typename T>
+    struct Interval
+    {
+        Eigen::Vector2<T> m_interval;
+        Interval() : m_interval{ 0, 0 } { };
+        Interval(T low, T high) { m_interval[0] = low; m_interval[1] = high; }
+        Interval(const Interval& interval) { m_interval = interval.m_interval; }
+        T get_low() const { return m_interval[0]; }
+        T get_high() const { return m_interval[1]; }
+        Interval& operator=(const Interval& rhs)
+        {
+            m_interval = rhs.m_interval;
+            return *this;
+        }
+        Interval& operator+=(const Interval& rhs)
+        {
+            m_interval += rhs.m_interval;
+            return *this;
+        }
+        ENUM_NURBS set_interval(T low, T high)
+        {
+            if (low > high)
+                return ENUM_NURBS::NURBS_PARAM_IS_INVALID;
+            m_interval[0] = low;
+            m_interval[1] = high;
+        }
+        bool contain(T number, T tol) const
+        {
+            if (m_interval[0] - tol > number || m_interval[1] + tol < number)
+            {
+                return false;
+            }
+            return true;
+        }
+    };
+
+
     template<typename T, int dim>
     struct Box
     {
@@ -360,6 +397,123 @@ namespace tnurbs
             }
             return min_length;
         }
+
+        Box<T, 1> get_index_interval(int index) const
+        {
+            Box<T, 1> result;
+            result.Min[0] = Min[index];
+            result.Max[0] = Max[index];
+            return result;
+        }
+
+        std::array<Box<T, 1>, dim> sperate_box() const
+        {
+            std::array<Box<T, 1>, dim> result;
+            for (int index = 0; index < dim; ++index)
+            {
+                result[index].Min[0] = Min[index];
+                result[index].Max[0] = Max[index];
+            }
+            return result;
+        }
+
+
+
+        bool set_index_interval(int index, const Box<T, 1> &interval)
+        {
+            Min[index] = interval.Min[0];
+            Max[index] = interval.Max[0];
+            return true;
+        }
+    
+        Box<T, dim> operator+(const Box<T, dim>& right) const
+        {
+            Box<T, dim> result;
+            result.Min = Min + right.Min;
+            result.Max = Max + right.Max;
+            return result;
+        }
+
+        Box<T, dim> operator-(const Box<T, dim>& right) const
+        {
+            Box<T, dim> result;
+            result.Min = Min - right.Max;
+            result.Max = Max - right.Min;
+            return result;
+        }
+
+
+        template<int n>
+        Box<T, dim> operator*(const Box<T, n>& right) const
+        {
+            static_assert(n == 1 || n == dim, "n != 1 && n != dim");
+            Box<T, dim> result;
+            if constexpr (n == dim)
+            {
+                for (int index = 0; index < dim; ++index)
+                {
+                    T x1 = Min[index] * right.Min[index];
+                    T x2 = Min[index] * right.Max[index];
+                    T x3 = Max[index] * right.Min[index];
+                    T x4 = Max[index] * right.Max[index];
+                    result.Min[index] = std::min({ x1, x2, x3, x4 });
+                    result.Max[index] = std::max({ x1, x2, x3, x4 });
+                }
+                return result;
+            }
+            else
+            {
+                for (int index = 0; index < dim; ++index)
+                {
+                    T x1 = Min[index] * right.Min[0];
+                    T x2 = Min[index] * right.Max[0];
+                    T x3 = Max[index] * right.Min[0];
+                    T x4 = Max[index] * right.Max[0];
+                    result.Min[index] = std::min({ x1, x2, x3, x4 });
+                    result.Max[index] = std::max({ x1, x2, x3, x4 });
+                }
+                return result;
+            }
+            
+        }
+
+        Box<T, dim> operator*(const T scale) const
+        {
+            Box<T, dim> result;
+            for (int index = 0; index < dim; ++index)
+            {
+                T x1 = scale * Min[index];
+                T x2 = scale * Max[index];
+
+                result.Min[index] = std::min({ x1, x2 });
+                result.Max[index] = std::max({ x1, x2 });
+            }
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+
+        Box<T, dim> operator*(const Interval<T> &scale) const
+        {
+            Box<T, dim> result;
+            for (int index = 0; index < dim; ++index)
+            {
+                T x1 = scale.m_interval[0] * Min[index];
+                T x2 = scale.m_interval[0] * Max[index];
+                T x3 = scale.m_interval[1] * Min[index];
+                T x4 = scale.m_interval[1] * Max[index];
+
+                result.Min[index] = std::min({ x1, x2, x3, x4 });
+                result.Max[index] = std::max({ x1, x2, x3, x4 });
+            }
+            return result;
+        }
+
+
+
+};
+
+    template<typename T, int dim>
+    struct Eigen::NumTraits<Box<T, dim>> : Eigen::NumTraits<T>
+    {
 
     };
 
