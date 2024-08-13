@@ -2558,7 +2558,41 @@ namespace tnurbs
             return ENUM_NURBS::NURBS_SUCCESS;
         }
 
+        //ENUM_NURBS tangent_surface(nurbs_curve<T, dim, is_rational, -1, -1> &tangent_curve) const
+        //{
 
+        //    std::vector<nurbs_curve<T, dim, is_rational, -1, -1>*> beziers;
+        //    decompose_to_nurbs(beziers);
+        //    std::vector<std::unique<nurbs_curve<T, dim, is_rational, -1, -1>>> raiis;
+        //    for (auto curve : beziers)
+        //    {
+        //        raiis.push_back(std::make_unique<nurbs_curve<T, dim, is_rational, -1, -1>>(curve));
+        //    }
+        //    std::vector<Eigen::Matrix<T, rows, Eigen::Dynamic>> new_control_points;
+        //    new_control_points.reserve(beziers.size());
+        //    Eigen::VectorX<Eigen::Matrix<T, rows, Eigen::Dynamic>> PK(2);
+        //    std::vector<Eigen::VectorX<T>> new_knots;
+        //    for (nurbs_curve<T, dim, is_rational, -1, -1>*curve : beziers)
+        //    {
+        //        curve_deriv_cpts<T, rows>(m_degree, 1, 0, m_control_points.cols() - 1, m_knots_vector, m_control_points, PK);
+        //        if  constexpr (is_rational == true)
+        //        {
+        //        }
+        //        else
+        //        {
+        //            new_control_points.push_back(PK[1].block(0, 0, rows, m_control_points.cols() - 1));
+        //        }
+        //        
+        //    }
+
+        //    
+
+        //    Eigen::VectorX<T> u_knots_vector = m_u_knots_vector.block(1, 0, m_u_knots_vector.size() - 2, 1);
+        //    surf.set_control_points(new_control_points);
+        //    surf.set_uv_knots(u_knots_vector, m_v_knots_vector);
+        //    surf.set_uv_degree(m_u_degree - 1, m_v_degree);
+        //    return ENUM_NURBS::NURBS_SUCCESS;
+        //}
 
     private:
 

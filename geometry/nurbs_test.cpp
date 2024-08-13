@@ -1368,6 +1368,8 @@ TEST(BEZIER_INT, test3)
     control_points2(2) = points13;
     control_points2(3) = points14;
     nurbs_surface<double, 3, -1, -1, -1, -1, false>* test_surface2 = new nurbs_surface<double, 3, -1, -1, -1, -1, false>(u_knots_vector, v_knots_vector2, control_points2);
+    //save_obj2(*test_surface, "test_surface.obj");
+    //save_obj2(*test_surface2, "test_surface2.obj");
     _set_error_mode(_OUT_TO_MSGBOX);
     trace_nurbs_surface<nurbs_surface<double, 3, -1, -1, -1, -1, false>> ts(test_surface, test_surface2);
     ts.init(1.0, 0.2);
@@ -1550,6 +1552,6 @@ int main(int argc, char **argv)
 {
     testing::InitGoogleTest(&argc, argv);
     
-    ::testing::FLAGS_gtest_filter = "BEZIER_INT.test4";
+    ::testing::FLAGS_gtest_filter = "BEZIER_INT.test3";
     return RUN_ALL_TESTS();
 }

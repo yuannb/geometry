@@ -38,26 +38,6 @@ namespace tnurbs
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
-    template<typename surface_type, typename T = typename surface_type::Type, int dim = surface_type::dimension>
-    ENUM_NURBS eval_point_interval(const surface_type* surf, const Box<T, 2>& interval, std::array<Interval<T>, (unsigned)dim>& box_interval)
-    {
-        surface_type* sub_surface = new surface_type();
-        std::unique_ptr<surface_type> raii = std::unique_ptr<surface_type>(sub_surface);
-
-        Box<T, 2> interval_copy = interval;
-        surf->sub_divide(interval_copy, *sub_surface);
-
-        Box<T, dim> sub_box;
-        sub_surface->get_box(sub_box);
-
-        //将u_box,v_box 转为interval vector
-        for (int index = 0; index < dim; ++index)
-        {
-            box_interval[index].m_interval[0] = sub_box.Min[index];
-            box_interval[index].m_interval[1] = sub_box.Max[index];
-        }
-        return ENUM_NURBS::NURBS_SUCCESS;
-    }
 
     template<typename surface_type, typename T = typename surface_type::Type, int dim = surface_type::dimension>
     ENUM_NURBS eval_point_interval(const surface_type* surf, const Box<T, 2>& interval, Box<T, dim> &box)
@@ -89,105 +69,7 @@ namespace tnurbs
         return ENUM_NURBS::NURBS_SUCCESS;
     }
     
-    /// @brief 计算两个曲面交线在各自参数域的原像曲线的1-2阶微分
-    /// @tparam surface_type 曲面类型
-    /// @tparam T double, flaot...
-    /// @tparam dim 维数(目前仅仅支持三维)
-    /// @param left_surface 第一个曲面
-    /// @param right_surface 第二个曲面
-    /// @param u 第一个曲面的参数u
-    /// @param v 第一个曲面的参数v
-    /// @param s 第一个曲面的参数s
-    /// @param t 第一个曲面的参数t
-    /// @param param_ders param_ders.col(0)为原像曲线的一阶微分, param_ders.col(1)为原像曲线的二阶微分
-    /// @param space_ders space_ders.col(0)为交线的点, space_ders.col(1)为交线的一阶微分, space_ders.col(1)为交先的二阶微分
-    /// @return 错误码
-    template<typename surface_type, typename T = typename surface_type::Type, int dim = surface_type::dimension>
-    ENUM_NURBS eval_preiamge_ders(const surface_type *left_surface, const surface_type *right_surface, T u, T v, T s, T t, 
-                                        Eigen::Matrix<T, 4, 2> &param_ders, Eigen::Matrix<T, dim, 3> &space_ders, T &x1, T &x2)
-    {
-        static_assert(3 == dim, "3 != dim");
-
-        Eigen::Matrix<Eigen::Vector<T, dim>, 3, 3> ders;
-        left_surface->template derivative_on_surface<2, 2>(u, v, ders);
-        space_ders.col(0) = ders(0, 0);
-        Eigen::Vector<T, dim> normal = ders(1, 0).cross(ders(0, 1));
-        normal.normalize();
-        Eigen::Matrix2<T> left_first_fundenmental;
-        Eigen::Matrix2<T> left_second_fundenmental;
-        eval_first_and_second_fundenmental(ders, normal, left_first_fundenmental, left_second_fundenmental);
-
-        Eigen::Matrix<Eigen::Vector<T, dim>, 3, 3> ders2;
-        right_surface->template derivative_on_surface<2, 2>(s, t, ders2);
-        Eigen::Vector<T, dim> normal2 = ders2(1, 0).cross(ders2(0, 1));
-        normal2.normalize();
-        Eigen::Matrix2<T> right_first_fundenmental;
-        Eigen::Matrix2<T> right_second_fundenmental;
-        eval_first_and_second_fundenmental(ders2, normal2, right_first_fundenmental, right_second_fundenmental);
-
-        Eigen::Vector<T, dim> tangent_vec = normal.cross(normal2);
-
-        // if (tangent_vec.squaredNorm() < TDEFAULT_ERROR<T>::value)
-        // {
-        //     //两曲面在交点处的法向共线; 暂时不处理; TODO
-        //     return ENUM_NURBS::NURBS_ERROR;
-        // }
-
-
-        tangent_vec.normalize();
-        space_ders.col(1) = tangent_vec;
-        Eigen::Vector<T, 2> dot_ders;
-        dot_ders[0] = tangent_vec.dot(ders(1, 0));
-        dot_ders[1] = tangent_vec.dot(ders(0, 1));
-        Eigen::JacobiSVD<Eigen::Matrix2<T>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(left_first_fundenmental);
-        param_ders.template block<2, 1>(0, 0) = matSvd.solve(dot_ders);
-        if (matSvd.info() !=  Eigen::Success)
-            return ENUM_NURBS::NURBS_ERROR;
-        x1 = param_ders.template block<2, 1>(0, 0).transpose() * left_first_fundenmental * param_ders.template block<2, 1>(0, 0);
-        dot_ders[0] = tangent_vec.dot(ders2(1, 0));
-        dot_ders[1] = tangent_vec.dot(ders2(0, 1));
-        Eigen::JacobiSVD<Eigen::Matrix2<T>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd2(right_first_fundenmental);
-        param_ders.template block<2, 1>(2, 0) = matSvd2.solve(dot_ders);
-        if (matSvd2.info() !=  Eigen::Success)
-            return ENUM_NURBS::NURBS_ERROR;
-        x2 = param_ders.template block<2, 1>(2, 0).transpose() * right_first_fundenmental * param_ders.template block<2, 1>(2, 0);
-        //计算两曲面的交线的二阶微分(弧长参数下)
-        
-        //1.计算 d(u, v) 的第二基本型的值
-        Eigen::Vector<T, 2> second_fundenmental_value;
-        second_fundenmental_value[0] = param_ders.template block<2, 1>(0, 0).col(0).transpose() * left_second_fundenmental * param_ders.template block<2, 1>(0, 0).col(0);
-        second_fundenmental_value[1] = param_ders.template block<2, 1>(2, 0).transpose() * right_second_fundenmental * param_ders.template block<2, 1>(2, 0);
-        Eigen::Matrix2<T> mat;
-        mat(0, 0) = mat(1, 1) = 1.0;
-        mat(0, 1) = mat(1, 0) = normal.dot(normal2);
-        Eigen::JacobiSVD<Eigen::Matrix2<T>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd3(mat);
-        Eigen::Vector2<T> coeff = matSvd3.solve(second_fundenmental_value);
-        if (matSvd3.info() !=  Eigen::Success)
-            return ENUM_NURBS::NURBS_ERROR;
-        
-        //交线的二阶导数
-        Eigen::Vector<T, dim> alpha_dd = coeff[0] * normal + coeff[1] * normal2;
-        space_ders.col(2) = alpha_dd;
-        Eigen::Vector<T, dim> L = std::pow(param_ders(0, 0), 2) * ders(2, 0) + 2 * param_ders(0, 0) * param_ders(1, 0) * ders(1, 1) + std::pow(param_ders(1, 0), 2) * ders(0, 2);
-
-        Eigen::Vector<T, dim> temp = alpha_dd - L;
-        dot_ders[0] = temp.dot(ders(1, 0));
-        dot_ders[1] = temp.dot(ders(0, 1));
-        param_ders.template block<2, 1>(0, 1) = matSvd.solve(dot_ders);
-        if (matSvd.info() !=  Eigen::Success)
-            return ENUM_NURBS::NURBS_ERROR;
-        
-        L  = std::pow(param_ders(2, 0), 2) * ders2(2, 0) + 2 * param_ders(2, 0) * param_ders(3, 0) * ders2(1, 1) + std::pow(param_ders(3, 0), 2) * ders2(0, 2);
-        temp = alpha_dd - L;
-        dot_ders[0] = temp.dot(ders2(1, 0));
-        dot_ders[1] = temp.dot(ders2(0, 1));
-        param_ders.template block<2, 1>(2, 1) = matSvd2.solve(dot_ders);
-        if (matSvd2.info() !=  Eigen::Success)
-            return ENUM_NURBS::NURBS_ERROR;
-        return ENUM_NURBS::NURBS_SUCCESS;
-    }
     
-
     //intersect points(以后有空再改吧)
     //surf_surf_int 负责释放内存
     template<typename T, int dim>
@@ -437,10 +319,11 @@ namespace tnurbs
             
 
         //2阶微分的box太大，要么能够缩小2阶微分的box，要么只使用一阶微分的box
+        //validated solution of initial value可以计算交线在此部分的包围盒,此包围盒应该会有其他的一些用处
         //TODO: 相切的情形的一阶微分的box
         template<unsigned order>
-        ENUM_NURBS eval_preiamge_and_space_ders(const Box<T, 4> &param_box, std::vector<std::array<Box<T, 4>, order>> &param_ders, 
-            std::vector<std::array<Box<T, dim>, order>>&space_ders)
+        ENUM_NURBS eval_preiamge_and_space_ders(const Box<T, 4> &param_box, std::array<Box<T, 4>, order> &param_ders, 
+            std::array<Box<T, dim>, order> &space_ders)
         {
             //目前仅仅支持三维
             static_assert(3 == dim, "dim != 3 is not supported");
@@ -484,9 +367,9 @@ namespace tnurbs
             if (error_code != ENUM_NURBS::NURBS_SUCCESS)
                 return error_code;
 
-            space_ders.resize(1);
-            space_ders[0][0] = c;
-            param_ders.resize(1);
+            //space_ders.resize(1);
+            space_ders[0] = c;
+            //param_ders.resize(1);
 
             std::vector<Box<T, 1>> alpha_d(2);
             std::vector<Box<T, 1>> beta_d(2);
@@ -501,10 +384,10 @@ namespace tnurbs
 
             if (false == interval_algorithm::divide(interval_algorithm::dot(right_normal_box, interval_algorithm::cross(right_u_tangent_box, unit_c)), right_normal_len2, beta_d[1]))
                 return ENUM_NURBS::NURBS_ERROR;
-            param_ders[0][0].set_index_interval(0, alpha_d[0]);
-            param_ders[0][0].set_index_interval(1, alpha_d[1]);
-            param_ders[0][0].set_index_interval(2, beta_d[0]);
-            param_ders[0][0].set_index_interval(3, beta_d[1]);
+            param_ders[0].set_index_interval(0, alpha_d[0]);
+            param_ders[0].set_index_interval(1, alpha_d[1]);
+            param_ders[0].set_index_interval(2, beta_d[0]);
+            param_ders[0].set_index_interval(3, beta_d[1]);
             if constexpr (order == 2)
             {
                 Box<T, dim> left_L;
@@ -559,7 +442,7 @@ namespace tnurbs
 
                 Box<T, dim> c_dd = left_normal_box * coeff1 + right_normal_box * coeff2;
                 //交线的二阶导数
-                space_ders[0][1] = c_dd;
+                space_ders[1] = c_dd;
 
                 Box<T, dim> temp = c_dd - left_L;
                 Eigen::Vector2<Box<T, 1>> dot_ders;
@@ -575,8 +458,8 @@ namespace tnurbs
                 if (false == interval_algorithm::divide(b2.determinant(), left_first_det, coeff2))
                     return ENUM_NURBS::NURBS_ERROR;
 
-                param_ders[0][1].set_index_interval(0, coeff1);
-                param_ders[0][1].set_index_interval(1, coeff2);
+                param_ders[1].set_index_interval(0, coeff1);
+                param_ders[1].set_index_interval(1, coeff2);
 
                 temp = c_dd - right_L;
                 dot_ders[0] = interval_algorithm::dot(temp, right_u_tangent_box);
@@ -591,11 +474,181 @@ namespace tnurbs
                 if (false == interval_algorithm::divide(b2.determinant(), right_first_det, coeff2))
                     return ENUM_NURBS::NURBS_ERROR;
 
-                param_ders[0][1].set_index_interval(2, coeff1);
-                param_ders[0][1].set_index_interval(3, coeff2);
+                param_ders[1].set_index_interval(2, coeff1);
+                param_ders[1].set_index_interval(3, coeff2);
             }
             return ENUM_NURBS::NURBS_SUCCESS;
         }
+
+        //相切的情形的一阶微分的box
+        //validated solution of initial value可以计算交线在此部分的包围盒,此包围盒应该会有其他的一些用处
+        //目前只能使用两个surface的box内部normal的变化作为一个步长选择的标准
+        template<unsigned order>
+        ENUM_NURBS eval_preiamge_and_space_ders_tangent(const Box<T, 4>& param_box, std::array<Box<T, 4>, order>& param_ders,
+            std::array<Box<T, dim>, order>& space_ders, int& type)
+        {
+            //目前仅仅支持三维
+            static_assert(3 == dim, "dim != 3 is not supported");
+            static_assert(order == 1, "order != 1");
+            Box<T, dim> left_normal_box, right_normal_box;
+            Box<T, dim> left_u_tangent_box, left_v_tangent_box;
+            Box<T, dim> right_u_tangent_box, right_v_tangent_box;
+
+            Box<T, 2> left_param_box(param_box.Min.template block<2, 1>(0, 0), param_box.Max.template block<2, 1>(0, 0));
+            Box<T, 2> right_param_box(param_box.Min.template block<2, 1>(2, 0), param_box.Max.template block<2, 1>(2, 0));
+            eval_point_interval(m_left_u_tangent_surface, left_param_box, left_u_tangent_box);
+            eval_point_interval(m_left_v_tangent_surface, left_param_box, left_v_tangent_box);
+            eval_point_interval(m_right_u_tangent_surface, right_param_box, right_u_tangent_box);
+            eval_point_interval(m_right_v_tangent_surface, right_param_box, right_v_tangent_box);
+
+            eval_point_interval(m_left_normal_surface, left_param_box, left_normal_box);
+            eval_point_interval(m_right_normal_surface, right_param_box, right_normal_box);
+
+            Box<T, 1> left_normal_len2 = interval_algorithm::dot(left_normal_box, left_normal_box);
+            Box<T, 1> right_normal_len2 = interval_algorithm::dot(right_normal_box, right_normal_box);
+
+            Eigen::Matrix2<Box<T, dim>> left_dxx;
+            eval_point_interval(m_left_dxx[0], left_param_box, left_dxx(0, 0));
+            eval_point_interval(m_left_dxx[1], left_param_box, left_dxx(1, 0));
+            left_dxx(0, 1) = left_dxx(1, 0);
+            eval_point_interval(m_left_dxx[2], left_param_box, left_dxx(1, 1));
+
+            Eigen::Matrix2<Box<T, dim>> right_dxx;
+            eval_point_interval(m_right_dxx[0], right_param_box, right_dxx(0, 0));
+            eval_point_interval(m_right_dxx[1], right_param_box, right_dxx(1, 0));
+            right_dxx(0, 1) = right_dxx(1, 0);
+            eval_point_interval(m_right_dxx[2], right_param_box, right_dxx(1, 1));
+
+            Box<T, 1> normal_dot = interval_algorithm::dot(left_normal_box, right_normal_box);
+            Eigen::Vector<T, 1> zero_num;
+            zero_num[0] = 0;
+            if (normal_dot.is_contain_point(zero_num, TDEFAULT_ERROR<T>::value) == true)
+            {
+                return ENUM_NURBS::NURBS_ERROR;
+            }
+            //int flag = normal_dot.Min[0] > 0 ? 1 : -1;
+            Box<T, dim> conormal;
+            ENUM_NURBS code = interval_algorithm::normalized(right_normal_box, conormal);
+            if (ENUM_NURBS::NURBS_SUCCESS != code)
+            {
+                return code;
+            }
+            
+            Eigen::Vector<T, dim> origin;
+            origin.setConstant(0.0);
+            T right_normal_min_length = right_normal_box.eval_minimal_distance(origin);
+            T right_normal_max_length = right_normal_box.eval_minimal_distance(origin);
+            Box<T, 1> denominator;
+            denominator.Min[0] = right_normal_min_length;
+            denominator.Max[0] = right_normal_max_length;
+            Box<T, 1> denominator_r, unitInterval;
+            unitInterval.Min[0] = 1.0;
+            unitInterval.Max[0] = 1.0;
+            code = interval_algorithm::divide(unitInterval, denominator, denominator_r);
+            if (ENUM_NURBS::NURBS_SUCCESS != code)
+            {
+                return code;
+            }
+
+            Box<T, 1> a11 = interval_algorithm::dot(interval_algorithm::cross(left_u_tangent_box, right_v_tangent_box), conormal) * denominator_r;
+            Box<T, 1> a12 = interval_algorithm::dot(interval_algorithm::cross(left_v_tangent_box, right_v_tangent_box), conormal) * denominator_r;
+            Box<T, 1> a21 = interval_algorithm::dot(interval_algorithm::cross(right_u_tangent_box, left_u_tangent_box), conormal) * denominator_r;
+            Box<T, 1> a22 = interval_algorithm::dot(interval_algorithm::cross(right_u_tangent_box, left_v_tangent_box), conormal) * denominator_r;
+            Box<T, dim> Xuu_box, Xuv_box, Xvv_box, Yuu_box, Yuv_box, Yvv_box;
+            eval_point_interval(m_left_dxx[0], left_param_box, Xuu_box);
+            eval_point_interval(m_left_dxx[1], left_param_box, Xuv_box);
+            eval_point_interval(m_left_dxx[2], left_param_box, Xvv_box);
+
+            eval_point_interval(m_right_dxx[0], right_param_box, Yuu_box);
+            eval_point_interval(m_right_dxx[1], right_param_box, Yuv_box);
+            eval_point_interval(m_right_dxx[2], right_param_box, Yvv_box);
+            
+            Box<T, 1> left_L = interval_algorithm::dot(Xuu_box, conormal);
+            Box<T, 1> left_M = interval_algorithm::dot(Xuv_box, conormal);
+            Box<T, 1> left_N = interval_algorithm::dot(Xvv_box, conormal);
+
+            Box<T, 1> right_L = interval_algorithm::dot(Yuu_box, conormal);
+            Box<T, 1> right_M = interval_algorithm::dot(Yuv_box, conormal);
+            Box<T, 1> right_N = interval_algorithm::dot(Yvv_box, conormal);
+
+            Box<T, 1> b11 = a11 * a11;
+            b11.Min[0] = std::max(0.0, b11.Min[0]);
+            b11 = b11 * right_L;
+            b11 = b11 + (a11 * a21 * right_M) * 2.0;
+            Box<T, 1> temp = a21 * a21;
+            temp.Min[0] = std::max(0.0, temp.Min[0]);
+            b11 = b11 + temp * right_N;
+            b11 = b11 - left_L;
+
+            Box<T, 1> b12 = a11 * a12 * right_L;
+            b12 = b12 + (a11 * a22 + a21 * a12) * right_M;
+            b12 = b12 + a21 * a22 * right_N;
+            b12 = b12 - left_M;
+
+            Box<T, 1> b22 = a12 * a12;
+            b22.Min[0] = std::max(0.0, b22.Min[0]);
+            b22 = b22 * right_L;
+            b22 = b22 + (a12 * a22 * right_M) * 2.0;
+            temp = a22 * a22;
+            temp.Min[0] = std::max(0.0, temp.Min[0]);
+            b22 = b22 + temp * right_N;
+            b22 = b22 - left_N;
+            
+            bool flag1 = b11.is_contain_point(zero_num, TDEFAULT_ERROR<T>::value);
+            //bool flag2 = b12.is_contain_point(zero_num, TDEFAULT_ERROR<T>::value);
+            bool flag2 = b22.is_contain_point(zero_num, TDEFAULT_ERROR<T>::value);
+            if (flag1 && flag2)
+            {
+                return ENUM_NURBS::NURBS_ERROR;
+            }
+            T b11_extream = std::min(std::abs(b11.Min[0]), std::abs(b11.Max[0]));
+            T b22_extream = std::min(std::abs(b22.Min[0]), std::abs(b22.Max[0]));
+            
+            if (flag2 == true || (b11_extream > b22_extream && flag1 == false))
+            {
+                Box<T, 1> nu;
+                interval_algorithm::divide(b12, b11, nu);
+                Box<T, dim> tangent = left_u_tangent_box * nu + left_v_tangent_box;
+                code = interval_algorithm::normalized(tangent, space_ders[0]);
+                if (ENUM_NURBS::NURBS_SUCCESS != code)
+                {
+                    return code;
+                }
+                type = 1;
+            }
+            else
+            {
+                Box<T, 1> mu;
+                interval_algorithm::divide(b12, b22, mu);
+                Box<T, dim> tangent = left_v_tangent_box * mu + left_u_tangent_box;
+                code = interval_algorithm::normalized(tangent, space_ders[0]);
+                if (ENUM_NURBS::NURBS_SUCCESS != code)
+                {
+                    return code;
+                }
+                type = 2;
+            }
+            std::vector<Box<T, 1>> alpha_d(2);
+            std::vector<Box<T, 1>> beta_d(2);
+            if (false == interval_algorithm::divide(interval_algorithm::dot(left_normal_box, interval_algorithm::cross(space_ders[0], left_v_tangent_box)), left_normal_len2, alpha_d[0]))
+                return ENUM_NURBS::NURBS_ERROR;
+
+            if (false == interval_algorithm::divide(interval_algorithm::dot(left_normal_box, interval_algorithm::cross(left_u_tangent_box, space_ders[0])), left_normal_len2, alpha_d[1]))
+                return ENUM_NURBS::NURBS_ERROR;
+
+            if (false == interval_algorithm::divide(interval_algorithm::dot(right_normal_box, interval_algorithm::cross(space_ders[0], right_v_tangent_box)), right_normal_len2, beta_d[0]))
+                return ENUM_NURBS::NURBS_ERROR;
+
+            if (false == interval_algorithm::divide(interval_algorithm::dot(right_normal_box, interval_algorithm::cross(right_u_tangent_box, space_ders[0])), right_normal_len2, beta_d[1]))
+                return ENUM_NURBS::NURBS_ERROR;
+            param_ders[0].set_index_interval(0, alpha_d[0]);
+            param_ders[0].set_index_interval(1, alpha_d[1]);
+            param_ders[0].set_index_interval(2, beta_d[0]);
+            param_ders[0].set_index_interval(3, beta_d[1]);
+
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+
 
 
         /// @brief 计算两个曲面交线在各自参数域的原像曲线的1-2阶微分
@@ -644,25 +697,15 @@ namespace tnurbs
             }
             else
             {
-                //Eigen::Matrix<Eigen::Vector<T, dim>, 3, 3> left_ders;
-                //m_left_surface->template derivative_on_surface<2>(initial_param[0], initial_param[1], left_ders);
-                //Eigen::Matrix<Eigen::Vector<T, dim>, 3, 3> right_ders;
-                //m_right_surface->template derivative_on_surface<2>(initial_param[2], initial_param[3], right_ders);
-
-                //Eigen::Vector<T, dim> left_normal = left_ders(1, 0).cross(left_ders(0, 1));
-                //left_normal.normalize();
-
-                //Eigen::Vector<T, dim> right_normal = right_ders(1, 0).cross(right_ders(0, 1));
-                //right_normal.normalize();
-                int flag = right_normal.dot(left_normal) > 0 ? 1 : -1;
+                //int flag = right_normal.dot(left_normal) > 0 ? 1 : -1;
                 T denominator = 1.0 / right_ders(1, 0).cross(right_ders(0, 1)).dot(right_normal);
                 T a11 = left_ders(1, 0).cross(right_ders(0, 1)).dot(right_normal) * denominator;
                 T a12 = left_ders(0, 1).cross(right_ders(0, 1)).dot(right_normal) * denominator;
                 T a21 = right_ders(1, 0).cross(left_ders(1, 0)).dot(right_normal) * denominator;
                 T a22 = right_ders(1, 0).cross(left_ders(0, 1)).dot(right_normal) * denominator;
-                T left_L = left_ders(2, 0).dot(left_normal) * flag;
-                T left_M = left_ders(1, 1).dot(left_normal) * flag;
-                T left_N = left_ders(0, 2).dot(left_normal) * flag;
+                T left_L = left_ders(2, 0).dot(right_normal);
+                T left_M = left_ders(1, 1).dot(right_normal);
+                T left_N = left_ders(0, 2).dot(right_normal);
 
                 T right_L = right_ders(2, 0).dot(right_normal);
                 T right_M = right_ders(1, 1).dot(right_normal);
@@ -686,16 +729,26 @@ namespace tnurbs
                 bool is_branch = false;
                 if (type == 3)
                 {
-                    if (delta < -KNOTS_EPS<T>::value)
+                    // 下面delta的值需要修改
+                    if (delta < -TDEFAULT_ERROR<T>::value)
                     {
-                        return ENUM_NURBS::NURBS_ISOLATED_TANGENTIAL_POINT;
+                        T try_value = -b12 / b11;
+                        T value = b11 * (try_value * try_value) + 2 * b12 * try_value + b22;
+                        if (std::abs(value) < TDEFAULT_ERROR<T>::value)
+                        {
+                            delta = 0.0;
+                        }
+                        else
+                        {
+                            return ENUM_NURBS::NURBS_ISOLATED_TANGENTIAL_POINT;
+                        }
                     }
-                    if (delta > KNOTS_EPS<T>::value)
+                    if (delta > TDEFAULT_ERROR<T>::value)
                     {
                         is_branch = true;
                     }
-                    if (std::abs(b11) < KNOTS_EPS<T>::value && std::abs(b12) < KNOTS_EPS<T>::value
-                        && std::abs(b22) < KNOTS_EPS<T>::value)
+                    if (std::abs(b11) < TDEFAULT_ERROR<T>::value && std::abs(b12) < TDEFAULT_ERROR<T>::value
+                        && std::abs(b22) < TDEFAULT_ERROR<T>::value)
                     {
                         return ENUM_NURBS::NURBS_HIGH_ORDER_TANGENTIAL;
                     }
@@ -813,7 +866,8 @@ namespace tnurbs
 
         ENUM_NURBS estimate_next_param(const Eigen::Vector<T, 4>& initial_param, const Box<T, 4> domain, T &step, Eigen::Vector<T, 4>& next_param, int type)
         {
-            while (std::abs(step)> TDEFAULT_ERROR<T>::value)
+            int loop_count = 8;
+            while (std::abs(step)> TDEFAULT_ERROR<T>::value && loop_count-- > 0)
             {
                 //domain = Box<T, 4>(Eigen::Vector<T, 4>(0, 0, 0, 0), Eigen::Vector<T, 4>(1, 1, 1, 1));
                 Eigen::Vector<T, dim> tangent;
@@ -887,11 +941,20 @@ namespace tnurbs
             return ENUM_NURBS::NURBS_ERROR;
         }
 
-        ENUM_NURBS eval_priori_enclosure_inner2(const Box<T, 4>& initial_box, const Box<T, 4>& param_box, T step_size, Box<T, 4>& priori_enclosure, T& angle_diff, int& type, bool transversal = true)
+        ENUM_NURBS eval_priori_enclosure_inner(const Box<T, 4>& initial_box, const Box<T, 4>& param_box, T step_size, Box<T, 4>& priori_enclosure, int& type, bool transversal = true)
         {
-            std::vector<std::array<Box<T, 4>, 1>> param_ders;
-            std::vector<std::array<Box<T, dim>, 1>> space_ders;
-            ENUM_NURBS error_code = eval_preiamge_and_space_ders<1>(param_box, param_ders, space_ders);
+            std::array<Box<T, 4>, 1> param_ders;
+            std::array<Box<T, dim>, 1> space_ders;
+            ENUM_NURBS error_code;
+            if (transversal == true)
+            {
+                error_code = eval_preiamge_and_space_ders<1>(param_box, param_ders, space_ders);
+                type = 0;
+            }
+            else
+            {
+                error_code = eval_preiamge_and_space_ders_tangent<1>(param_box, param_ders, space_ders, type);
+            }
             if (ENUM_NURBS::NURBS_SUCCESS != error_code)
             {
                 return error_code;
@@ -899,7 +962,7 @@ namespace tnurbs
 
             Interval<T> step_box(0, step_size);
 
-            Box<T, 4> box_interval = param_ders[0][0] * step_box;
+            Box<T, 4> box_interval = param_ders[0] * step_box;
             Box<T, 4> temp_priori_enclosure = initial_box + box_interval;
 
             if (true == m_product_box.is_contain_box(temp_priori_enclosure, 5.0 * PRECISION<T>::value))
@@ -912,320 +975,6 @@ namespace tnurbs
 
         }
 
-        ENUM_NURBS eval_priori_enclosure_inner(const Box<T, 4>& initial_box, const Box<T, 4>& param_box, T step_size, Box<T, 4>& priori_enclosure, T &angle_diff, int &type, bool transversal = true)
-        {
-            //目前仅仅支持三维
-            static_assert(3 == dim, "dim != 3 is not supported");
-
-            //计算交线的切向, 两个曲面非相切的时候; TODO:相切的时候
-            std::array<Interval<T>, (unsigned)dim> left_normal_interval, right_normal_interval;
-            std::array<Interval<T>, (unsigned)dim> left_normal_interval_t, right_normal_interval_t;
-            std::array<Interval<T>, (unsigned)dim> left_u_tangent_interval, left_v_tangent_interval;
-            std::array<Interval<T>, (unsigned)dim> right_u_tangent_interval, right_v_tangent_interval;
-
-            Box<T, 2> left_param_box(param_box.Min.template block<2, 1>(0, 0), param_box.Max.template block<2, 1>(0, 0));
-            Box<T, 2> right_param_box(param_box.Min.template block<2, 1>(2, 0), param_box.Max.template block<2, 1>(2, 0));
-            eval_point_interval(m_left_u_tangent_surface, left_param_box, left_u_tangent_interval);
-            eval_point_interval(m_left_v_tangent_surface, left_param_box, left_v_tangent_interval);
-            eval_point_interval(m_right_u_tangent_surface, right_param_box, right_u_tangent_interval);
-            eval_point_interval(m_right_v_tangent_surface, right_param_box, right_v_tangent_interval);
-            eval_point_interval(m_left_normal_surface, left_param_box, left_normal_interval);
-            eval_point_interval(m_right_normal_surface, right_param_box, right_normal_interval);
-
-
-            //eval_normal_and_tangent_interval<surface_type>(m_left_u_tangent_surface, m_left_v_tangent_surface, left_param_box, left_normal_interval, left_u_tangent_interval, left_v_tangent_interval);
-            //eval_normal_and_tangent_interval<surface_type>(m_right_u_tangent_surface, m_right_v_tangent_surface, right_param_box, right_normal_interval, right_u_tangent_interval, right_v_tangent_interval);
-            Box<T, dim> u_normal_box, v_normal_box, left_u_tangent_box, left_v_tangent_box, right_u_tangent_box, right_v_tangent_box;
-            for (int index = 0; index < dim; ++index)
-            {
-                u_normal_box.Min[index] = left_normal_interval[index].get_low();
-                u_normal_box.Max[index] = left_normal_interval[index].get_high();
-                v_normal_box.Min[index] = right_normal_interval[index].get_low();
-                v_normal_box.Max[index] = right_normal_interval[index].get_high();
-
-                left_u_tangent_box.Min[index] = left_u_tangent_interval[index].get_low();
-                left_u_tangent_box.Max[index] = left_u_tangent_interval[index].get_high();
-
-                left_v_tangent_box.Min[index] = left_v_tangent_interval[index].get_low();
-                left_v_tangent_box.Max[index] = left_v_tangent_interval[index].get_high();
-
-                right_u_tangent_box.Min[index] = right_u_tangent_interval[index].get_low();
-                right_u_tangent_box.Max[index] = right_u_tangent_interval[index].get_high();
-
-                right_v_tangent_box.Min[index] = right_v_tangent_interval[index].get_low();
-                right_v_tangent_box.Max[index] = right_v_tangent_interval[index].get_high();
-            }
-
-            T u_minLen = u_normal_box.eval_minimal_distance(Eigen::Vector3d(0, 0, 0));
-            T u_maxLen = u_normal_box.eval_maximal_distance(Eigen::Vector3d(0, 0, 0));
-
-            T v_minLen = v_normal_box.eval_minimal_distance(Eigen::Vector3d(0, 0, 0));
-            T v_maxLen = v_normal_box.eval_maximal_distance(Eigen::Vector3d(0, 0, 0));
-            Interval<T> u_normal_dot(u_minLen * u_minLen, u_maxLen * u_maxLen);
-            Interval<T> v_normal_dot(v_minLen * v_minLen, v_maxLen * v_maxLen);
-
-            // Transversal Intersection
-            std::array<Interval<T>, (unsigned)dim> c;
-            if (transversal == true)
-            {
-                c = vector_product(left_normal_interval, right_normal_interval);
-                type = 0;
-            }
-            else
-            {
-                //Eigen::Vector<T, 4> initial_param = initial_box.get_middle_point();
-                //Eigen::Matrix<Eigen::Vector<T, dim>, 3, 3> left_ders;
-                //m_left_surface->template derivative_on_surface<2>(initial_param[0], initial_param[1], left_ders);
-                //Eigen::Matrix<Eigen::Vector<T, dim>, 3, 3> right_ders;
-                //m_right_surface->template derivative_on_surface<2>(initial_param[2], initial_param[3], right_ders);
-
-                //Eigen::Vector<T, dim> left_normal = left_ders(1, 0).cross(left_ders(0, 1));
-                //left_normal.normalize();
-
-                //Eigen::Vector<T, dim> right_normal = right_ders(1, 0).cross(right_ders(0, 1));
-                //right_normal.normalize();
-                //T de = right_ders(1, 0).cross(right_ders(0, 1)).dot(right_normal);
-                //T a11_t = left_ders(1, 0).cross(right_ders(0, 1)).dot(right_normal) / de;
-                //T a12_t = left_ders(0, 1).cross(right_ders(0, 1)).dot(right_normal) / de;
-                //T a21_t = right_ders(1, 0).cross(left_ders(1, 0)).dot(right_normal) / de;
-                //T a22_t = right_ders(1, 0).cross(left_ders(0, 1)).dot(right_normal) / de;
-                //T left_L_t = left_ders(2, 0).dot(left_normal);
-                //T left_M_t = left_ders(1, 1).dot(left_normal);
-                //T left_N_t = left_ders(0, 2).dot(left_normal);
-
-                //T right_L_t = right_ders(2, 0).dot(right_normal);
-                //T right_M_t = right_ders(1, 1).dot(right_normal);
-                //T right_N_t = right_ders(0, 2).dot(right_normal);
-
-                //T b11_t = a11_t * a11_t * right_L_t;
-                //b11_t += 2 * a11_t * a21_t * right_M_t;
-                //b11_t += a21_t * a21_t * right_N_t;
-                //b11_t -= left_L_t;
-
-                //T b12_t = a11_t * a12_t * right_L_t;
-                //b12_t += (a11_t * a22_t + a21_t * a12_t) * right_M_t;
-                //b12_t += a21_t * a22_t * right_N_t;
-                //b12_t -= left_M_t;
-
-                //T b22_t = a12_t * a12_t * right_L_t;
-                //b22_t += 2 * a12_t * a22_t * right_M_t;
-                //b22_t += a22_t * a22_t * right_N_t;
-                //b22_t -= left_N_t;
-                //double delta_t = b12_t * b12_t - b11_t * b22_t;
-
-
-                // Tangential Intersection
-                Interval<T> noraml_dot = dot_product(left_normal_interval, right_normal_interval);
-                if (noraml_dot.contain(0.0, PRECISION<T>::value) == true)
-                {
-                    return ENUM_NURBS::NURBS_ERROR;
-                }
-                int flag = noraml_dot.m_interval[0] > 0 ? 1 : -1;
-                Box<T, dim> left_normal_box, right_normal_box;
-                std::array<Interval<T>, (unsigned)dim> left_normal_interval_t = left_normal_interval;
-                std::array<Interval<T>, (unsigned)dim> right_normal_interval_t = right_normal_interval;
-                for (int index = 0; index < dim; ++index)
-                {
-                    left_normal_box.Min[index] = left_normal_interval_t[index].get_low();
-                    left_normal_box.Max[index] = left_normal_interval_t[index].get_high();
-
-                    right_normal_box.Min[index] = right_normal_interval_t[index].get_low();
-                    right_normal_box.Max[index] = right_normal_interval_t[index].get_high();
-                }
-
-                T minLen = left_normal_box.eval_minimal_distance(Eigen::Vector3d(0, 0, 0));
-                T maxLen = left_normal_box.eval_maximal_distance(Eigen::Vector3d(0, 0, 0));
-
-                Interval<T> left_normal_dot(minLen, maxLen);
-
-                if (left_normal_dot.m_interval[0] <= TDEFAULT_ERROR<T>::value * TDEFAULT_ERROR<T>::value)
-                    return ENUM_NURBS::NURBS_ERROR;
-
-                if (divide<T, (unsigned)dim>(left_normal_interval_t, left_normal_dot, left_normal_interval_t) == false)
-                    return ENUM_NURBS::NURBS_ERROR;
-
-                minLen = right_normal_box.eval_minimal_distance(Eigen::Vector3d(0, 0, 0));
-                maxLen = right_normal_box.eval_maximal_distance(Eigen::Vector3d(0, 0, 0));
-
-                Interval<T> right_normal_dot(minLen, maxLen);
-                if (right_normal_dot.m_interval[0] <= TDEFAULT_ERROR<T>::value * TDEFAULT_ERROR<T>::value)
-                    return ENUM_NURBS::NURBS_ERROR;
-
-                if (divide<T, (unsigned)dim>(right_normal_interval_t, right_normal_dot, right_normal_interval_t) == false)
-                    return ENUM_NURBS::NURBS_ERROR;
-
-
-                // TODO : 缩小下面量的范围，估计更准确一些
-                //Interval<T> denominator = dot_product(right_normal_interval, right_normal_interval);
-                Interval<T> denominator_r;
-                divide(Interval<T>(1.0, 1.0), right_normal_dot, denominator_r);
-                Interval<T> a11 = mutilply<T>(dot_product<T>(vector_product<T>(left_u_tangent_interval, right_v_tangent_interval), right_normal_interval_t), denominator_r);
-                Interval<T> a12 = mutilply<T>(dot_product<T>(vector_product<T>(left_v_tangent_interval, right_v_tangent_interval), right_normal_interval_t), denominator_r);
-                Interval<T> a21 = mutilply<T>(dot_product<T>(vector_product<T>(right_u_tangent_interval, left_u_tangent_interval), right_normal_interval_t), denominator_r);
-                Interval<T> a22 = mutilply<T>(dot_product<T>(vector_product<T>(right_u_tangent_interval, left_v_tangent_interval), right_normal_interval_t), denominator_r);
-                std::array<Interval<T>, (unsigned)dim> Xuu_box, Xuv_box, Xvv_box, Yuu_box, Yuv_box, Yvv_box;
-                eval_point_interval<surface_type>(m_left_dxx[0], left_param_box, Xuu_box);
-                eval_point_interval<surface_type>(m_left_dxx[1], left_param_box, Xuv_box);
-                eval_point_interval<surface_type>(m_left_dxx[2], left_param_box, Xvv_box);
-
-                eval_point_interval<surface_type>(m_right_dxx[0], right_param_box, Yuu_box);
-                eval_point_interval<surface_type>(m_right_dxx[1], right_param_box, Yuv_box);
-                eval_point_interval<surface_type>(m_right_dxx[2], right_param_box, Yvv_box);
-                Interval<T> left_L = dot_product<T>(Xuu_box, left_normal_interval_t);
-                Interval<T> left_M = dot_product<T>(Xuv_box, left_normal_interval_t);
-                Interval<T> left_N = dot_product<T>(Xvv_box, left_normal_interval_t);
-                if (flag == -1)
-                {
-                    Interval<T> Flag = Interval<T>(flag, flag);
-                    left_L = mutilply(left_L, Flag);
-                    left_M = mutilply(left_M, Flag);
-                    left_N = mutilply(left_N, Flag);
-                }
-
-                Interval<T> right_L = dot_product<T>(Yuu_box, right_normal_interval_t);
-                Interval<T> right_M = dot_product<T>(Yuv_box, right_normal_interval_t);
-                Interval<T> right_N = dot_product<T>(Yvv_box, right_normal_interval_t);
-
-                Interval<T> temp = mutilply<T>(a11, a11);
-                temp.m_interval[0] = 0 > temp.m_interval[0] ? 0 : temp.m_interval[0];
-                Interval<T> b11 = mutilply(temp, right_L);
-                b11 = plus<T>(b11, mutilply<T>(Interval<T>(2.0, 2.0), mutilply<T>(mutilply<T>(a11, a21), right_M)));
-
-                temp = mutilply<T>(a21, a21);
-                temp.m_interval[0] = 0 > temp.m_interval[0] ? 0 : temp.m_interval[0];
-                b11 = plus<T>(b11, mutilply(temp, right_N));
-                b11 = minus<T>(b11, left_L);
-
-                Interval<T> b12 = mutilply(mutilply<T>(a11, a12), right_L);
-                b12 = plus<T>(b12, mutilply<T>(right_M, plus<T>(mutilply<T>(a11, a22), mutilply<T>(a21, a12))));
-                b12 = plus<T>(b12, mutilply(mutilply<T>(a21, a22), right_N));
-                b12 = minus<T>(b12, left_M);
-
-                temp = mutilply<T>(a12, a12);
-                temp.m_interval[0] = 0 > temp.m_interval[0] ? 0 : temp.m_interval[0];
-                Interval<T> b22 = mutilply(temp, right_L);
-                b22 = plus<T>(b22, mutilply<T>(Interval<T>(2.0, 2.0), mutilply<T>(mutilply<T>(a12, a22), right_M)));
-
-                temp = mutilply<T>(a22, a22);
-                temp.m_interval[0] = 0 > temp.m_interval[0] ? 0 : temp.m_interval[0];
-                b22 = plus<T>(b22, mutilply(temp, right_N));
-                b22 = minus<T>(b22, left_N);
-
-                temp = mutilply(b12, b12);
-                temp.m_interval[0] = 0 > temp.m_interval[0] ? 0 : temp.m_interval[0];
-                Interval<T> delta = minus(temp, mutilply(b11, b22));
-
-                if (delta.get_low() > 0 || delta.get_high() < 0)
-                {
-                    return ENUM_NURBS::NURBS_ERROR;
-                }
-                if (b11.contain(0, 0) && b12.contain(0, 0) && b22.contain(0, 0))
-                {
-                    return ENUM_NURBS::NURBS_ERROR;
-                }
-                if (b11.contain(0, 0) == false)
-                {
-                    Interval<T> nu;
-                    divide(b12, b11, nu);
-                    c = mutilply<T, dim>(left_u_tangent_interval, nu);
-                    c = minus<T, dim>(left_v_tangent_interval, c);
-                    type = 1;
-                }
-                else if (b22.contain(0, 0) == false)
-                {
-                    Interval<T> mu;
-                    divide(b12, b22, mu);
-                    c = mutilply<T, dim>(left_v_tangent_interval, mu);
-                    c = minus<T, dim>(left_u_tangent_interval, c);
-                    type = 2;
-                }
-                //else
-                //{
-                //    return ENUM_NURBS::NURBS_ERROR
-                //}
-            }
-
-
-            Box<T, dim> c_box;
-            for (int index = 0; index < dim; ++index)
-            {
-                c_box.Min[index] = c[index].get_low();
-                c_box.Max[index] = c[index].get_high();
-            }
-            Box<T, dim> un_box, vn_box;
-            for (int index = 0; index < dim; ++index)
-            {
-                un_box.Min[index] = left_normal_interval[index].get_low();
-                un_box.Max[index] = left_normal_interval[index].get_high();
-
-                vn_box.Min[index] = right_normal_interval[index].get_low();
-                vn_box.Max[index] = right_normal_interval[index].get_high();
-            }
-            cone<T, dim> un_cone = point_box(un_box, Eigen::Vector3d(0, 0, 0));
-            cone<T, dim> vn_cone = point_box(vn_box, Eigen::Vector3d(0, 0, 0));
-            angle_diff = std::max(un_cone.m_angle * 2.0, vn_cone.m_angle * 2.0);
-
-            cone<T, dim> left_u_tangent_cone = point_box(left_u_tangent_box, Eigen::Vector3d(0, 0, 0));
-            cone<T, dim> left_v_tangent_cone = point_box(left_v_tangent_box, Eigen::Vector3d(0, 0, 0));
-            T temp_angle_diff = std::max(left_u_tangent_cone.m_angle * 2.0, left_v_tangent_cone.m_angle * 2.0);
-
-            cone<T, dim> right_u_tangent_cone = point_box(right_u_tangent_box, Eigen::Vector3d(0, 0, 0));
-            cone<T, dim> right_v_tangent_cone = point_box(right_v_tangent_box, Eigen::Vector3d(0, 0, 0));
-            T temp_angle_diff2 = std::max(right_u_tangent_cone.m_angle * 2.0, right_v_tangent_cone.m_angle * 2.0);
-            angle_diff = std::min(std::max(temp_angle_diff, temp_angle_diff2), angle_diff);
-
-            T minLen = c_box.eval_minimal_distance(Eigen::Vector3d(0, 0, 0));
-            T maxLen = c_box.eval_maximal_distance(Eigen::Vector3d(0, 0, 0));
-
-            //Interval<T> c_dot = dot_product(c, c);
-            Interval<T> c_dot(minLen, maxLen);
-
-            cone<T, dim> c_cone = point_box(c_box, Eigen::Vector3d(0, 0, 0));
-            angle_diff = std::min(c_cone.m_angle * 2.0, angle_diff);
-
-            //正常不应该在此return false
-            if (c_dot.m_interval[0] <= TDEFAULT_ERROR<T>::value * TDEFAULT_ERROR<T>::value)
-                return ENUM_NURBS::NURBS_ERROR;
-
-            if (divide<T, (unsigned)dim>(c, c_dot, c) == false)
-                return ENUM_NURBS::NURBS_ERROR;
-
-            if (false == divide(dot_product(left_normal_interval, vector_product(c, left_v_tangent_interval)), u_normal_dot, m_alpha))
-                return ENUM_NURBS::NURBS_ERROR;
-            if (false == divide(dot_product(left_normal_interval, vector_product(left_u_tangent_interval, c)), u_normal_dot, m_beta))
-                return ENUM_NURBS::NURBS_ERROR;
-            if (false == divide(dot_product(right_normal_interval, vector_product(c, right_v_tangent_interval)), v_normal_dot, m_u))
-                return ENUM_NURBS::NURBS_ERROR;
-            if (false == divide(dot_product(right_normal_interval, vector_product(right_u_tangent_interval, c)), v_normal_dot, m_v))
-                return ENUM_NURBS::NURBS_ERROR;
-
-            Interval<T> alpha, beta, u, v;
-            Interval<T> step_box(0.0, step_size);
-            alpha = mutilply(m_alpha, step_box);
-            beta = mutilply(m_beta, step_box);
-            u = mutilply(m_u, step_box);
-            v = mutilply(m_v, step_box);
-
-            Box<T, 4> box_interval;
-            box_interval.Min[0] = alpha.m_interval[0];
-            box_interval.Min[1] = beta.m_interval[0];
-            box_interval.Min[2] = u.m_interval[0];
-            box_interval.Min[3] = v.m_interval[0];
-
-            box_interval.Max[0] = alpha.m_interval[1];
-            box_interval.Max[1] = beta.m_interval[1];
-            box_interval.Max[2] = u.m_interval[1];
-            box_interval.Max[3] = v.m_interval[1];
-
-            Box<T, 4> temp_priori_enclosure = initial_box.plus(box_interval, PRECISION<T>::value);
-            if (true == m_product_box.is_contain_box(temp_priori_enclosure, 5.0 * PRECISION<T>::value))
-            {
-                temp_priori_enclosure.intersect(m_product_box, priori_enclosure);
-                return ENUM_NURBS::NURBS_SUCCESS;
-            }
-            return ENUM_NURBS::NURBS_ERROR;
-        }
-
         bool eval_priori_enclosure(const Box<T, 4>& initial_box, const T& bigger_step_size, T& smalll_step_size, Box<T, 4>& priori_enclosure, T& angle_diff, int &type, bool transversal = true)
         {
             int loopCount = 8;
@@ -1233,13 +982,25 @@ namespace tnurbs
             Box<T, 4> initial_box_t = initial_box;
             Box<T, 4> priori_enclosure_t = priori_enclosure;
             T angle_diff_t = angle_diff;
-            //ENUM_NURBS code = eval_priori_enclosure_inner2(initial_box, initial_box, bigger_step_size, priori_enclosure_t, angle_diff_t, type, transversal);
-            //code = eval_priori_enclosure_inner(initial_box, initial_box, bigger_step_size, priori_enclosure, angle_diff, type, transversal);
-            if (ENUM_NURBS::NURBS_SUCCESS != eval_priori_enclosure_inner2(initial_box, initial_box, bigger_step_size, priori_enclosure, angle_diff, type, transversal))
+            if (ENUM_NURBS::NURBS_SUCCESS != eval_priori_enclosure_inner(initial_box, initial_box, bigger_step_size, priori_enclosure, type, transversal))
             {
                 angle_diff = 4.0;
                 return false;
             }
+
+            Box<T, 2> left_param_box(priori_enclosure.Min.template block<2, 1>(0, 0), priori_enclosure.Max.template block<2, 1>(0, 0));
+            Box<T, 2> right_param_box(priori_enclosure.Min.template block<2, 1>(2, 0), priori_enclosure.Max.template block<2, 1>(2, 0));
+            Box<T, dim> left_normal_box, right_normal_box;
+            eval_point_interval(m_left_normal_surface, left_param_box, left_normal_box);
+            eval_point_interval(m_right_normal_surface, right_param_box, right_normal_box);
+            Eigen::Vector<T, dim> origin;
+            origin.setConstant(0.0);
+            cone<T, dim> normal_cone = point_box(left_normal_box, origin);
+            angle_diff = normal_cone.m_angle;
+            normal_cone = point_box(right_normal_box, origin);
+            angle_diff = std::max(angle_diff, normal_cone.m_angle);
+
+
             while (loopCount > 0)
             {
                 loopCount -= 1;
@@ -1270,86 +1031,33 @@ namespace tnurbs
                 //}
                 Box<T, 4> next_priori_enclosure;
                 Box<T, 4> next_priori_enclosure_t;
-                //code = eval_priori_enclosure_inner2(initial_box, priori_enclosure_t, smalll_step_size, priori_enclosure_t, angle_diff_t, type, transversal);
-                //if (ENUM_NURBS::NURBS_SUCCESS != eval_priori_enclosure_inner(initial_box, priori_enclosure, smalll_step_size, next_priori_enclosure, angle_diff, type, transversal))
-                if (ENUM_NURBS::NURBS_SUCCESS != eval_priori_enclosure_inner2(initial_box, priori_enclosure, smalll_step_size, next_priori_enclosure, angle_diff, type, transversal))
+                if (ENUM_NURBS::NURBS_SUCCESS != eval_priori_enclosure_inner(initial_box, priori_enclosure, smalll_step_size, next_priori_enclosure, type, transversal))
                 {
                     return false;
                 }
                 if (priori_enclosure.is_contain_box(next_priori_enclosure))
                 {
-                    //code = eval_priori_enclosure_inner2(initial_box, next_priori_enclosure_t, smalll_step_size, priori_enclosure_t, angle_diff_t, type, transversal);
-                    /*if (ENUM_NURBS::NURBS_SUCCESS != eval_priori_enclosure_inner(initial_box, next_priori_enclosure, smalll_step_size, priori_enclosure, angle_diff, type, transversal))*/
-                    if (ENUM_NURBS::NURBS_SUCCESS != eval_priori_enclosure_inner(initial_box, next_priori_enclosure, smalll_step_size, priori_enclosure, angle_diff, type, transversal))
+                    if (ENUM_NURBS::NURBS_SUCCESS != eval_priori_enclosure_inner(initial_box, next_priori_enclosure, smalll_step_size, priori_enclosure, type, transversal))
                     {
                         return false;
                     }
-                    T costheta = std::cos(m_angle_eps);
-                    if (angle_diff < m_angle_eps * 1000)
-                    {
-                        //Box<T, 4> box_interval;
-                        //box_interval.Min[0] = m_alpha.m_interval[0];
-                        //box_interval.Min[1] = m_beta.m_interval[0];
-                        //box_interval.Min[2] = m_u.m_interval[0];
-                        //box_interval.Min[3] = m_v.m_interval[0];
-
-                        //box_interval.Max[0] = m_alpha.m_interval[1];
-                        //box_interval.Max[1] = m_beta.m_interval[1];
-                        //box_interval.Max[2] = m_u.m_interval[1];
-                        //box_interval.Max[3] = m_v.m_interval[1];
-                        //box_interval.scale(step_size);
-
-                        //Box<T, 4> temp_priori_enclosure;
-                        //if (true == initial_box.plus(box_interval, PRECISION<T>::value).intersect(m_product_box, temp_priori_enclosure))
-                        //{
-                        //    priori_enclosure = temp_priori_enclosure;
-                        //    return true;
-                        //}
-                        return true;
-                    }
+                    return true;
                 }
                 //else
                 Box<T, 4> temp_box = next_priori_enclosure;
-                //priori_enclosure = ;
                 Box<T, 4> temp_box_t = next_priori_enclosure;
-                //code = eval_priori_enclosure_inner2(initial_box, temp_box_t, smalll_step_size, next_priori_enclosure_t, angle_diff_t, type, transversal);
-                /*if (ENUM_NURBS::NURBS_SUCCESS != eval_priori_enclosure_inner(initial_box, temp_box, smalll_step_size, next_priori_enclosure, angle_diff, type, transversal))*/
-                if (ENUM_NURBS::NURBS_SUCCESS != eval_priori_enclosure_inner2(initial_box, temp_box, smalll_step_size, next_priori_enclosure, angle_diff, type, transversal))
+                if (ENUM_NURBS::NURBS_SUCCESS != eval_priori_enclosure_inner(initial_box, temp_box, smalll_step_size, next_priori_enclosure, type, transversal))
                 {
                     return false;
                 }
                 if (temp_box.is_contain_box(next_priori_enclosure))
                 {
-                    //code = eval_priori_enclosure_inner2(initial_box, temp_box_t, smalll_step_size, priori_enclosure_t, angle_diff_t, type, transversal);
-                    //if (ENUM_NURBS::NURBS_SUCCESS != eval_priori_enclosure_inner(initial_box, next_priori_enclosure, smalll_step_size, priori_enclosure, angle_diff, type, transversal))
-                    if (ENUM_NURBS::NURBS_SUCCESS != eval_priori_enclosure_inner2(initial_box, next_priori_enclosure, smalll_step_size, priori_enclosure, angle_diff, type, transversal))
+                    if (ENUM_NURBS::NURBS_SUCCESS != eval_priori_enclosure_inner(initial_box, next_priori_enclosure, smalll_step_size, priori_enclosure, type, transversal))
                     {
                         return false;
                     }
-                    if (angle_diff < m_angle_eps * 100)
-                    {
-                        //Box<T, 4> box_interval;
-                        //box_interval.Min[0] = m_alpha.m_interval[0];
-                        //box_interval.Min[1] = m_beta.m_interval[0];
-                        //box_interval.Min[2] = m_u.m_interval[0];
-                        //box_interval.Min[3] = m_v.m_interval[0];
-
-                        //box_interval.Max[0] = m_alpha.m_interval[1];
-                        //box_interval.Max[1] = m_beta.m_interval[1];
-                        //box_interval.Max[2] = m_u.m_interval[1];
-                        //box_interval.Max[3] = m_v.m_interval[1];
-                        //box_interval.scale(step_size);
-
-                        //Box<T, 4> temp_priori_enclosure;
-                        //if (true == initial_box.plus(box_interval, PRECISION<T>::value).intersect(m_product_box, temp_priori_enclosure))
-                        //{
-                        //    priori_enclosure = temp_priori_enclosure;
-                        //    return true;
-                        //}
-                        return true;
-                    }
+                    return true;
                 }
-                //
                 priori_enclosure = next_priori_enclosure;
                 smalll_step_size /= 1.2;
                 if (std::abs(smalll_step_size) < TDEFAULT_ERROR<T>::value)
@@ -1545,19 +1253,12 @@ namespace tnurbs
             Eigen::Vector<T, 4> intersect_param;
             priori_enclosure = initial_box;
 
-           /* Eigen::Matrix<T, 4, 2> params_ders;
-            params_ders.setConstant(0.0);
-            Eigen::Matrix<T, dim, 3> space_ders;
-            space_ders.setConstant(0.0);
-            T x1, x2;
-            eval_preiamge_ders<surface_type, typename surface_type::Type, surface_type::dimension>(m_left_surface, m_right_surface, param[0], param[1], param[2], param[3], params_ders, space_ders, x1, x2);*/
             std::vector<Eigen::Matrix<T, 4, 2>> param_ders;
             std::vector<Eigen::Matrix<T, dim, 2>> space_ders;
             eval_preiamge_and_space_ders<2>(param, param_ders, space_ders, transversal == true ? 0 : 3);
 
             // TODO : 处理branch
             T curvature = space_ders[0].col(1).norm();
-            //T curvature = 0;
             T arc_length = 2 * m_angle_eps;
             if (curvature < TDEFAULT_ERROR<T>::value)
             {
@@ -1570,14 +1271,13 @@ namespace tnurbs
             T param_space_length = arc_length;
 
             // TODO : 处理step太大超过参数域
-            //T abs_step = 0.5 * param_ders[0].col(0).norm() / (2.0 * param_ders[0].col(1).norm());
-            //T bigger_step_size = direction == false ? abs_step : -abs_step;
             T bigger_step_size = direction == false ? param_space_length  : -param_space_length;
             T small_step = bigger_step_size;
             int type;
             T angle_diff;
             while (false == eval_priori_enclosure(initial_box, bigger_step_size, small_step, priori_enclosure, angle_diff, type, transversal))
             {
+                // TODO: delete
                 if (std::abs(bigger_step_size) < 1e-4)
                 {
                     stop = true;
@@ -1587,15 +1287,13 @@ namespace tnurbs
                 }
                 if (angle_diff < 0.1)
                 {
-                    //if (angle_diff < 0.01)
-                    //{
-                    //    return ENUM_NURBS::NURBS_ERROR;
-                    //}
                     // 计算奇异点
                     Eigen::Vector<T, 4> pre_param;
                     if (estimate_next_param(param, priori_enclosure, small_step, next_init_param, type) != ENUM_NURBS::NURBS_SUCCESS)
                     {
-                        return ENUM_NURBS::NURBS_ERROR;
+                        bigger_step_size /= 1.5;
+                        small_step = bigger_step_size;
+                        continue;
                     }
 
                     // try find singular point
@@ -1606,7 +1304,7 @@ namespace tnurbs
                             if (priori_enclosure.is_contain_point(intersect_param) == true)
                             {
                                 // check is singular point
-                                    // TODO: 计算出奇异点，从此点出沿着切向发先出发一个微小的距离到达p，从p点开始追踪(存在唯一的追踪)，过程中可能链接到存在的曲线。追踪完之后，继续追踪因为奇异点导致停止的追踪过程
+                                // TODO: 计算出奇异点，从此点出沿着切向发先出发一个微小的距离到达p，从p点开始追踪(存在唯一的追踪)，过程中可能链接到存在的曲线。追踪完之后，继续追踪因为奇异点导致停止的追踪过程
                                 std::vector<Eigen::Matrix<T, 4, 1>> param_ders_temp;
                                 std::vector<Eigen::Matrix<T, dim, 1>> space_ders_temp;
                                 eval_preiamge_and_space_ders<1>(intersect_param, param_ders_temp, space_ders_temp, 3);
@@ -1620,7 +1318,6 @@ namespace tnurbs
                                     next_initial_box.Max = intersect_param + m_box_size;
 
                                     return ENUM_NURBS::NURBS_SUCCESS;
-                                    //break;
                                 }
                             }      
                         }
@@ -1630,39 +1327,38 @@ namespace tnurbs
                 small_step = bigger_step_size;
             }
 
-            //T temp_bigger = bigger_step_size / 1.2;
-            //T temp_small = small_step * 1.2;
-            //while (true)
-            //{
-            //    Box<T, 4> temp_priori_enclosure;
-            //    if (ENUM_NURBS::NURBS_SUCCESS != eval_priori_enclosure_inner(initial_box, initial_box, temp_bigger, temp_priori_enclosure, angle_diff, type, transversal))
-            //    {
-            //        break;
-            //    }
-            //    Box<T, 4> next_priori_enclosure;
-            //    if (ENUM_NURBS::NURBS_SUCCESS != eval_priori_enclosure_inner(initial_box, temp_priori_enclosure, temp_small, next_priori_enclosure, angle_diff, type, transversal))
-            //    {
-            //        break;
-            //    }
-            //    if (temp_priori_enclosure.is_contain_box(next_priori_enclosure))
-            //    {
-            //        priori_enclosure = temp_priori_enclosure;
-            //        small_step = temp_small;
-            //        bigger_step_size = temp_bigger;
-            //        temp_small *= 1.2;
-            //        temp_bigger /= 1.2;
-            //    }
-            //    else
-            //    {
-            //        temp_bigger /= 1.2;
-            //        if (std::abs(temp_bigger) < std::abs(temp_small))
-            //        {
-            //            break;
-            //        }
-            //    }
-            //}
-            
+            if (false == transversal)
+            {
+                while (angle_diff > m_angle_eps)
+                {
+                    // TODO: delete
+                    if (std::abs(small_step) < 1e-4)
+                    {
+                        stop = true;
+                        return ENUM_NURBS::NURBS_SUCCESS;
 
+                    }
+
+                    small_step /= 1.2;
+                    Box<T, 4> param_box = priori_enclosure;
+                    if (ENUM_NURBS::NURBS_SUCCESS != eval_priori_enclosure_inner(initial_box, param_box, small_step, priori_enclosure, type, transversal))
+                    {
+                        return ENUM_NURBS::NURBS_ERROR;
+                    }
+                    Box<T, 2> left_param_box(priori_enclosure.Min.template block<2, 1>(0, 0), priori_enclosure.Max.template block<2, 1>(0, 0));
+                    Box<T, 2> right_param_box(priori_enclosure.Min.template block<2, 1>(2, 0), priori_enclosure.Max.template block<2, 1>(2, 0));
+                    Box<T, dim> left_normal_box, right_normal_box;
+                    eval_point_interval(m_left_normal_surface, left_param_box, left_normal_box);
+                    eval_point_interval(m_right_normal_surface, right_param_box, right_normal_box);
+                    Eigen::Vector<T, dim> origin;
+                    origin.setConstant(0.0);
+                    cone<T, dim> normal_cone = point_box(left_normal_box, origin);
+                    angle_diff = normal_cone.m_angle;
+                    normal_cone = point_box(right_normal_box, origin);
+                    angle_diff = std::max(angle_diff, normal_cone.m_angle);
+                } 
+            }
+            
             do
             {
                 if (ENUM_NURBS::NURBS_SUCCESS != estimate_next_param(param, priori_enclosure, small_step, next_init_param, type))
@@ -1742,8 +1438,8 @@ namespace tnurbs
             right_normal.normalize();
             bool transversal = true;
             double cosTheta = left_normal.dot(right_normal);
-
-            if (cosTheta > 1.0 - KNOTS_EPS<T>::value)
+            double theta = std::acos(cosTheta);
+            if (std::abs(cosTheta) > 1.0 - KNOTS_EPS<T>::value)
             {
                 transversal = false;
             }

@@ -212,7 +212,26 @@ namespace tnurbs
                     Box<T, 1> sub_box(Eigen::Vector<T, 1>(current_box.Min[index]), Eigen::Vector<T, 1>(current_box.Max[index]));
                     if (sub_box.Max[0] - sub_box.Min[0] < KNOTS_EPS<T>::value)
                     {
-                        m_skip.push_back(index);
+                        sub_box.Max[0] = std::min(1.0, sub_box.Min[0] + KNOTS_EPS<T>::value * 5);
+                        sub_box.Min[0] = std::max(0.0, sub_box.Min[0] - KNOTS_EPS<T>::value * 5);
+                        
+                        //m_skip.push_back(index);
+                        //int step = 1;
+                        //for (int j = index + 1; j < variaty_count; ++j)
+                        //    step *= (m_index.m_bounds[j] + 1);
+                        //int first_index = m_index.m_index[variaty_count - 1];
+
+                        //int temp = m_index.m_bounds[variaty_count - 1] + 1;
+                        //for (int j = variaty_count - 2; j >= 0; --j)
+                        //{
+                        //    first_index += m_index.m_index[j] * temp;
+                        //    temp *= (m_index.m_bounds[j] + 1);
+                        //}
+                        //for (int i = 0; i < bezier_control_points_count; ++i)
+                        //{
+                        //    control_points.col(first_index + i * step).setConstant(0.0);
+                        //}
+                        //continue;
                     }
                     //int x = 0;
                     do
@@ -307,6 +326,98 @@ namespace tnurbs
             return true;
         }
     
+        bool compute_ipp(std::vector<Box<T, variaty_count>>& int_params)
+        {
+            if (sign_change(m_coeff) == false)
+                return true;
+            //init interval 
+            Eigen::Vector<T, variaty_count> min, max;
+            min.setConstant(0.0);
+            max.setConstant(1.0);
+            Box<T, variaty_count> init_box(min, max);
+            std::deque<Box<T, variaty_count>> boxes{ init_box };
+
+            //int loop_count = 0;
+            while (boxes.empty() == false)
+            {
+                m_skip.clear();
+                //std::cout << "loop count: " << loop_count << std::endl;
+                //++loop_count;
+                Box<T, variaty_count> current_box = boxes.back();
+                boxes.pop_back();
+                if ((current_box.Max - current_box.Min).norm() < TDEFAULT_ERROR<T>::value)
+                {
+                    //逻辑需要处理
+                    int_params.push_back(current_box);
+                    continue;
+                }
+                //将bezier细分
+                Eigen::Matrix<T, equation_count, Eigen::Dynamic> control_points = m_coeff;
+                for (int index = 0; index < variaty_count; ++index)
+                {
+                    int bezier_control_points_count = m_index.m_bounds[index] + 1;
+                    //std::cout << "index: " << index << std::endl;
+                    Eigen::Matrix<T, equation_count, Eigen::Dynamic> bezier_control_points(equation_count, bezier_control_points_count);
+                    Box<T, 1> sub_box(Eigen::Vector<T, 1>(current_box.Min[index]), Eigen::Vector<T, 1>(current_box.Max[index]));
+                    if (sub_box.Max[0] - sub_box.Min[0] < KNOTS_EPS<T>::value)
+                    {
+                        sub_box.Max[0] = std::min(1.0, sub_box.Min[0] + KNOTS_EPS<T>::value * 5);
+                        sub_box.Min[0] = std::max(0.0, sub_box.Min[0] - KNOTS_EPS<T>::value * 5);
+                    }
+                    //int x = 0;
+                    do
+                    {
+                        //std::cout << "x: " << x << std::endl;
+                        //++x;
+                        int step = 1;
+                        for (int j = index + 1; j < variaty_count; ++j)
+                            step *= (m_index.m_bounds[j] + 1);
+                        int first_index = m_index.m_index[variaty_count - 1];
+
+                        int temp = m_index.m_bounds[variaty_count - 1] + 1;
+                        for (int j = variaty_count - 2; j >= 0; --j)
+                        {
+                            first_index += m_index.m_index[j] * temp;
+                            temp *= (m_index.m_bounds[j] + 1);
+                        }
+
+                        //构造bezier曲线
+                        for (int i = 0; i < bezier_control_points_count; ++i)
+                        {
+                            bezier_control_points.col(i) = control_points.col(first_index + i * step);
+                        }
+                        nurbs_curve<T, equation_count, false, -1, -1> nurbs(bezier_control_points);
+                        nurbs.sub_divide(sub_box);
+                        bezier_control_points = nurbs.get_control_points();
+                        // std::cout << bezier_control_points << std::endl;
+                        for (int i = 0; i < bezier_control_points_count; ++i)
+                        {
+                            control_points.col(first_index + i * step) = bezier_control_points.col(i);
+                        }
+
+                    } while (m_index.add_one(index));
+                    m_index.reset();
+                }
+
+                Box<T, variaty_count> project_box;
+                if (interval_projected_polyhedron(control_points, project_box) == false)
+                {
+                    continue;
+                }
+                std::vector<Box<T, variaty_count>> split_boxes;
+                split_box_by_ratio(project_box, current_box, split_boxes);
+                for (const auto& b : split_boxes)
+                {
+                    Box<T, variaty_count> cbox = current_box;
+                    cut_box(cbox, b);
+                    boxes.push_back(cbox);
+                }
+            }
+
+            return true;
+        }
+
+
     private:
         Eigen::Matrix<T, equation_count, equation_count> fi_fj_mat(const Eigen::Matrix<T, equation_count, Eigen::Dynamic> &control_points)
         {
@@ -372,7 +483,7 @@ namespace tnurbs
                 auto skip_it = m_skip.begin();
                 for (int index = 0; index < variaty_count; ++index)
                 {
-                    if (skip_it != m_skip.end() && f_index == *skip_it)
+                    if (skip_it != m_skip.end() && index == *skip_it)
                     {
                         continue;
                     }
@@ -549,6 +660,145 @@ namespace tnurbs
         return int_params;
     }
 
+
+    //迭代加细交点(周期性曲面待处理)(TODO: 重构)
+    template<typename T, int dim, bool is_rational = false>
+    ENUM_NURBS intersect_point_iteration(const nurbs_curve<T, dim, is_rational, -1, -1>& left, const nurbs_surface<T, dim, -1, -1, -1, -1, is_rational>& right,
+                                        const Box<T, 3>& domian, Eigen::Vector<T, 3> current_param, Eigen::Vector<T, 3>& intersect_param)
+    {
+        // TODO: closed
+        Eigen::Vector<Eigen::Vector<T, dim>, 2> left_point_ders;
+        Eigen::Matrix<Eigen::Vector<T, dim>, 2, 2> right_point_ders;
+        //Eigen::Vector<T, dim> left_point, right_point;
+        Eigen::Vector<T, dim> vec;
+        T min_distance = 100000;
+        intersect_param = current_param;
+
+        //迭代次数需要修改
+        for (int loop_index = 0; loop_index < 2 * SURFACE_ITERATE_DEEP; ++loop_index)
+        {
+            left.derivative_on_curve<1>(current_param[0], left_point_ders);
+            right.derivative_on_surface<1>(current_param[1], current_param[2], right_point_ders);
+            vec = right_point_ders(0, 0) - left_point_ders[0];
+            T distance = vec.squaredNorm();
+            if (distance < min_distance)
+            {
+                min_distance = distance;
+                intersect_param = current_param;
+
+                bool flag = true;
+                for (int index = 0; index < dim; ++index)
+                {
+                    if (std::abs(vec[index]) > PRECISION<T>::value)
+                    {
+                        flag = false;
+                        break;
+                    }
+                }
+                if (flag == true)
+                    return ENUM_NURBS::NURBS_SUCCESS;
+            }
+
+            Eigen::Matrix<T, dim, 3> mat;
+            mat.col(0) = left_point_ders[1];
+            mat.col(1) = -1.0 * right_point_ders(1, 0);
+            mat.col(2) = -1.0 * right_point_ders(0, 1);
+
+            Eigen::JacobiSVD<Eigen::Matrix<T, dim, 3>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(mat);
+            Eigen::Vector<T, 3> delta = matSvd.solve(vec);
+            if (matSvd.info() != Eigen::Success)
+                return ENUM_NURBS::NURBS_ERROR;
+
+            Eigen::Vector<T, 3> next_param = current_param + delta;
+            for (int index = 0; index < 3; ++index)
+            {
+                if (next_param[index] < domian.Min[index])
+                    next_param[index] = domian.Min[index];
+                else if (next_param[index] > domian.Max[index])
+                    next_param[index] = domian.Max[index];
+            }
+
+            current_param = next_param;
+        }
+
+        return ENUM_NURBS::NURBS_ERROR;
+    }
+
+
+    //迭代加细交点(周期性曲面待处理)(TODO: 重构)
+    template<typename T, int dim, bool is_rational = false>
+    ENUM_NURBS intersect_point_singular_iteration(const nurbs_curve<T, dim, is_rational, -1, -1>& left, const nurbs_surface<T, dim, -1, -1, -1, -1, is_rational>& right,
+        const Box<T, 3>& domian, Eigen::Vector<T, 3> current_param, Eigen::Vector<T, 3>& intersect_param)
+    {
+        // TODO: closed
+        Eigen::Vector<Eigen::Vector<T, dim>, 3> left_point_ders;
+        Eigen::Matrix<Eigen::Vector<T, dim>, 3, 3> right_point_ders;
+        //Eigen::Vector<T, dim> left_point, right_point;
+        Eigen::Vector<T, dim + 1> vec;
+        T min_distance = 100000;
+        intersect_param = current_param;
+
+        //迭代次数需要修改
+        for (int loop_index = 0; loop_index < 2 * SURFACE_ITERATE_DEEP; ++loop_index)
+        {
+            left.derivative_on_curve<2>(current_param[0], left_point_ders);
+            right.derivative_on_surface<2>(current_param[1], current_param[2], right_point_ders);
+            vec.template block<dim, 1>(0, 0) = right_point_ders(0, 0) - left_point_ders[0];
+            Eigen::Vector<T, dim> surface_normal = right_point_ders(1, 0).cross(right_point_ders(0, 1));
+            T normal_len = surface_normal.norm();
+            T tangent_len = left_point_ders[1].norm();
+            T coeff = -1.0 / (normal_len * tangent_len);
+            vec[dim] = -surface_normal.dot(left_point_ders[1]) * coeff;
+
+            T distance = vec.squaredNorm();
+            if (distance < min_distance)
+            {
+                min_distance = distance;
+                intersect_param = current_param;
+
+                bool flag = true;
+                for (int index = 0; index <= dim; ++index)
+                {
+                    if (std::abs(vec[index]) > PRECISION<T>::value)
+                    {
+                        flag = false;
+                        break;
+                    }
+                }
+                if (flag == true)
+                    return ENUM_NURBS::NURBS_SUCCESS;
+            }
+
+            Eigen::Matrix<T, dim + 1, 3> mat;
+            mat.template block<dim, 1>(0, 0) = left_point_ders[1];
+            mat.template block<dim, 1>(0, 1) = -1.0 * right_point_ders(1, 0);
+            mat.template block<dim, 1>(0, 2) = -1.0 * right_point_ders(0, 1);
+            mat(dim, 0) = right_point_ders(1, 0).cross(right_point_ders(0, 1)).dot(left_point_ders[2]) * coeff;
+            mat(dim, 1) = (right_point_ders(2, 0).cross(right_point_ders(0, 1)) + right_point_ders(1, 0).cross(right_point_ders(1, 1))).dot(left_point_ders[1]) * coeff;
+            mat(dim, 2) = (right_point_ders(1, 0).cross(right_point_ders(0, 2)) + right_point_ders(1, 1).cross(right_point_ders(0, 1))).dot(left_point_ders[1]) * coeff;
+
+            Eigen::JacobiSVD<Eigen::Matrix<T, dim + 1, 3>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(mat);
+            Eigen::Vector<T, 3> delta = matSvd.solve(vec);
+            if (matSvd.info() != Eigen::Success)
+                return ENUM_NURBS::NURBS_ERROR;
+
+            Eigen::Vector<T, 3> next_param = current_param + delta;
+            for (int index = 0; index < 3; ++index)
+            {
+                if (next_param[index] < domian.Min[index])
+                    next_param[index] = domian.Min[index];
+                else if (next_param[index] > domian.Max[index])
+                    next_param[index] = domian.Max[index];
+            }
+
+            current_param = next_param;
+        }
+
+        return ENUM_NURBS::NURBS_ERROR;
+    }
+
+
+
     template<typename T, int dim, bool is_rational = false>
     std::vector<Eigen::Vector<T, 3>> bezier_curve_int_bezier_surface(const nurbs_curve<T, dim, is_rational, -1, -1>& left, const nurbs_surface<T, dim, -1, -1, -1, -1, is_rational>& right)
     {
@@ -572,9 +822,41 @@ namespace tnurbs
 
         smspe<T, dim, 3> solver;
         solver.init(coeff, degrees);
-        std::vector<Eigen::Vector<T, 3>> int_params;
-        solver.compute_ipp(int_params);
-        return int_params;
+        std::vector<Box<T, 3>> int_boxes;
+        solver.compute_ipp(int_boxes);
+        std::vector<Eigen::Vector<T, 3>> iter_int_params;
+        Box<T, 3> domian;
+        domian.Min.setConstant(0.0);
+        domian.Max.setConstant(1.0);
+        Eigen::Vector<T, 3> result_param;
+        for (Box<T, 3>& int_box : int_boxes)
+        {
+            bool flag = false;
+            Eigen::Vector<T, 3> initial_param = int_box.get_middle_point();
+            Eigen::Vector<T, 3> param;
+            if (ENUM_NURBS::NURBS_SUCCESS == intersect_point_iteration<T, dim, is_rational>(left, right, domian, initial_param, param))
+            {
+                if (int_box.is_contain_point(param, PRECISION<T>::value))
+                {
+                    flag = true;
+                    result_param = param;
+                    initial_param = param;
+                }
+            }
+            if (ENUM_NURBS::NURBS_SUCCESS == intersect_point_singular_iteration<T, dim, is_rational>(left, right, domian, initial_param, param))
+            {
+                if (int_box.is_contain_point(param, PRECISION<T>::value))
+                {
+                    flag = true;
+                    result_param = param;
+                }
+            }
+            if (flag == true)
+            {
+                iter_int_params.push_back(result_param);
+            }
+        }
+        return iter_int_params;
     }
 
 

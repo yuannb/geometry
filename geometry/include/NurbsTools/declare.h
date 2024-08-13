@@ -271,11 +271,11 @@ namespace tnurbs
             return *this;
         }
 
-        bool is_contain_point(const Eigen::Vector<T, dim> &point) const
+        bool is_contain_point(const Eigen::Vector<T, dim> &point, T eps = 0) const
         {
             for (int index = 0; index < dim; ++index)
             {
-                if (point[index] > Max[index] || point[index] < Min[index])
+                if (point[index] > Max[index] + eps || point[index] < Min[index] - eps)
                     return false;
             }
             return true;
@@ -488,7 +488,7 @@ namespace tnurbs
                 result.Min[index] = std::min({ x1, x2 });
                 result.Max[index] = std::max({ x1, x2 });
             }
-            return ENUM_NURBS::NURBS_SUCCESS;
+            return result;
         }
 
         Box<T, dim> operator*(const Interval<T> &scale) const
