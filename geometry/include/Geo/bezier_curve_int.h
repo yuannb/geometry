@@ -356,7 +356,6 @@ namespace tnurbs
                 for (int index = 0; index < variaty_count; ++index)
                 {
                     int bezier_control_points_count = m_index.m_bounds[index] + 1;
-                    //std::cout << "index: " << index << std::endl;
                     Eigen::Matrix<T, equation_count, Eigen::Dynamic> bezier_control_points(equation_count, bezier_control_points_count);
                     Box<T, 1> sub_box(Eigen::Vector<T, 1>(current_box.Min[index]), Eigen::Vector<T, 1>(current_box.Max[index]));
                     if (sub_box.Max[0] - sub_box.Min[0] < KNOTS_EPS<T>::value)
@@ -364,11 +363,8 @@ namespace tnurbs
                         sub_box.Max[0] = std::min(1.0, sub_box.Min[0] + KNOTS_EPS<T>::value * 5);
                         sub_box.Min[0] = std::max(0.0, sub_box.Min[0] - KNOTS_EPS<T>::value * 5);
                     }
-                    //int x = 0;
                     do
                     {
-                        //std::cout << "x: " << x << std::endl;
-                        //++x;
                         int step = 1;
                         for (int j = index + 1; j < variaty_count; ++j)
                             step *= (m_index.m_bounds[j] + 1);
@@ -522,7 +518,8 @@ namespace tnurbs
             for (int index = 0; index < variaty_count; ++index)
             {
                 bool flag = box.Max[index] - box.Min[index] < 0.8;
-                if (flag == false && origin_box.Max[index] - origin_box.Min[index] > TDEFAULT_ERROR<T>::value * 10)
+                //if (flag == false && origin_box.Max[index] - origin_box.Min[index] > TDEFAULT_ERROR<T>::value * 10)
+                if (flag == false && origin_box.Max[index] - origin_box.Min[index] > TDEFAULT_ERROR<T>::value)
                 {
                     std::vector<Box<T, variaty_count>> current_split_boxes;
                     for (Box<T, variaty_count> &box : split_boxes)
@@ -543,8 +540,6 @@ namespace tnurbs
                 T len = box.Max[index] - box.Min[index];
                 box.Max[index] = box.Min[index] + sub_box.Max[index] * len;
                 box.Min[index] += sub_box.Min[index] * len;
-                //box.Max[index] = box.Min[index] + sub_box.Max[index] * std::min(len + KNOTS_EPS<T>::value, 1.0);
-                //box.Min[index] += sub_box.Min[index] * std::max(0.0, len - KNOTS_EPS<T>::value);
             }
             return true;
         }
@@ -836,7 +831,7 @@ namespace tnurbs
             Eigen::Vector<T, 3> param;
             if (ENUM_NURBS::NURBS_SUCCESS == intersect_point_iteration<T, dim, is_rational>(left, right, domian, initial_param, param))
             {
-                if (int_box.is_contain_point(param, PRECISION<T>::value))
+                if (int_box.is_contain_point(param, TDEFAULT_ERROR<T>::value))
                 {
                     flag = true;
                     result_param = param;
@@ -845,7 +840,7 @@ namespace tnurbs
             }
             if (ENUM_NURBS::NURBS_SUCCESS == intersect_point_singular_iteration<T, dim, is_rational>(left, right, domian, initial_param, param))
             {
-                if (int_box.is_contain_point(param, PRECISION<T>::value))
+                if (int_box.is_contain_point(param, TDEFAULT_ERROR<T>::value))
                 {
                     flag = true;
                     result_param = param;
@@ -856,6 +851,20 @@ namespace tnurbs
                 iter_int_params.push_back(result_param);
             }
         }
+
+        //TODO: 去重
+        std::unordered_set<help<T, 3>, hash_help<T, 3>> remove_mult;
+        for (const Eigen::Vector<T, 3>& param : iter_int_params)
+        {
+            help<T, 3> h(param);
+            remove_mult.insert(h);
+        }
+        iter_int_params.clear();
+        for (auto it = remove_mult.begin(); it != remove_mult.end(); ++it)
+        {
+            iter_int_params.push_back(it->m_point);
+        }
+
         return iter_int_params;
     }
 

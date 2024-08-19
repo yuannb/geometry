@@ -6,7 +6,40 @@ namespace tnurbs
     {
         std::cout << vec << std::endl;
     }
-    void save_obj(Eigen::Matrix<double, 3, Eigen::Dynamic> &mat, const char *path)
+    void save_box(const std::vector<Box<double, 2>> &boxes, const char *path)
+    {
+        int cols = boxes.size();
+        std::ofstream outfile2(path);
+        outfile2.precision(16);
+
+        for (int j = 0; j < cols; ++j)
+        {
+            Box<double, 2> box = boxes[j];
+            
+            outfile2 << "v " << box.Min[0] << " " <<
+            box.Min[1] << " " << 0 << std::endl;
+            outfile2 << "v " << box.Max[0] << " " <<
+                box.Min[1] << " " << 0 << std::endl;
+            outfile2 << "v " << box.Max[0] << " " <<
+                box.Max[1] << " " << 0 << std::endl;
+            outfile2 << "v " << box.Min[0] << " " <<
+                box.Max[1] << " " << 0 << std::endl;
+        }
+        for (int j = 0; j < cols; ++j)
+        {
+            outfile2 << "l ";
+            outfile2 << j * 4 + 1 << " " << j * 4 + 2 << std::endl;
+            outfile2 << "l ";
+            outfile2 << j * 4 + 2 << " " << j * 4 + 3 << std::endl;
+            outfile2 << "l ";
+            outfile2 << j * 4 + 3 << " " << j * 4 + 4 << std::endl;
+            outfile2 << "l ";
+            outfile2 << j * 4 + 4 << " " << j * 4 + 1 << std::endl;
+        }
+        outfile2.close();
+    }
+
+    void save_obj(Eigen::Matrix<double, 3, Eigen::Dynamic>& mat, const char* path)
     {
         int cols = mat.cols();
         std::ofstream outfile2(path);
@@ -15,12 +48,29 @@ namespace tnurbs
         for (int j = 0; j < cols; ++j)
         {
             Eigen::Vector3d point = mat.col(j);
-            
+
             outfile2 << "v " << point[0] << " " <<
-            point[1] << " " << point[2] << std::endl;
+                point[1] << " " << point[2] << std::endl;
         }
         outfile2.close();
     }
+    
+    void save_obj(std::vector<Eigen::Vector3d>& points, const char* path)
+    {
+        int cols = points.size();
+        std::ofstream outfile2(path);
+        outfile2.precision(16);
+
+        for (int j = 0; j < cols; ++j)
+        {
+            Eigen::Vector3d point = points[j];
+
+            outfile2 << "v " << point[0] << " " <<
+                point[1] << " " << point[2] << std::endl;
+        }
+        outfile2.close();
+    }
+    
     void save_obj(const Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> &mat, const char *path)
     {
         int rows = mat.rows();
@@ -35,6 +85,22 @@ namespace tnurbs
                 outfile2 << "v " << point[0] << " " <<
                 point[1] << " " << point[2] << std::endl;
             }
+        }
+        outfile2.close();
+    }
+
+    void save_obj(Eigen::Matrix<double, 2, Eigen::Dynamic>& mat, const char* path)
+    {
+        int cols = mat.cols();
+        std::ofstream outfile2(path);
+        outfile2.precision(16);
+
+        for (int j = 0; j < cols; ++j)
+        {
+            Eigen::Vector2d point = mat.col(j);
+
+            outfile2 << "v " << point[0] << " " <<
+                point[1] << " " << 0 << std::endl;
         }
         outfile2.close();
     }

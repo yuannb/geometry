@@ -7,12 +7,17 @@
 #include "discret.h"
 namespace tnurbs
 {
+    void save_box(const std::vector<Box<double, 2>>& boxes, const char* path);
     void printEigenVector(const Eigen::VectorX<double> &vec);
 
     void printEigenMatrix(const Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> &mat);
 
     void save_obj(const Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> &mat, const char *path);
     void save_obj(Eigen::Matrix<double, 3, Eigen::Dynamic> &mat, const char *path);
+
+    void save_obj(std::vector<Eigen::Vector3d>& points, const char* path);
+
+    void save_obj(Eigen::Matrix<double, 2, Eigen::Dynamic>& mat, const char* path);
 
     void printEigenMatrix(const Eigen::Matrix<double, 2, Eigen::Dynamic> &mat);
 

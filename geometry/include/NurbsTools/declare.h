@@ -324,7 +324,7 @@ namespace tnurbs
             return { box1, box2 };
         }
 
-        bool intersect(const Box &box, Box &intersect_box)
+        bool intersect(const Box &box, Box &intersect_box) const
         {
             for (int index = 0; index < dim; ++index)
             {
