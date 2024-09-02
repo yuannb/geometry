@@ -82,6 +82,10 @@ namespace tnurbs
                 m_index[variaty_count - 1] += 1;
                 for (int i = variaty_count - 1; i > 0; --i)
                 {
+                    if (i == index)
+                    {
+                        continue;
+                    }
                     if (m_index[i] < m_bounds[i] + 1)
                         break;
                     else
@@ -326,7 +330,7 @@ namespace tnurbs
             return true;
         }
     
-        bool compute_ipp(std::vector<Box<T, variaty_count>>& int_params)
+        bool compute_ipp(std::vector<Box<T, variaty_count>>& int_params, T box_size = TDEFAULT_ERROR<T>::value)
         {
             if (sign_change(m_coeff) == false)
                 return true;
@@ -345,7 +349,7 @@ namespace tnurbs
                 //++loop_count;
                 Box<T, variaty_count> current_box = boxes.back();
                 boxes.pop_back();
-                if ((current_box.Max - current_box.Min).norm() < TDEFAULT_ERROR<T>::value)
+                if ((current_box.Max - current_box.Min).norm() < box_size)
                 {
                     //逻辑需要处理
                     int_params.push_back(current_box);
@@ -867,6 +871,40 @@ namespace tnurbs
 
         return iter_int_params;
     }
+
+
+    template<typename T, int dim, bool is_rational = false>
+    std::vector<Box<T, 4>> bezier_surface_int_bezier_surface(const nurbs_surface<T, dim, -1, -1, -1, -1, is_rational>& left, const nurbs_surface<T, dim, -1, -1, -1, -1, is_rational>& right, T box_size = TDEFAULT_ERROR<T>::value)
+    {
+        static_assert(is_rational == false, "is_rational != false");
+        auto left_control_points = left.get_control_points();
+        int u_left_degree = left_control_points[0].cols() - 1;
+        int v_left_degree = left_control_points.rows() - 1;
+
+        auto right_control_points = right.get_control_points();
+        int u_right_degree = right_control_points[0].cols() - 1;
+        int v_right_degree = right_control_points.rows() - 1;
+        std::array<int, 4> degrees{ u_left_degree, v_left_degree, u_right_degree, v_right_degree };
+
+        int count = (v_left_degree + 1) * (u_left_degree + 1) * (u_right_degree + 1) * (v_right_degree + 1);
+        Eigen::Matrix<T, dim, Eigen::Dynamic> coeff(dim, count);
+        Index<4> index;
+        index.reset();
+        index.set_bounds(degrees);
+        for (int i = 0; i < count; ++i)
+        {
+            coeff.col(i) = left_control_points[index.m_index[1]].col(index.m_index[0]) - right_control_points[index.m_index[3]].col(index.m_index[2]);
+            index.add_one();
+        }
+
+        smspe<T, dim, 4> solver;
+        solver.init(coeff, degrees);
+        std::vector<Box<T, 4>> int_boxes;
+        solver.compute_ipp(int_boxes, box_size);
+        return int_boxes;
+    }
+
+
 
 
 }

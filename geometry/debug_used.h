@@ -46,5 +46,10 @@ namespace tnurbs
     ENUM_NURBS save_obj(const nurbs_surface<double, 3, -1, -1, -1, -1, true> &surf, const char *path);
 
     ENUM_NURBS save_obj(const mesh<2> *surf, const char *path);
+
+    ENUM_NURBS save_obj2(const nurbs_surface<double, 3, -1, -1, -1, -1, false>& surf, const char* path);
+
+    ENUM_NURBS save_obj2(const nurbs_curve<double, 3, false, -1, -1>& curv, const char* path);
+
 } // namespace tnurbs
 

@@ -6,6 +6,7 @@ namespace tnurbs
     template<typename T, int dim>
     struct cone
     {
+        //半角
         T m_angle;
         Eigen::Vector<T, dim> m_dir;
         cone(const cone &c) : m_angle(c.m_angle), m_dir(c.m_dir) {  }
@@ -26,9 +27,9 @@ namespace tnurbs
             T angle;
             if (std::abs(cos_angle) > 1.0 - TDEFAULT_ERROR<T>::value)
             {
-                if (cos_angle > 1.0 - TDEFAULT_ERROR<T>::value && cos_angle < 1.0 + TDEFAULT_ERROR<T>::value)
+                if (cos_angle > 1.0 /*- TDEFAULT_ERROR<T>::value*/ && cos_angle < 1.0 + TDEFAULT_ERROR<T>::value)
                     angle = 0.0;
-                else if (cos_angle < -1.0 + TDEFAULT_ERROR<T>::value && cos_angle > -1.0 - TDEFAULT_ERROR<T>::value)
+                else if (cos_angle < -1.0 /*+ TDEFAULT_ERROR<T>::value*/ && cos_angle > -1.0 - TDEFAULT_ERROR<T>::value)
                     angle = M_PI;
                 else
                     return ENUM_NURBS::NURBS_ERROR;
@@ -118,6 +119,19 @@ namespace tnurbs
             return ENUM_NURBS::NURBS_SUCCESS;
         }
         
+        bool is_cotain_vector(const Eigen::Vector<T, dim>& dir) const
+        {
+            Eigen::Vector<T, dim> normal_dir = dir.normalized();
+            double dot_vecs = normal_dir.dot(m_dir);
+            double cos_theta = std::cos(m_angle);
+            if (dot_vecs >= cos_theta - PRECISION<T>::value)
+            {
+                return true;
+            }
+            return false;
+        }
+
+
         cone & operator=(const cone &c)
         {
             if (this != &c)

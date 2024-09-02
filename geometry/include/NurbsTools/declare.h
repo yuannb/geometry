@@ -323,6 +323,23 @@ namespace tnurbs
             box2.Min[dimension] = box1.Max[dimension];
             return { box1, box2 };
         }
+        std::vector<Box<T, dim>> split_at_middle() const
+        {
+            std::vector<Box<T, dim>> sub_boxes;
+            sub_boxes.push_back(*this);
+            std::vector<Box<T, dim>> next_boxes;
+            for (int index = 0; index < dim; ++index)
+            {
+                for (int box_index = 0; box_index < sub_boxes.size(); ++box_index)
+                {
+                    std::array<Box<T, dim>, 2> temp_result = sub_boxes[box_index].split_at_middle(index);
+                    next_boxes.insert(next_boxes.end(), temp_result.begin(), temp_result.end());
+                }
+                std::swap(next_boxes, sub_boxes);
+                next_boxes.clear();
+            }
+            return sub_boxes;
+        }
 
         bool intersect(const Box &box, Box &intersect_box) const
         {

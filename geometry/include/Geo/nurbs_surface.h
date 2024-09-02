@@ -1917,6 +1917,102 @@ namespace tnurbs
             return ENUM_NURBS::NURBS_SUCCESS;
         }
 
+        ENUM_NURBS find_point_on_surface(const Eigen::Vector<T, dim>& point, T& u, T& v, T eps = PRECISION<T>::value) const
+        {
+           
+            T current_u = u;
+            T current_v = v;
+            bool is_u_closed_flag = is_u_closed();
+            bool is_v_closed_flag = is_v_closed();
+            T u_min = m_u_knots_vector[0];
+            int u_knots_size = m_u_knots_vector.size();
+            T u_max = m_u_knots_vector[u_knots_size - 1];
+
+            T v_min = m_v_knots_vector[0];
+            int v_knots_size = m_v_knots_vector.size();
+            T v_max = m_v_knots_vector[v_knots_size - 1];
+            T min_length = 10000;
+            Eigen::Matrix<Eigen::Vector<T, dim>, 3, 3> ders_vec;
+            for (int loop_index = 0; loop_index < 2 * SURFACE_ITERATE_DEEP; ++loop_index)
+            {
+                derivative_on_surface<2>(current_u, current_v, ders_vec);
+                Eigen::Vector<T, dim> dist_vec = ders_vec(0, 0) - point;
+                T distance = dist_vec.norm();
+                if (distance < eps)
+                {
+                    u = current_u;
+                    v = current_v;
+                    return ENUM_NURBS::NURBS_SUCCESS;
+                }
+                if (distance < min_length)
+                {
+                    min_length = distance;
+                    u = current_u;
+                    v = current_v;
+                }
+
+                T cos_angle_1 = ders_vec(1, 0).dot(dist_vec);
+                T cos_angle_2 = ders_vec(0, 1).dot(dist_vec);
+                T tanget_vec_square_len_1 = ders_vec(1, 0).squaredNorm();
+                T tanget_vec_square_len_2 = ders_vec(0, 1).squaredNorm();
+
+                Eigen::Matrix<T, 2, 2> J;
+                J(0, 0) = tanget_vec_square_len_1 + dist_vec.dot(ders_vec(2, 0));
+                J(1, 0) = ders_vec(1, 0).dot(ders_vec(0, 1)) + dist_vec.dot(ders_vec(1, 1));
+                J(0, 1) = J(1, 0);
+                J(1, 1) = tanget_vec_square_len_2 + dist_vec.dot(ders_vec(0, 2));
+
+                Eigen::Vector<T, 2> K;
+                K[0] = -1 * dist_vec.dot(ders_vec(1, 0));
+                K[1] = -1 * dist_vec.dot(ders_vec(0, 1));
+
+                double det = J.determinant();
+                if (std::abs(det) < DEFAULT_ERROR)
+                {
+                    //退化矩阵, break
+                    return ENUM_NURBS::NURBS_ERROR;
+                }
+                Eigen::JacobiSVD<Eigen::MatrixX<T>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(J);
+                Eigen::Vector<T, 2> delta_param = matSvd.solve(K);
+
+                T next_u = current_u + delta_param[0];
+                T next_v = current_v + delta_param[1];
+
+                if (is_u_closed_flag)
+                {
+                    if (next_u < u_min)
+                        next_u = u_max - (u_min - next_u);
+                    else if (next_u > u_max)
+                        next_u = u_min + (next_u - u_max);
+                }
+                else
+                {
+                    if (next_u < u_min)
+                        next_u = u_min;
+                    else if (next_u > u_max)
+                        next_u = u_max;
+                }
+
+                if (is_v_closed_flag)
+                {
+                    if (next_v < v_min)
+                        next_v = v_max - (v_min - next_v);
+                    else if (next_v > v_max)
+                        next_v = v_min + (next_v - v_max);
+                }
+                else
+                {
+                    if (next_v < v_min)
+                        next_v = v_min;
+                    else if (next_v > v_max)
+                        next_v = v_max;
+                }
+                current_u = next_u;
+                current_v = next_v;
+            }
+
+            return ENUM_NURBS::NURBS_ERROR;
+        }
 
         //反求参数空间的切向量,没有测试
         ENUM_NURBS surface_tangent_vector_inversion(const Eigen::Vector<T, dim> &tangent_on_surface, 

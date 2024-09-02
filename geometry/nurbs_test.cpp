@@ -21,49 +21,6 @@ using namespace tnurbs;
 //vs中assert中止调试查看堆栈在代码中添加下面的函数
 //_set_error_mode(_OUT_TO_MSGBOX);
 
-ENUM_NURBS save_obj(const mesh<1>* cur, const char* path)
-{
-    std::ofstream outfile2(path);
-    for (auto point : cur->m_ders)
-    {
-        outfile2 << "v " << point(0, 0)[0] << " " <<
-            point(0, 0)[1] << " " << point(0, 0)[2] << std::endl;
-    }
-    for (auto index : cur->m_indexs)
-    {
-        int count = index.size();
-        outfile2 << "l ";
-        for (int i = 0; i < count; ++i)
-        {
-            outfile2 << index[i] + 1 << " ";
-        }
-        outfile2 << std::endl;
-    }
-    outfile2.close();
-    return ENUM_NURBS::NURBS_SUCCESS;
-}
-
-ENUM_NURBS save_obj2(const nurbs_surface<double, 3, -1, -1, -1, -1, false>& surf, const char* path)
-{
-    surface_mesh_helper<nurbs_surface<double, 3, -1, -1, -1, -1, false>> mh;
-    disc_surface(&surf, mh, TDEFAULT_ERROR<double>::value, 10.0, 0.1, 1.0);
-    mesh<2> surface_mesh;
-    mesh_help_to_mesh(mh, surface_mesh);
-
-    save_obj(&surface_mesh, path);
-    return ENUM_NURBS::NURBS_SUCCESS;
-}
-
-ENUM_NURBS save_obj2(const nurbs_curve<double, 3, false, -1, -1>& curv, const char* path)
-{
-    curve_mesh_helper<nurbs_curve<double, 3, false, -1, -1>> mh;
-    disc_curve(&curv, mh, TDEFAULT_ERROR<double>::value, 10.0, 0.1, 1.0);
-    mesh<1> curve_mesh;
-    mesh_help_to_mesh(mh, curve_mesh);
-
-    save_obj(&curve_mesh, path);
-    return ENUM_NURBS::NURBS_SUCCESS;
-}
 
 
 
@@ -1632,10 +1589,363 @@ TEST(BEZIER_INT, test5)
     }
 }
 
+TEST(BEZIER_INT, test6)
+{
+    Eigen::VectorX<double> u_knots_vector2(8);
+    u_knots_vector2 << 0, 0, 0, 0, 1, 1, 1, 1;
+    Eigen::VectorX<double> v_knots_vector2(8);
+    v_knots_vector2 << 0, 0, 0, 0, 1, 1, 1, 1;
+
+    Eigen::VectorX<double> u_knots_vector(6);
+    u_knots_vector << 0, 0, 0, 1, 1, 1;
+    Eigen::VectorX<double> v_knots_vector(6);
+    v_knots_vector << 0, 0, 0, 1, 1, 1;
+
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points1(3, 3);
+    points1 << 0, 10, 20,
+        0, 0, 0,
+        1.57, 1.57, 1.57;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points2(3, 3);
+    points2 << 0, 10, 20,
+        10, 10, 10,
+        1.57, 1.57, 1.57;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points3(3, 3);
+    points3 << 0, 10, 20,
+        20, 20, 20,
+        1.57, 1.57, 1.57;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points4(3, 3);
+    points4 << 0, 10, 20,
+        30, 30, 30,
+        1.57, 1.57, 1.57;
+    Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> control_points(4);
+    control_points(0) = points1;
+    control_points(1) = points2;
+    control_points(2) = points3;
+    control_points(3) = points4;
+    nurbs_surface<double, 3, -1, -1, -1, -1, false>* test_surface = new nurbs_surface<double, 3, -1, -1, -1, -1, false>(u_knots_vector, v_knots_vector2, control_points);
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points11(3, 4);
+    points11 << 0, 4, 8, 12,
+        0, 10, 10, 0,
+        -20, -20, -20, -20;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points12(3, 4);
+    points12 << 0, 0, 0, 12,
+        -50, 12, 12, -50,
+        20, 5, 5, 20;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points13(3, 4);
+    points13 << 0, 12, 12, 12,
+        70, 8, 8, 70,
+        20, 5, 5, 20;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points14(3, 4);
+    points14 << 0, 4, 8, 12,
+        20, 10, 10, 20,
+        -20, -20, -20, -20;
+
+    Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> control_points2(4);
+    control_points2(0) = points11;
+    control_points2(1) = points12;
+    control_points2(2) = points13;
+    control_points2(3) = points14;
+    nurbs_surface<double, 3, -1, -1, -1, -1, false>* test_surface2 = new nurbs_surface<double, 3, -1, -1, -1, -1, false>(u_knots_vector2, v_knots_vector2, control_points2);
+    save_obj2(*test_surface, "test_surface.obj");
+    //save_obj2(*test_surface2, "test_surface2.obj");
+    int i = 0;
+    _set_error_mode(_OUT_TO_MSGBOX);
+    trace_nurbs_surface<nurbs_surface<double, 3, -1, -1, -1, -1, false>> ts(test_surface2, test_surface);
+    ts.init(1.0, 0.2);
+    ts.surafces_intersection2();
+    surf_surf_int<nurbs_surface<double, 3, -1, -1, -1, -1, false>> intersection = ts.m_result;
+    int curve_count = intersection.m_intersect_points.size();
+    for (int index = 0; index < curve_count; ++index)
+    {
+        std::vector<surf_surf_intersect_point<double, 3>> curves_points = intersection.m_intersect_points[index];
+        std::vector<Eigen::Vector3d> int_points;
+        std::vector<Box<double, 2>> uv_box;
+        std::vector<Box<double, 2>> st_box;
+        for (auto it = curves_points.begin(); it != curves_points.end(); ++it)
+        {
+            int_points.push_back(it->m_point);
+            uv_box.emplace_back(it->m_priori_enclosure.Min.template block<2, 1>(0, 0), it->m_priori_enclosure.Max.template block<2, 1>(0, 0));
+            st_box.emplace_back(it->m_priori_enclosure.Min.template block<2, 1>(2, 0), it->m_priori_enclosure.Max.template block<2, 1>(2, 0));
+        }
+
+        std::string path = "intersect" + std::to_string(index) + ".obj";
+        std::string uvpath = "intersect_uv_box" + std::to_string(index) + ".obj";
+        std::string stpath = "intersect_st_box" + std::to_string(index) + ".obj";
+        save_obj(int_points, path.data());
+        save_box(uv_box, uvpath.data());
+        save_box(st_box, stpath.data());
+    }
+}
+
+
+TEST(BEZIER_INT, test7)
+{
+    Eigen::VectorX<double> u_knots_vector2(8);
+    u_knots_vector2 << 0, 0, 0, 0, 1, 1, 1, 1;
+    Eigen::VectorX<double> v_knots_vector2(8);
+    v_knots_vector2 << 0, 0, 0, 0, 1, 1, 1, 1;
+
+    Eigen::VectorX<double> u_knots_vector(6);
+    u_knots_vector << 0, 0, 0, 1, 1, 1;
+    Eigen::VectorX<double> v_knots_vector(6);
+    v_knots_vector << 0, 0, 0, 1, 1, 1;
+
+    //Eigen::Matrix<double, 3, Eigen::Dynamic> points1(3, 3);
+    //points1 << 0, 10, 20,
+    //    0, 0, 0,
+    //    1.5625, 1.5625, 1.5625;
+
+    //Eigen::Matrix<double, 3, Eigen::Dynamic> points2(3, 3);
+    //points2 << 0, 10, 20,
+    //    10, 10, 10,
+    //    1.5625, 1.5625, 1.5625;
+
+    //Eigen::Matrix<double, 3, Eigen::Dynamic> points3(3, 3);
+    //points3 << 0, 10, 20,
+    //    20, 20, 20,
+    //    1.5625, 1.5625, 1.5625;
+
+    //Eigen::Matrix<double, 3, Eigen::Dynamic> points4(3, 3);
+    //points4 << 0, 10, 20,
+    //    30, 30, 30,
+    //    1.5625, 1.5625, 1.5625;
+
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points1(3, 3);
+    points1 << 0, 10, 20,
+        0, -5, -10,
+        1.5625, 1.5625, 1.5625;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points2(3, 3);
+    points2 << 0, 10, 20,
+        10, -5, 0,
+        1.5625, 1.5625, 1.5625;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points3(3, 3);
+    points3 << 0, 10, 20,
+        20, 15, 10,
+        1.5625, 1.5625, 1.5625;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points4(3, 3);
+    points4 << 0, 10, 20,
+        30, 25, 20,
+        1.5625, 1.5625, 1.5625;
+    Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> control_points(4);
+    control_points(0) = points1;
+    control_points(1) = points2;
+    control_points(2) = points3;
+    control_points(3) = points4;
+    nurbs_surface<double, 3, -1, -1, -1, -1, false>* test_surface = new nurbs_surface<double, 3, -1, -1, -1, -1, false>(u_knots_vector, v_knots_vector2, control_points);
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points11(3, 4);
+    points11 << 0, 4, 8, 12,
+        5, 10, 10, 5,
+        -20, -20, -20, -20;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points12(3, 4);
+    points12 << 0, 0, 0, 12,
+        8, 12, 12, 8,
+        20, 5, 5, 20;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points13(3, 4);
+    points13 << 0, 12, 12, 12,
+        12, 8, 8, 12,
+        20, 5, 5, 20;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points14(3, 4);
+    points14 << 0, 4, 8, 12,
+        15, 10, 10, 15,
+        -20, -20, -20, -20;
+
+    Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> control_points2(4);
+    control_points2(0) = points11;
+    control_points2(1) = points12;
+    control_points2(2) = points13;
+    control_points2(3) = points14;
+    nurbs_surface<double, 3, -1, -1, -1, -1, false>* test_surface2 = new nurbs_surface<double, 3, -1, -1, -1, -1, false>(u_knots_vector2, v_knots_vector2, control_points2);
+    //save_obj2(*test_surface, "test_surface.obj");
+    //save_obj2(*test_surface2, "test_surface2.obj");
+    int i = 0;
+    _set_error_mode(_OUT_TO_MSGBOX);
+    trace_nurbs_surface<nurbs_surface<double, 3, -1, -1, -1, -1, false>> ts(test_surface, test_surface2);
+    ts.init(1.0, 0.2);
+    ts.surafces_intersection2();
+    surf_surf_int<nurbs_surface<double, 3, -1, -1, -1, -1, false>> intersection = ts.m_result;
+    int curve_count = intersection.m_intersect_points.size();
+    for (int index = 0; index < curve_count; ++index)
+    {
+        std::vector<surf_surf_intersect_point<double, 3>> curves_points = intersection.m_intersect_points[index];
+        std::vector<Eigen::Vector3d> int_points;
+        std::vector<Box<double, 2>> uv_box;
+        std::vector<Box<double, 2>> st_box;
+        std::vector<Eigen::Vector3d> uvs;
+        std::vector<Eigen::Vector3d> sts;
+        for (auto it = curves_points.begin(); it != curves_points.end(); ++it)
+        {
+            int_points.push_back(it->m_point);
+            uv_box.emplace_back(it->m_priori_enclosure.Min.template block<2, 1>(0, 0), it->m_priori_enclosure.Max.template block<2, 1>(0, 0));
+            st_box.emplace_back(it->m_priori_enclosure.Min.template block<2, 1>(2, 0), it->m_priori_enclosure.Max.template block<2, 1>(2, 0));
+            Eigen::Vector3d vec;
+            vec[0] = it->m_uv[0];
+            vec[1] = it->m_uv[1];
+            vec[2] = 0.0;
+            uvs.push_back(vec);
+            
+        }
+
+        std::string path = "intersect" + std::to_string(index) + ".obj";
+        std::string uvpath = "intersect_uv_box" + std::to_string(index) + ".obj";
+        std::string stpath = "intersect_st_box" + std::to_string(index) + ".obj";
+        std::string uv2spath = "intersect_uvs" + std::to_string(index) + ".obj";
+        save_obj(int_points, path.data());
+        save_box(uv_box, uvpath.data());
+        save_box(st_box, stpath.data());
+        save_obj(uvs, uv2spath.data());
+    }
+}
+
+
+
+TEST(BEZIER_INT, test8)
+{
+    Eigen::VectorX<double> u_knots_vector2(8);
+    u_knots_vector2 << 0, 0, 0, 0, 1, 1, 1, 1;
+    Eigen::VectorX<double> v_knots_vector2(8);
+    v_knots_vector2 << 0, 0, 0, 0, 1, 1, 1, 1;
+
+    Eigen::VectorX<double> u_knots_vector(6);
+    u_knots_vector << 0, 0, 0, 1, 1, 1;
+    Eigen::VectorX<double> v_knots_vector(6);
+    v_knots_vector << 0, 0, 0, 1, 1, 1;
+
+    //Eigen::Matrix<double, 3, Eigen::Dynamic> points1(3, 3);
+    //points1 << 0, 10, 20,
+    //    0, 0, 0,
+    //    1.5625, 1.5625, 1.5625;
+
+    //Eigen::Matrix<double, 3, Eigen::Dynamic> points2(3, 3);
+    //points2 << 0, 10, 20,
+    //    10, 10, 10,
+    //    1.5625, 1.5625, 1.5625;
+
+    //Eigen::Matrix<double, 3, Eigen::Dynamic> points3(3, 3);
+    //points3 << 0, 10, 20,
+    //    20, 20, 20,
+    //    1.5625, 1.5625, 1.5625;
+
+    //Eigen::Matrix<double, 3, Eigen::Dynamic> points4(3, 3);
+    //points4 << 0, 10, 20,
+    //    30, 30, 30,
+    //    1.5625, 1.5625, 1.5625;
+
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points1(3, 3);
+    points1 << 0, 10, 20,
+        0, 0, 0,
+        9, 9, 9;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points2(3, 3);
+    points2 << 0, 10, 20,
+        10, 10, 10,
+        9, 9, 9;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points3(3, 3);
+    points3 << 0, 10, 20,
+        20, 20, 20,
+        9, 9, 9;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points4(3, 3);
+    points4 << 0, 10, 20,
+        30, 30, 30,
+        9, 9, 9;
+    Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> control_points(4);
+    control_points(0) = points1;
+    control_points(1) = points2;
+    control_points(2) = points3;
+    control_points(3) = points4;
+    nurbs_surface<double, 3, -1, -1, -1, -1, false>* test_surface = new nurbs_surface<double, 3, -1, -1, -1, -1, false>(u_knots_vector, v_knots_vector2, control_points);
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points11(3, 4);
+    points11 << 0, 4, 8, 12,
+        5, 10, 10, 5,
+        -20, -20, -20, -20;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points12(3, 4);
+    points12 << 0, 4, 8, 12,
+        5, 10, 10, 5,
+        20, 10, 30, 10;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points13(3, 4);
+    points13 << 0, 4, 8, 12,
+        15, 10, 10, 15,
+        20, 10, 30, 10;
+
+    Eigen::Matrix<double, 3, Eigen::Dynamic> points14(3, 4);
+    points14 << 0, 4, 8, 12,
+        15, 10, 10, 15,
+        -20, -20, -20, -20;
+
+    Eigen::VectorX<Eigen::Matrix<double, 3, Eigen::Dynamic>> control_points2(4);
+    control_points2(0) = points11;
+    control_points2(1) = points12;
+    control_points2(2) = points13;
+    control_points2(3) = points14;
+    nurbs_surface<double, 3, -1, -1, -1, -1, false>* test_surface2 = new nurbs_surface<double, 3, -1, -1, -1, -1, false>(u_knots_vector2, v_knots_vector2, control_points2);
+    save_obj2(*test_surface, "test_surface.obj");
+    //save_obj2(*test_surface2, "test_surface2.obj");
+    int i = 0;
+    _set_error_mode(_OUT_TO_MSGBOX);
+    trace_nurbs_surface<nurbs_surface<double, 3, -1, -1, -1, -1, false>> ts(test_surface, test_surface2);
+    ts.init(1.0, 0.2);
+    ts.surafces_intersection2();
+    surf_surf_int<nurbs_surface<double, 3, -1, -1, -1, -1, false>> intersection = ts.m_result;
+    int curve_count = intersection.m_int_chats.size();
+    for (int index = 0; index < curve_count; ++index)
+    {
+        surfs_int_points_chat<double, 3> curves_points = intersection.m_int_chats[index];
+        std::vector<Eigen::Vector3d> int_points;
+        std::vector<Box<double, 2>> uv_box;
+        std::vector<Box<double, 2>> st_box;
+        std::vector<Eigen::Vector3d> uvs;
+        std::vector<Eigen::Vector3d> sts;
+        for (auto it = curves_points.m_inter_points.begin(); it != curves_points.m_inter_points.end(); ++it)
+        {
+            int_points.push_back(it->m_point);
+            uv_box.emplace_back(it->m_priori_enclosure.Min.template block<2, 1>(0, 0), it->m_priori_enclosure.Max.template block<2, 1>(0, 0));
+            st_box.emplace_back(it->m_priori_enclosure.Min.template block<2, 1>(2, 0), it->m_priori_enclosure.Max.template block<2, 1>(2, 0));
+            Eigen::Vector3d vec;
+            vec[0] = it->m_uv[0];
+            vec[1] = it->m_uv[1];
+            vec[2] = 0.0;
+            uvs.push_back(vec);
+
+        }
+
+        std::string path = "intersect" + std::to_string(index) + ".obj";
+        std::string uvpath = "intersect_uv_box" + std::to_string(index) + ".obj";
+        std::string stpath = "intersect_st_box" + std::to_string(index) + ".obj";
+        std::string uv2spath = "intersect_uvs" + std::to_string(index) + ".obj";
+        save_obj(int_points, path.data());
+        save_box(uv_box, uvpath.data());
+        save_box(st_box, stpath.data());
+        save_obj(uvs, uv2spath.data());
+    }
+}
+
+
+
 int main(int argc, char **argv)
 {
     testing::InitGoogleTest(&argc, argv);
     
-    ::testing::FLAGS_gtest_filter = "BEZIER_INT.test5";
+    ::testing::FLAGS_gtest_filter = "BEZIER_INT.test8";
     return RUN_ALL_TESTS();
 }

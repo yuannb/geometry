@@ -380,6 +380,49 @@ namespace tnurbs
         outfile2.close();
         return ENUM_NURBS::NURBS_SUCCESS;
     }
+    ENUM_NURBS save_obj(const mesh<1>* cur, const char* path)
+    {
+        std::ofstream outfile2(path);
+        for (auto point : cur->m_ders)
+        {
+            outfile2 << "v " << point(0, 0)[0] << " " <<
+                point(0, 0)[1] << " " << point(0, 0)[2] << std::endl;
+        }
+        for (auto index : cur->m_indexs)
+        {
+            int count = index.size();
+            outfile2 << "l ";
+            for (int i = 0; i < count; ++i)
+            {
+                outfile2 << index[i] + 1 << " ";
+            }
+            outfile2 << std::endl;
+        }
+        outfile2.close();
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    ENUM_NURBS save_obj2(const nurbs_surface<double, 3, -1, -1, -1, -1, false>& surf, const char* path)
+    {
+        surface_mesh_helper<nurbs_surface<double, 3, -1, -1, -1, -1, false>> mh;
+        disc_surface(&surf, mh, TDEFAULT_ERROR<double>::value, 10.0, 0.1, 1.0);
+        mesh<2> surface_mesh;
+        mesh_help_to_mesh(mh, surface_mesh);
+
+        save_obj(&surface_mesh, path);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    ENUM_NURBS save_obj2(const nurbs_curve<double, 3, false, -1, -1>& curv, const char* path)
+    {
+        curve_mesh_helper<nurbs_curve<double, 3, false, -1, -1>> mh;
+        disc_curve(&curv, mh, TDEFAULT_ERROR<double>::value, 10.0, 0.1, 1.0);
+        mesh<1> curve_mesh;
+        mesh_help_to_mesh(mh, curve_mesh);
+
+        save_obj(&curve_mesh, path);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
 }
 
 
