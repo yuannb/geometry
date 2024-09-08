@@ -106,11 +106,10 @@ namespace tnurbs
     {        
         surface_type* m_left_surf;
         surface_type* m_right_surf;
-        std::vector<std::vector<surf_surf_intersect_point<T, dim>>> m_intersect_points;
         std::vector<surfs_int_points_chat<T, dim>> m_int_chats;
+        std::vector<surf_surf_intersect_point<T, dim>> m_isolate_points;
 
         //每个交点链表的交点的个数
-        std::vector<int> m_intersect_points_count;
         ~surf_surf_int()
         {
             //if (m_left_surf)
@@ -145,19 +144,10 @@ namespace tnurbs
         T m_angle_eps;
         Box<T, 4> m_product_box;
 
-        //std::vector<std::vector<surf_surf_intersect_point<T, dim>>> m_boundary_intpoints;
         std::vector<surfs_int_points_chat<T, dim>> m_boundary_chats;
-        
-        //'0'表示负向追踪，其余反向追踪; std::vector<bool>真sb
-        std::vector<char> m_boundary_point_trace_dir;
-        std::vector<char> m_singular_point_trace_dir;
-        //'1'表示transversal
-        //std::vector<char> m_boundary_transversal;
 
         //奇异点必然为起始点或者终止点
         //奇异点的意思是在此点的切平面上存在至少两个方向v1, v2, 使得两个相交的平面在这两个方向上任意阶偏导数相等(弧长参数下), 奇异点必然相切
-        //确切的说这里存的是奇异点的前一个点
-        //std::vector<std::vector<surf_surf_intersect_point<T, dim>>> m_singular_points;
         std::vector<surfs_int_points_chat<T, dim>> m_singular_chats;
         std::vector<Box<T, 4>> m_singular_boxes;
 
@@ -990,8 +980,9 @@ namespace tnurbs
                     Eigen::Vector<T, dim> intersec_point;
                     
                     m_right_surface->point_on_surface(intersect_param[2], intersect_param[3], intersec_point);
-                    double dis = (intersec_point - test_point).norm();
-                    if (priori_enclosure.is_contain_point(intersect_param) && (intersec_point - test_point).norm() < 1e-8)
+                    //double dis = (intersec_point - test_point).norm();
+                    T tolerance = type == 0 ? 1e-8 : 1e-4;
+                    if (priori_enclosure.is_contain_point(intersect_param) && (intersec_point - test_point).norm() < tolerance)
                     {
                         return true;
                     }
@@ -1450,6 +1441,180 @@ namespace tnurbs
             return ENUM_NURBS::NURBS_ERROR;
         }
 
+        ENUM_NURBS eval_singular_points(const Eigen::Vector<T, 4>& intersect_param, const std::vector<Eigen::Matrix<T, 4, 1>>& param_ders, const std::vector<Eigen::Matrix<T, dim, 1>>& space_ders, 
+                                        std::vector<surfs_int_points_chat<T, dim>>& singular_chats)
+        {
+            Box<T, 4> singular_box;
+            create_box(intersect_param, TDEFAULT_ERROR<T>::value * 0.01, singular_box);
+            m_singular_boxes.push_back(singular_box);
+            surf_surf_intersect_point<T, dim> singluar_point;
+            singluar_point.m_uv = intersect_param;
+            m_left_surface->point_on_surface(intersect_param[0], intersect_param[1], singluar_point.m_point);
+            std::vector<Eigen::Vector4<T>> next_params(4);
+            for (int index = 0; index < 2; ++index)
+            {
+                Eigen::Vector4<T> param_tangent = param_ders[index].col(0).normalized();
+                Eigen::Vector4<T> initial_param1 = intersect_param + param_tangent * TDEFAULT_ERROR<T>::value;
+                Eigen::Vector4<T> intial_param2 = intersect_param - param_tangent * TDEFAULT_ERROR<T>::value;
+                intersect_point_iteration(m_product_box, initial_param1, next_params[2 * index]);
+                intersect_point_iteration(m_product_box, intial_param2, next_params[2 * index + 1]);
+            }
+
+            Eigen::Matrix<Eigen::Vector<T, dim>, 3, 3> left_ders;
+            m_left_surface->template derivative_on_surface<2, 2>(intersect_param[0], intersect_param[1], left_ders);
+            Eigen::Vector<T, dim> left_normal = left_ders(1, 0).cross(left_ders(0, 1));
+            left_normal.normalize();
+            Eigen::Matrix<Eigen::Vector<T, dim>, 3, 3> right_ders;
+            m_right_surface->template derivative_on_surface<2, 2>(intersect_param[2], intersect_param[3], right_ders);
+            Eigen::Vector<T, dim> right_normal = right_ders(1, 0).cross(right_ders(0, 1));
+            right_normal.normalize();
+            bool flag = left_normal.dot(right_normal) > 0;
+
+            std::vector<Eigen::Matrix<T, 4, 1>> current_param_ders;
+            std::vector<Eigen::Matrix<T, dim, 1>> current_space_ders;
+            for (int index = 0; index < 4; ++index)
+            {
+                singular_chats.push_back(surfs_int_points_chat<T, dim>());
+                surfs_int_points_chat<T, dim>& end_chat = singular_chats.back();
+                std::vector<surf_surf_intersect_point<T, dim>>& int_point = end_chat.m_inter_points;
+                int_point.resize(2);
+                int_point[0] = singluar_point;
+
+                Eigen::Vector<T, 4> singular_intersect_param;
+                if (intersect_singular_point_iteration(m_product_box, end_chat.m_inter_points[1].m_uv, singular_intersect_param) == ENUM_NURBS::NURBS_SUCCESS)
+                {
+                    eval_preiamge_and_space_ders<1>(singular_intersect_param, current_param_ders, current_space_ders, 3);
+                    if (current_space_ders.size() == 1)
+                    {
+                        end_chat.m_is_transversal = false;
+                        end_chat.m_inter_points[1].m_uv = singular_intersect_param;
+                        m_left_surface->point_on_surface(singular_intersect_param[0], singular_intersect_param[1], end_chat.m_inter_points[1].m_point);
+                        end_chat.start_point_type = POINT_TYPE::SINGULAR;
+
+                        T tangent_dot = current_param_ders[0].dot(param_ders[index / 2]);
+                        if (index % 2 == 1)
+                        {
+                            tangent_dot *= -1;
+                        }
+                        end_chat.m_is_positive_direction = tangent_dot > 0;
+                        continue;
+                    }
+                }
+
+                end_chat.m_is_transversal = true;
+                end_chat.start_point_type = POINT_TYPE::SINGULAR;
+                int_point[1].m_uv = next_params[index];
+                m_left_surface->point_on_surface(next_params[index][0], next_params[index][1], int_point[1].m_point);
+
+                eval_preiamge_and_space_ders<1>(end_chat.m_inter_points[1].m_uv, current_param_ders, current_space_ders, 0);
+                T tangent_dot = current_param_ders[0].dot(param_ders[index / 2]);
+                if (index % 2 == 1)
+                {
+                    tangent_dot *= -1;
+                }
+                end_chat.m_is_positive_direction = tangent_dot > 0;
+            }
+
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+
+        ENUM_NURBS try_find_singular_points(const Eigen::Vector<T, 4>& initial_param, const Box<T, 4>& priori_enclosure, std::vector<surfs_int_points_chat<T, dim>>& singular_chats)
+        {
+            // try find singular point
+            singular_chats.clear();
+            Eigen::Vector<T, 4> pre_param, intersect_param;
+            if (ENUM_NURBS::NURBS_SUCCESS == intersect_point_iteration(m_product_box, initial_param, pre_param))
+            {
+                if (ENUM_NURBS::NURBS_SUCCESS == intersect_singular_point_iteration(m_product_box, pre_param, intersect_param))
+                {
+                    if (priori_enclosure.is_contain_point(intersect_param) == true)
+                    {
+                        // TODO: 整理
+                        std::vector<Eigen::Matrix<T, 4, 1>> param_ders_temp;
+                        std::vector<Eigen::Matrix<T, dim, 1>> space_ders_temp;
+                        ENUM_NURBS error_code = eval_preiamge_and_space_ders<1>(intersect_param, param_ders_temp, space_ders_temp, 3);
+                        if (space_ders_temp.size() == 2)
+                        {
+                            eval_singular_points(intersect_param, param_ders_temp, space_ders_temp, singular_chats);
+
+                           /* Box<T, 4> singular_box;
+                            create_box(intersect_param, TDEFAULT_ERROR<T>::value * 0.01, singular_box);
+                            m_singular_boxes.push_back(singular_box);
+                            surf_surf_intersect_point<T, dim> singluar_point;
+                            singluar_point.m_uv = intersect_param;
+                            m_left_surface->point_on_surface(intersect_param[0], intersect_param[1], singluar_point.m_point);
+                            std::vector<Eigen::Vector4<T>> next_params(4);
+                            for (int index = 0; index < 2; ++index)
+                            {
+                                Eigen::Vector4<T> param_tangent = param_ders_temp[index].col(0).normalized();
+                                Eigen::Vector4<T> initial_param1 = intersect_param + param_tangent * TDEFAULT_ERROR<T>::value;
+                                Eigen::Vector4<T> intial_param2 = intersect_param - param_tangent * TDEFAULT_ERROR<T>::value;
+                                intersect_point_iteration(m_product_box, initial_param1, next_params[2 * index]);
+                                intersect_point_iteration(m_product_box, intial_param2, next_params[2 * index + 1]);
+                            }
+
+                            Eigen::Matrix<Eigen::Vector<T, dim>, 3, 3> left_ders;
+                            m_left_surface->template derivative_on_surface<2, 2>(intersect_param[0], intersect_param[1], left_ders);
+                            Eigen::Vector<T, dim> left_normal = left_ders(1, 0).cross(left_ders(0, 1));
+                            left_normal.normalize();
+                            Eigen::Matrix<Eigen::Vector<T, dim>, 3, 3> right_ders;
+                            m_right_surface->template derivative_on_surface<2, 2>(intersect_param[2], intersect_param[3], right_ders);
+                            Eigen::Vector<T, dim> right_normal = right_ders(1, 0).cross(right_ders(0, 1));
+                            right_normal.normalize();
+                            bool flag = left_normal.dot(right_normal) > 0;
+
+                            std::vector<Eigen::Matrix<T, 4, 1>> current_param_ders;
+                            std::vector<Eigen::Matrix<T, dim, 1>> current_space_ders;
+                            for (int index = 0; index < 4; ++index)
+                            {
+                                singular_chats.push_back(surfs_int_points_chat<T, dim>());
+                                surfs_int_points_chat<T, dim>& end_chat = singular_chats.back();
+                                std::vector<surf_surf_intersect_point<T, dim>>& int_point = end_chat.m_inter_points;
+                                int_point.resize(2);
+                                int_point[0] = singluar_point;
+
+                                Eigen::Vector<T, 4> singular_intersect_param;
+                                if (intersect_singular_point_iteration(m_product_box, end_chat.m_inter_points[1].m_uv, singular_intersect_param) == ENUM_NURBS::NURBS_SUCCESS)
+                                {
+                                    eval_preiamge_and_space_ders<1>(singular_intersect_param, current_param_ders, current_space_ders, 3);
+                                    if (space_ders_temp.size() == 1)
+                                    {
+                                        end_chat.m_is_transversal = false;
+                                        end_chat.m_inter_points[1].m_uv = singular_intersect_param;
+                                        m_left_surface->point_on_surface(singular_intersect_param[0], singular_intersect_param[1], end_chat.m_inter_points[1].m_point);
+                                        end_chat.start_point_type = POINT_TYPE::SINGULAR;
+     
+                                        T tangent_dot = current_param_ders[0].dot(param_ders_temp[index / 2]);
+                                        if (index % 2 == 1)
+                                        {
+                                            tangent_dot *= -1;
+                                        }
+                                        end_chat.m_is_positive_direction = tangent_dot > 0;
+                                        continue;
+                                    }
+                                }
+
+                                end_chat.m_is_transversal = true;
+                                end_chat.start_point_type = POINT_TYPE::SINGULAR;
+                                int_point[1].m_uv = next_params[index];
+                                m_left_surface->point_on_surface(next_params[index][0], next_params[index][1], int_point[1].m_point);
+
+                                eval_preiamge_and_space_ders<1>(end_chat.m_inter_points[1].m_uv, current_param_ders, current_space_ders, 0);
+                                T tangent_dot = current_param_ders[0].dot(param_ders_temp[index / 2]);
+                                if (index % 2 == 1)
+                                {
+                                    tangent_dot *= -1;
+                                }
+                                end_chat.m_is_positive_direction = tangent_dot > 0;
+                            }
+                            return ENUM_NURBS::NURBS_SUCCESS;*/
+                        }
+                    }
+                }
+            }
+            return ENUM_NURBS::NURBS_SUCCESS;
+        };
+
         ENUM_NURBS trace_point(surfs_int_points_chat<T, dim>& current_intpoints, bool& is_stop, bool& is_arrived_singular, T box_len = TDEFAULT_ERROR<T>::value * 0.01)
         {
             //bool direction;
@@ -1495,7 +1660,7 @@ namespace tnurbs
                     return ENUM_NURBS::NURBS_ERROR;
 
                 }
-                if (angle_diff < 0.1 || may_arrived_singular == true)
+                if (angle_diff < 0.1 && may_arrived_singular == true && current_intpoints.m_inter_points.size() > 2)
                 {
                     bool flag = true;
                     for (const Box<T, 4> &singular_box : m_singular_boxes)
@@ -1521,113 +1686,50 @@ namespace tnurbs
                         continue;
                     }
 
-                    // try find singular point
-                    Eigen::Vector<T, 4> pre_param;
-                    if (ENUM_NURBS::NURBS_SUCCESS == intersect_point_iteration(m_product_box, next_init_param, pre_param))
+                    std::vector<surfs_int_points_chat<T, dim>> singular_chats;
+                    try_find_singular_points(next_init_param, priori_enclosure, singular_chats);
+                    if (singular_chats.size() > 0)
                     {
-                        if (ENUM_NURBS::NURBS_SUCCESS == intersect_singular_point_iteration(m_product_box, pre_param, intersect_param))
+                        is_arrived_singular = true;
+                        if (current_intpoints.start_point_type == POINT_TYPE::SINGULAR)
                         {
-                            if (priori_enclosure.is_contain_point(intersect_param) == true)
-                            {
-                                // TODO: 整理
-                                std::vector<Eigen::Matrix<T, 4, 1>> param_ders_temp;
-                                std::vector<Eigen::Matrix<T, dim, 1>> space_ders_temp;
-                                eval_preiamge_and_space_ders<1>(intersect_param, param_ders_temp, space_ders_temp, 3);
-                                if (space_ders_temp.size() == 2)
-                                {
-                                    double dot_product = space_ders_temp[0].col(0).dot(space_ders_temp[1].col(0));
-                                    double angele = std::acos(dot_product);
-                                    Box<T, 4> singular_box;
-                                    create_box(intersect_param, TDEFAULT_ERROR<T>::value * 0.01, singular_box);
-                                    m_singular_boxes.push_back(singular_box);
-                                    surf_surf_intersect_point<T, dim> singluar_point;// = new surf_surf_intersect_point<T, dim>();
-                                    singluar_point.m_uv = intersect_param;
-                                    m_left_surface->point_on_surface(intersect_param[0], intersect_param[1], singluar_point.m_point);
-                                    std::vector<Eigen::Vector4<T>> next_params(4);
-                                    for (int index = 0; index < 2; ++index)
-                                    {
-                                        Eigen::Vector4<T> param_tangent = param_ders_temp[index].col(0).normalized();
-                                        Eigen::Vector4<T> initial_param1 = intersect_param + param_tangent * TDEFAULT_ERROR<T>::value;
-                                        Eigen::Vector4<T> intial_param2 = intersect_param - param_tangent * TDEFAULT_ERROR<T>::value;
-                                        //TOOD:处理错误, 追踪两个点
-                                        intersect_point_iteration(m_product_box, initial_param1, next_params[2 * index]);
-                                        intersect_point_iteration(m_product_box, intial_param2, next_params[2 * index + 1]);
-                                    }
-                                    T min_len = 100000;
-                                    for (const Eigen::Vector4<T>& corner_param : next_params)
-                                    {
-                                        min_len = std::min(min_len, (corner_param - intersect_param).norm());
-                                    }
-                                    for (int i = 0; i < 3; ++i)
-                                    {
-                                        for (int j = i + 1; j < 4; ++j)
-                                        {
-                                            min_len = std::min(min_len, (next_params[i] - next_params[j]).norm());
-                                        }
-                                    }
-                                    assert(min_len > 1e-6);
-
-                                    for (int index = 0; index < 4; ++index)
-                                    {
-                                        //surfs_int_points_chat<T, dim> singular_chat;
-                                        m_singular_chats.push_back(surfs_int_points_chat<T, dim>());
-                                        surfs_int_points_chat<T, dim>& end_chat = m_singular_chats.back();
-                                        // TODO: 不要写死
-                                        end_chat.m_is_transversal = true;
-                                        std::vector<surf_surf_intersect_point<T, dim>>& int_point = end_chat.m_inter_points;
-                                        int_point.resize(2);
-                                        int_point[0] = singluar_point;
-                                        int_point[1].m_uv = next_params[index];
-                                        m_left_surface->point_on_surface(next_params[index][0], next_params[index][1], int_point[1].m_point);
-
-                                        //m_singular_points.push_back(int_point);
-
-                                        //TODO:修改下面这行代码，因为这话代码的direction是写死的
-                                        m_singular_point_trace_dir.push_back(index >= 2 ? '1' : '0');
-                                        end_chat.m_is_positive_direction = index >= 2;
-                                    }
-                                    is_arrived_singular = true;
-                                    return ENUM_NURBS::NURBS_SUCCESS;
-                                }
-                            }
+                            m_singular_chats.push_back(current_intpoints);
                         }
+                        else if (current_intpoints.start_point_type == POINT_TYPE::BOUNDARY)
+                        {
+                            m_boundary_chats.push_back(current_intpoints);
+                        }
+                        else if (current_intpoints.start_point_type == POINT_TYPE::LOOP)
+                        {
+                            m_loop_chats.push_back(current_intpoints);
+                        }
+                        else
+                        {
+                            assert(false);
+                        }
+                        while (singular_chats.empty() == false)
+                        {
+                            bool is_stop = false;
+                            bool is_arrived_singular = false;
+                            surfs_int_points_chat<T, dim>& singular_chat = singular_chats.back();
+                            trace_point(singular_chat, is_stop, is_arrived_singular);
+                            if (is_stop == true)
+                            {
+                                m_result.m_int_chats.push_back(singular_chat);
+                            }
+                            else
+                            {
+                                m_singular_chats.push_back(singular_chat);
+                            }
+                            singular_chats.pop_back();
+                        }
+                        return ENUM_NURBS::NURBS_SUCCESS;
                     }
+                    
                 }
                 bigger_step_size /= 1.5;
                 small_step = bigger_step_size;
             }
-
-            //if (false == transversal)
-            //{
-            //    while (angle_diff > m_angle_eps)
-            //    {
-            //        // TODO: delete
-            //        if (std::abs(small_step) < 1e-4)
-            //        {
-            //            return ENUM_NURBS::NURBS_ERROR;
-
-            //        }
-
-            //        small_step /= 1.2;
-            //        Box<T, 4> param_box = priori_enclosure;
-            //        if (ENUM_NURBS::NURBS_SUCCESS != eval_priori_enclosure_inner(initial_box, param_box, small_step, priori_enclosure, type, transversal))
-            //        {
-            //            return ENUM_NURBS::NURBS_ERROR;
-            //        }
-            //        Box<T, 2> left_param_box(priori_enclosure.Min.template block<2, 1>(0, 0), priori_enclosure.Max.template block<2, 1>(0, 0));
-            //        Box<T, 2> right_param_box(priori_enclosure.Min.template block<2, 1>(2, 0), priori_enclosure.Max.template block<2, 1>(2, 0));
-            //        Box<T, dim> left_normal_box, right_normal_box;
-            //        eval_point_interval(m_left_normal_surface, left_param_box, left_normal_box);
-            //        eval_point_interval(m_right_normal_surface, right_param_box, right_normal_box);
-            //        Eigen::Vector<T, dim> origin;
-            //        origin.setConstant(0.0);
-            //        cone<T, dim> normal_cone = point_box(left_normal_box, origin);
-            //        angle_diff = normal_cone.m_angle;
-            //        normal_cone = point_box(right_normal_box, origin);
-            //        angle_diff = std::max(angle_diff, normal_cone.m_angle);
-            //    }
-            //}
-
 
             do
             {
@@ -1676,19 +1778,19 @@ namespace tnurbs
                         current_intpoint.m_priori_enclosure = priori_enclosure;
                         // TODO: 处理priori_enclosure
                         int points_count = m_boundary_chats[index].m_inter_points.size();
-                        for (int ipoint_index = 0; ipoint_index < points_count - 1; ++ipoint_index)
+                        for (int ipoint_index = 1; ipoint_index < points_count; ++ipoint_index)
                         {
-                            m_boundary_chats[index].m_inter_points[ipoint_index].m_priori_enclosure = m_boundary_chats[index].m_inter_points[ipoint_index + 1].m_priori_enclosure;
+                            m_boundary_chats[index].m_inter_points[ipoint_index].m_priori_enclosure = m_boundary_chats[index].m_inter_points[ipoint_index - 1].m_priori_enclosure;
                         }
 
                         current_intpoints.m_inter_points.insert(current_intpoints.m_inter_points.end(), m_boundary_chats[index].m_inter_points.rbegin(), m_boundary_chats[index].m_inter_points.rend());
 
                         m_boundary_chats.erase(m_boundary_chats.begin() + index);
-                        m_boundary_point_trace_dir.erase(m_boundary_point_trace_dir.begin() + index);
                         return ENUM_NURBS::NURBS_SUCCESS;
                     }
                 }
             }
+
             for (int index = 0; index < m_singular_chats.size(); ++index)
             {
                 surf_surf_intersect_point<T, dim>& singular_point = m_singular_chats[index].m_inter_points.back();
@@ -1703,20 +1805,19 @@ namespace tnurbs
                         current_intpoint.m_priori_enclosure = priori_enclosure;
                         // TODO: 处理priori_enclosure
                         int points_count = m_singular_chats[index].m_inter_points.size();
-                        for (int index = 0; index < points_count - 1; ++index)
+                        for (int point_index = 1; point_index < points_count; ++point_index)
                         {
-                            m_singular_chats[index].m_inter_points[index].m_priori_enclosure = m_singular_chats[index + 1].m_inter_points[index].m_priori_enclosure;
+                            m_singular_chats[index].m_inter_points[point_index].m_priori_enclosure = m_singular_chats[index].m_inter_points[point_index - 1].m_priori_enclosure;
                         }
 
                         current_intpoints.m_inter_points.insert(current_intpoints.m_inter_points.end(), m_singular_chats[index].m_inter_points.rbegin(), m_singular_chats[index].m_inter_points.rend());
                         m_singular_chats.erase(m_singular_chats.begin() + index);
-                        m_singular_point_trace_dir.erase(m_singular_point_trace_dir.begin() + index);
                         return ENUM_NURBS::NURBS_SUCCESS;
                     }
                 }
             }
 
-
+            // TODO: singular curve arrived to loop point
             surf_surf_intersect_point<T, dim> next_intpoint;
             next_intpoint.m_priori_enclosure = priori_enclosure;
             next_intpoint.m_uv = intersect_param;
@@ -1757,8 +1858,182 @@ namespace tnurbs
             return ENUM_NURBS::NURBS_SUCCESS;
         }
 
+        ENUM_NURBS trace_int_chat(std::vector<surfs_int_points_chat<T, dim>>& int_chat)
+        {
+            while (int_chat.empty() == false || m_singular_chats.empty() == false)
+            {
+                bool is_stop = false;
+                if (m_singular_chats.empty() == false)
+                {
+                    surfs_int_points_chat<T, dim> current_intpoints = m_singular_chats.back();
+                    m_singular_chats.pop_back();
+                    if (trace_curve_by_point(current_intpoints, is_stop) != ENUM_NURBS::NURBS_SUCCESS)
+                    {
+                        return ENUM_NURBS::NURBS_ERROR;
+                    }
+                    if (is_stop == false)
+                    {
+                        m_singular_chats.push_back(current_intpoints);
+                    }
+                    else
+                    {
+                        m_result.m_int_chats.push_back(current_intpoints);
+                    }
+                }
+                else
+                {
+                    surfs_int_points_chat<T, dim> current_intpoints = int_chat.back();
+                    int_chat.pop_back();
+                    if (trace_curve_by_point(current_intpoints, is_stop) != ENUM_NURBS::NURBS_SUCCESS)
+                    {
+                        return ENUM_NURBS::NURBS_ERROR;
+                    }
+                    if (is_stop == false)
+                    {
+                        //int_chat.push_back(current_intpoints);
+                    }
+                    else
+                    {
+                        m_result.m_int_chats.push_back(current_intpoints);
+                    }
+                }
+            }
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
 
-        //暂时不处理相交为环的情况(目前只支持bezier情况)
+        ENUM_NURBS get_initial_box(std::vector<std::pair<Box<T, 2>, Box<T, 2>>>& sub_int_boxes, std::vector<char>& is_tangent)
+        {
+            sub_int_boxes.clear();
+            is_tangent.clear();
+            std::vector<std::pair<Box<T, 2>, Box<T, 2>>> int_boxes;
+            
+            Box<T, dim> left_box, right_box;
+            m_left_surface->get_box(left_box);
+            m_right_surface->get_box(right_box);
+            Box<T, dim> intersect_box;
+            if (left_box.intersect(right_box, intersect_box))
+            {
+                Box<T, 2> uv_box, st_box;
+                m_left_surface->get_uv_box(uv_box);
+                m_right_surface->get_uv_box(st_box);
+                int_boxes.push_back(std::make_pair(uv_box, st_box));
+            }
+            
+            std::array<surface_type, 4> left_sub_surfaces, right_sub_surfaces;
+            std::array<Box<T, dim>, 4> left_sub_boxes, right_sub_boxes;
+            
+            while (int_boxes.empty() == false)
+            {
+                std::pair<Box<T, 2>, Box<T, 2>> domain_box = int_boxes.back();
+                int_boxes.pop_back();
+                std::vector<Box<T, 2>> uv_patchs = domain_box.first.split_at_middle();
+                std::vector<Box<T, 2>> st_patchs = domain_box.second.split_at_middle();
+
+                for (int index = 0; index < 4; ++index)
+                {
+                    m_left_surface->sub_divide(uv_patchs[index], left_sub_surfaces[index]);
+                    left_sub_surfaces[index].get_box(left_sub_boxes[index]);
+
+                    m_right_surface->sub_divide(st_patchs[index], right_sub_surfaces[index]);
+                    right_sub_surfaces[index].get_box(right_sub_boxes[index]);
+
+                }
+
+                for (int i = 0; i < 4; ++i)
+                {
+                    for (int j = 0; j < 4; ++j)
+                    {
+                        if (left_sub_boxes[i].intersect(right_sub_boxes[j], intersect_box) == true)
+                        {
+                            Box<T, 4> sub_int_domian;
+                            sub_int_domian.Min.template block<2, 1>(0, 0) = uv_patchs[i].Min;
+                            sub_int_domian.Min.template block<2, 1>(2, 0) = st_patchs[j].Min;
+
+                            sub_int_domian.Max.template block<2, 1>(0, 0) = uv_patchs[i].Max;
+                            sub_int_domian.Max.template block<2, 1>(2, 0) = st_patchs[j].Max;
+
+                            std::array<Box<T, 4>, 1> param_ders;
+
+                            std::array<Box<T, 3>, 1> space_ders;
+                            bool may_arrived_singular = false;
+                            Box<T, 4> param_ders_box;
+                            
+
+                            ENUM_NURBS code = eval_preiamge_and_space_ders<1>(sub_int_domian, param_ders, space_ders, may_arrived_singular);
+                            if (code != ENUM_NURBS::NURBS_SUCCESS)
+                            {
+                                // 目前对相切的时候不做处理
+                                // TODO: 当面片平整到一定程度时候. 1. 可以根据一个面是否完全在另一个面一边(使用距离和迭代的方式)，来确定这个面片内没有transversal类型的交线
+                                // 2. 确定面片内是否有奇异点(貌似比较困难在奇异点连接的是相切的交线时)，如果有奇异点，去重加入m_singular_chats; 如果没有奇异点, 使用
+                                // eval_preiamge_and_space_ders_tangent 来确定内部是否有相切的"Turning Point"
+                                if ((uv_patchs[i].Min - uv_patchs[i].Max).norm() < 1.0 / 256.0)
+                                {
+                                    bool add_int_box = true;
+                                    Box<T, 2> intersect_box1, intersect_box2;
+                                    for (Box<T, 4> &singular_box : m_singular_boxes)
+                                    {
+                                        Box<T, 2> uv_singular_box(singular_box.Min.template block<2, 1>(0, 0), singular_box.Max.template block<2, 1>(0, 0));
+                                        Box<T, 2> st_singular_box(singular_box.Min.template block<2, 1>(2, 0), singular_box.Max.template block<2, 1>(2, 0));
+                                        if (uv_patchs[i].intersect(uv_singular_box, intersect_box1) || st_patchs[j].intersect(st_singular_box, intersect_box2))
+                                        {
+                                            add_int_box = false;
+                                            break;
+                                        }
+                                    }
+                                    if (add_int_box == true)
+                                    {
+                                        sub_int_boxes.push_back(std::make_pair(uv_patchs[i], st_patchs[j]));
+                                        is_tangent.push_back('1');
+                                    }
+                                        
+                                }
+                                else
+                                {
+                                    int_boxes.push_back(std::make_pair(uv_patchs[i], st_patchs[j]));
+                                }
+                                continue;
+                            }
+
+                            Box<T, 2> uv_tangent_box(param_ders[0].Min.template block<2, 1>(0, 0), param_ders[0].Max.template block<2, 1>(0, 0));
+                            cone<T, 2> uv_tangent_cone = point_box(uv_tangent_box, Eigen::Vector2<T>(0, 0));
+                            
+                            if (uv_tangent_cone.is_cotain_vector(Eigen::Vector2<double>(-1, 0)))
+                            {
+                                if ((uv_patchs[i].Min - uv_patchs[i].Max).norm() < 0.001)
+                                {
+                                    bool add_int_box = true;
+
+                                    Box<T, 2> intersect_box1, intersect_box2;
+                                    for (Box<T, 4> &singular_box : m_singular_boxes)
+                                    {
+                                        Box<T, 2> uv_singular_box(singular_box.Min.template block<2, 1>(0, 0), singular_box.Max.template block<2, 1>(0, 0));
+                                        Box<T, 2> st_singular_box(singular_box.Min.template block<2, 1>(2, 0), singular_box.Max.template block<2, 1>(2, 0));
+                                        if (uv_patchs[i].intersect(uv_singular_box, intersect_box1) || st_patchs[j].intersect(st_singular_box, intersect_box2))
+                                        {
+                                            add_int_box = false;
+                                            break;
+                                        }
+                                    }
+
+                                    if (add_int_box)
+                                    {
+                                        sub_int_boxes.push_back(std::make_pair(uv_patchs[i], st_patchs[j]));
+                                        is_tangent.push_back('0');
+                                    }
+                                }
+                                else
+                                {
+                                    int_boxes.push_back(std::make_pair(uv_patchs[i], st_patchs[j]));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return ENUM_NURBS::NURBS_SUCCESS;
+        };
+
+        //目前只支持bezier情况
         ENUM_NURBS surafces_intersection2()
         {
             //先取等参线和曲面求交(非闭合)
@@ -1807,7 +2082,7 @@ namespace tnurbs
                 m_left_surface->template derivative_on_surface<1>(param[0], param[1], left_ders);
                 Eigen::Matrix<Eigen::Vector<T, dim>, 2, 2> right_ders;
                 m_right_surface->template derivative_on_surface<1>(param[2], param[3], right_ders);
-                std::vector<surf_surf_intersect_point<T, dim>> current_intpoint(1);// = new surf_surf_intersect_point<T, dim>();
+                std::vector<surf_surf_intersect_point<T, dim>> current_intpoint(1);
                 current_intpoint[0].m_uv = param;
                 current_intpoint[0].m_point = left_ders(0, 0);
 
@@ -1837,7 +2112,6 @@ namespace tnurbs
                     assert(is_arrived_singular == false);
                     
                     m_boundary_chats.push_back(boundary_points);
-                    m_boundary_point_trace_dir.push_back('1');
                 }
                 boundary_points.m_is_positive_direction = false;
                 boundary_points.m_inter_points = current_intpoint;
@@ -1848,7 +2122,6 @@ namespace tnurbs
                     assert(is_arrived_singular == false);
                     
                     m_boundary_chats.push_back(boundary_points);
-                    m_boundary_point_trace_dir.push_back('0');
                 }
                 //else
                 //{
@@ -1858,226 +2131,101 @@ namespace tnurbs
             }
             
             
-            while (m_boundary_chats.empty() == false || m_singular_chats.empty() == false)
+            ENUM_NURBS error_code = trace_int_chat(m_boundary_chats);
+            if (error_code != ENUM_NURBS::NURBS_SUCCESS)
             {
-                bool is_stop = false;
-                if (m_singular_chats.empty() == false)
-                {
-                    char direction = m_singular_point_trace_dir.back();
-                    surfs_int_points_chat<T, dim> current_intpoints = m_singular_chats.back();
-                    m_singular_chats.pop_back();
-                    m_singular_point_trace_dir.pop_back();
-                    //TODO:direction 不写死
-                    if (trace_curve_by_point(current_intpoints, is_stop) != ENUM_NURBS::NURBS_SUCCESS)
-                    {
-                        return ENUM_NURBS::NURBS_ERROR;
-                    }
-                    if (is_stop == false)
-                    {
-                        m_singular_chats.push_back(current_intpoints);
-                        m_singular_point_trace_dir.push_back(direction);
-                    }
-                    else
-                    {
-                        m_result.m_int_chats.push_back(current_intpoints);
-                    }
-                }
-                else
-                {
-                    surfs_int_points_chat<T, dim> current_intpoints = m_boundary_chats.back();
-                    m_boundary_chats.pop_back();
-                    m_boundary_point_trace_dir.pop_back();
-                    if (trace_curve_by_point(current_intpoints, is_stop) != ENUM_NURBS::NURBS_SUCCESS)
-                    {
-                        return ENUM_NURBS::NURBS_ERROR;
-                    }
-                    if (is_stop == false)
-                    {
-                        m_boundary_chats.push_back(current_intpoints);   
-                    }
-                    else
-                    {
-                        m_result.m_int_chats.push_back(current_intpoints);
-                    }
-                } 
-            }            
-            
-            
-            std::vector<std::pair<Box<T, 2>, Box<T, 2>>> int_boxes;
-            std::vector<std::pair<Box<T, 2>, Box<T, 2>>> sub_int_boxes;
-            Box<T, 2> uv_box, st_box;
-            std::vector<Box<T, 4>> exact_int_boxes;
-            std::vector<Box<T, 4>> exact_int_boxes2;
-            m_left_surface->get_uv_box(uv_box);
-            m_right_surface->get_uv_box(st_box);
-            int_boxes.push_back(std::make_pair(uv_box, st_box));
-            int num_count = 0;
-            int num_count2 = 0;
-            while (int_boxes.empty() == false)
-            {
-                num_count++;
-                std::pair<Box<T, 2>, Box<T, 2>> domain_box = int_boxes.back();
-                int_boxes.pop_back();
-                std::vector<Box<T, 2>> uv_patchs = domain_box.first.split_at_middle();
-                std::vector<Box<T, 2>> st_patchs = domain_box.second.split_at_middle();
-                for (int i = 0; i < 4; ++i)
-                {
-                    surface_type sub_surface1;
-                    m_left_surface->sub_divide(uv_patchs[i], sub_surface1);
-                    Box<T, dim> sub_uv_box;
-                    sub_surface1.get_box(sub_uv_box);
-                    for (int j = 0; j < 4; ++j)
-                    {
-                        surface_type sub_surface2;
-                        m_right_surface->sub_divide(st_patchs[j], sub_surface2);
-                        Box<T, dim> sub_st_box;
-                        sub_surface2.get_box(sub_st_box);
-                        Box<T, dim> intersect_box;
-                        if (sub_st_box.intersect(sub_uv_box, intersect_box) == true)
-                        {
-                            Box<T, 4> sub_int_domian;
-                            sub_int_domian.Min.template block<2, 1>(0, 0) = uv_patchs[i].Min;
-                            sub_int_domian.Min.template block<2, 1>(2, 0) = st_patchs[j].Min;
-
-                            sub_int_domian.Max.template block<2, 1>(0, 0) = uv_patchs[i].Max;
-                            sub_int_domian.Max.template block<2, 1>(2, 0) = st_patchs[j].Max;
-
-                            std::array<Box<T, 4>, 1> param_ders;
-
-                            std::array<Box<T, 3>, 1> space_ders;
-                            bool may_arrived_singular = false;
-                            ENUM_NURBS code = eval_preiamge_and_space_ders<1>(sub_int_domian, param_ders, space_ders, may_arrived_singular);
-                            if (code != ENUM_NURBS::NURBS_SUCCESS)
-                            {
-                                // TODO: 目前排除不了相切的情况
-                                if ((uv_patchs[i].Min - uv_patchs[i].Max).norm() < 0.001)
-                                {
-                                    sub_int_boxes.push_back(std::make_pair(uv_patchs[i], st_patchs[j]));
-                                }
-
-                                int_boxes.push_back(std::make_pair(uv_patchs[i], st_patchs[j]));
-                                num_count2 += 1;
-                                continue;
-                            }
-
-                            Box<T, 2> uv_tangent_box(param_ders[0].Min.template block<2, 1>(0, 0), param_ders[0].Max.template block<2, 1>(0, 0));
-                            cone<T, 2> uv_tangent_cone = point_box(uv_tangent_box, Eigen::Vector2<T>(0, 0));
-                            if (uv_tangent_cone.is_cotain_vector(Eigen::Vector2<double>(0, 1)))
-                            {
-                                if ((uv_patchs[i].Min - uv_patchs[i].Max).norm() < 0.001)
-                                {
-                                    bool add_int_box = true;
-
-                                    Box<T, 2> intersect_box1, intersect_box2;
-                                    for (Box<T, 4> &singular_box : m_singular_boxes)
-                                    {
-                                        Box<T, 2> uv_singular_box(singular_box.Min.template block<2, 1>(0, 0), singular_box.Max.template block<2, 1>(0, 0));
-                                        Box<T, 2> st_singular_box(singular_box.Min.template block<2, 1>(2, 0), singular_box.Max.template block<2, 1>(2, 0));
-                                        if (uv_patchs[i].intersect(uv_singular_box, intersect_box1) || st_patchs[j].intersect(st_singular_box, intersect_box2))
-                                        {
-                                            add_int_box = false;
-                                            break;
-                                        }
-                                    }
-
-                                    if (add_int_box)
-                                    {
-                                        sub_int_boxes.push_back(std::make_pair(uv_patchs[i], st_patchs[j]));
-                                    }
-                                    continue;
-                                }
-                                int_boxes.push_back(std::make_pair(uv_patchs[i], st_patchs[j]));
-                            }
-                        }
-                    }
-                }
+                return error_code;
             }
-            //std::cout << num_count << std::endl;
-            //std::vector<Box<T, 2>> save_uv_box, save_st_box;
 
-            //std::vector<Eigen::Vector3d> save_point;
-            //for (auto p : sub_int_boxes)
-            //{
-            //    save_uv_box.push_back(p.first);
-            //    save_st_box.push_back(p.second);
-            //    Eigen::Vector2d param = p.first.get_middle_point();
-            //    Eigen::Vector3d pp;
-            //    m_left_surface->point_on_surface(param[0], param[1], pp);
-            //    save_point.push_back(pp);
-            //}
-            //save_box(save_uv_box, "uv_box.obj");
-            //save_box(save_st_box, "st_box.obj");
-            //save_obj(save_point, "point.obj");
-
-            for (std::pair<Box<T, 2>, Box<T, 2>>& int_box : sub_int_boxes)
+            std::vector<std::pair<Box<T, 2>, Box<T, 2>>> sub_int_boxes;
+            std::vector<char> is_tangent;
+            get_initial_box(sub_int_boxes, is_tangent);
+            size_t intersect_count = sub_int_boxes.size();
+            for (size_t index = 0; index < intersect_count; ++index)
             {
+                std::pair<Box<T, 2>, Box<T, 2>>& int_box = sub_int_boxes[index];
                 Eigen::Vector4<T> initial_param, intersect_param;
                 initial_param.template block<2, 1>(0, 0) = int_box.first.get_middle_point();
                 initial_param.template block<2, 1>(2, 0) = int_box.second.get_middle_point();
+                int type = 0;
                 if (intersect_point_iteration(m_product_box, initial_param, intersect_param) == ENUM_NURBS::NURBS_SUCCESS)
                 {
-                    bool flag = is_point_on_intcurve(intersect_param, true, 0);
-                    if (flag == false)
+                    if (false == int_box.first.is_contain_point(intersect_param.template block<2, 1>(0, 0))
+                        || false == int_box.second.is_contain_point(intersect_param.template block<2, 1>(2, 0)))
                     {
+                        continue;
+                    }
+                    if (is_tangent[index] == '1')
+                    {
+                        Eigen::Vector<T, 4> singular_intersect_param;
+                        if (ENUM_NURBS::NURBS_SUCCESS == intersect_singular_point_iteration(m_product_box, intersect_param, singular_intersect_param))
+                        {
+                            if (int_box.first.is_contain_point(singular_intersect_param.template block<2, 1>(0, 0))
+                                && int_box.second.is_contain_point(singular_intersect_param.template block<2, 1>(2, 0)))
+                            {
+                                std::vector<Eigen::Matrix<T, 4, 1>> param_ders_temp;
+                                std::vector<Eigen::Matrix<T, dim, 1>> space_ders_temp;
+                                ENUM_NURBS error_code = eval_preiamge_and_space_ders<1>(singular_intersect_param, param_ders_temp, space_ders_temp, 3);
+                                if (error_code == ENUM_NURBS::NURBS_ISOLATED_TANGENTIAL_POINT)
+                                {
+                                    surf_surf_intersect_point<T, dim> isolate_point;
+                                    isolate_point.m_uv = singular_intersect_param;
+                                    m_right_surface->point_on_surface(singular_intersect_param[2], singular_intersect_param[3], isolate_point.m_point);
+                                    m_result.m_isolate_points.push_back(isolate_point);
+                                    continue;
+                                }
+                                else if (param_ders_temp.size() == 1)
+                                {
+                                    type = 3;
+                                    intersect_param = singular_intersect_param;
+                                }
+                                else
+                                {
+                                    bool is_exit = false;
+                                    for (const Box<T, 4> &singular_box : m_singular_boxes)
+                                    {
+                                        if (singular_box.is_contain_point(singular_intersect_param) == true)
+                                        {
+                                            is_exit = true;
+                                            break;
+                                        }
+                                    }
+                                    if (is_exit)
+                                    {
+                                        continue;
+                                    }
+                                    std::vector<surfs_int_points_chat<T, dim>> singular_chats;
+                                    eval_singular_points(singular_intersect_param, param_ders_temp, space_ders_temp, singular_chats);
+                                    m_singular_chats.insert(m_singular_chats.end(), singular_chats.begin(), singular_chats.end());
+                                }
+                            }
+                        }
+                    }
+                    if (m_singular_chats.empty() == true)
+                    {
+                        if (is_point_on_intcurve(intersect_param, type == 0, type) == true)
+                        {
+                            continue;
+                        }
                         surf_surf_intersect_point<T, dim> current_intpoint{};
                         current_intpoint.m_uv = intersect_param;
                         m_right_surface->point_on_surface(intersect_param[2], intersect_param[3], current_intpoint.m_point);
                         surfs_int_points_chat<T, dim> loop_points;
                         loop_points.m_inter_points.push_back(current_intpoint);
-                        
 
-                        // TODO:
-                        loop_points.m_is_transversal = true;
+                        loop_points.m_is_transversal = type == 0;
                         loop_points.m_is_positive_direction = true;
                         loop_points.start_point_type = POINT_TYPE::LOOP;
                         m_loop_chats.push_back(loop_points);
-
-                        while (m_loop_chats.empty() == false || m_singular_chats.empty() == false)
-                        {
-                            bool is_stop = false;
-                            if (m_singular_chats.empty() == false)
-                            {
-                                char direction = m_singular_point_trace_dir.back();
-                                surfs_int_points_chat<T, dim> current_intpoints = m_singular_chats.back();
-                                m_singular_chats.pop_back();
-                                m_singular_point_trace_dir.pop_back();
-                                //TODO:direction 不写死
-                                if (trace_curve_by_point(current_intpoints, is_stop) != ENUM_NURBS::NURBS_SUCCESS)
-                                {
-                                    return ENUM_NURBS::NURBS_ERROR;
-                                }
-                                if (is_stop == false)
-                                {
-                                    m_singular_chats.push_back(current_intpoints);
-                                    m_singular_point_trace_dir.push_back(direction);
-                                }
-                                else
-                                {
-                                    m_result.m_int_chats.push_back(current_intpoints);
-                                }
-                            }
-                            else
-                            {
-                                surfs_int_points_chat<T, dim> current_intpoints = m_loop_chats.back();
-                                m_loop_chats.pop_back();
-                                if (trace_curve_by_point(current_intpoints, is_stop) != ENUM_NURBS::NURBS_SUCCESS)
-                                {
-                                    return ENUM_NURBS::NURBS_ERROR;
-                                }
-                                if (is_stop == false)
-                                {
-                                    m_loop_chats.push_back(current_intpoints);
-                                }
-                                else
-                                {
-                                    m_result.m_int_chats.push_back(current_intpoints);
-                                }
-                            }
-                        }
+                    }
+                    
+                    error_code = trace_int_chat(m_loop_chats);
+                    if (error_code != ENUM_NURBS::NURBS_SUCCESS)
+                    {
+                        return error_code;
                     }
                 }
             }            
-            
             return ENUM_NURBS::NURBS_SUCCESS;  
         }
     };

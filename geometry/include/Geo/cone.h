@@ -16,7 +16,7 @@ namespace tnurbs
         ~cone() { };
         ENUM_NURBS merge_vector(const Eigen::Vector<T, dim> &v)
         {
-            if (v.norm() < TDEFAULT_ERROR<T>::value)
+            if (v.norm() < PRECISION<T>::value)
             {
                 return ENUM_NURBS::NURBS_SUCCESS;
             }
@@ -25,15 +25,19 @@ namespace tnurbs
 
             T cos_angle = m_dir.dot(unit_v);
             T angle;
-            if (std::abs(cos_angle) > 1.0 - TDEFAULT_ERROR<T>::value)
-            {
-                if (cos_angle > 1.0 /*- TDEFAULT_ERROR<T>::value*/ && cos_angle < 1.0 + TDEFAULT_ERROR<T>::value)
-                    angle = 0.0;
-                else if (cos_angle < -1.0 /*+ TDEFAULT_ERROR<T>::value*/ && cos_angle > -1.0 - TDEFAULT_ERROR<T>::value)
-                    angle = M_PI;
-                else
-                    return ENUM_NURBS::NURBS_ERROR;
-            }
+            //if (std::abs(cos_angle) > 1.0 - TDEFAULT_ERROR<T>::value)
+            //{
+            //    if (cos_angle > 1.0 /*- TDEFAULT_ERROR<T>::value*/ && cos_angle < 1.0 + TDEFAULT_ERROR<T>::value)
+            //        angle = 0.0;
+            //    else if (cos_angle < -1.0 /*+ TDEFAULT_ERROR<T>::value*/ && cos_angle > -1.0 - TDEFAULT_ERROR<T>::value)
+            //        angle = M_PI;
+            //    else
+            //        return ENUM_NURBS::NURBS_ERROR;
+            //}
+            if (cos_angle > 1.0 /*- TDEFAULT_ERROR<T>::value*/ && cos_angle < 1.0 + TDEFAULT_ERROR<T>::value)
+                angle = 0.0;
+            else if (cos_angle < -1.0 /*+ TDEFAULT_ERROR<T>::value*/ && cos_angle > -1.0 - TDEFAULT_ERROR<T>::value)
+                angle = M_PI;
             else
                 angle = std::acos(cos_angle);
             if (angle < m_angle)
@@ -119,6 +123,18 @@ namespace tnurbs
             return ENUM_NURBS::NURBS_SUCCESS;
         }
         
+        bool is_intersect_cone(const cone& c)
+        {
+            double cos_angle = c.m_dir.dot(m_dir);
+            double angle_sum = m_angle + c.m_angle;
+            double angle_sum_cos = std::cos(angle_sum);
+            if (cos_angle > angle_sum_cos + PRECISION<T>::value)
+            {
+                return true;
+            }
+            return false;
+        }
+
         bool is_cotain_vector(const Eigen::Vector<T, dim>& dir) const
         {
             Eigen::Vector<T, dim> normal_dir = dir.normalized();
