@@ -16,3 +16,4 @@ nurbs surfaces intersect
 ![example4](intersectExampleImage/example4.png)
 ![example5](intersectExampleImage/example5.png)
 ![example6](intersectExampleImage/example6.png)
+<img src="intersectExampleImage/example1.png" width = 150 height = 100>
