@@ -3,56 +3,9 @@
 #include "interval_alogrithm.h"
 #include <memory>
 #include "bezier_curve_int.h"
+#include <ctime>
 namespace tnurbs
 {
-    //check uniqueness and existence
-    //先计算曲面的法向(目前只处理非有理的情况，有理只需要稍加修改即可)
-    template<typename surface_type, typename T = typename surface_type::Type, int dim = surface_type::dimension>
-    ENUM_NURBS eval_normal_and_tangent_interval(const surface_type *u_surface, const surface_type *v_surface, const Box<T, 2> &interval,
-                std::array<Interval<T>, (unsigned)dim> &normal_interval, std::array<Interval<T>, (unsigned)dim> &u_tangent_interval, std::array<Interval<T>, (unsigned)dim> &v_tangent_interval)
-    {
-        surface_type *u_sub_surface = new surface_type();
-        surface_type *v_sub_surface = new surface_type();
-        
-        std::unique_ptr<surface_type> raii = std::unique_ptr<surface_type>(u_sub_surface);
-        std::unique_ptr<surface_type> raii2 = std::unique_ptr<surface_type>(v_sub_surface);
-        
-        Box<T, 2> interval_copy = interval;
-        u_surface->sub_divide(interval_copy, *u_sub_surface);
-        v_surface->sub_divide(interval_copy, *v_sub_surface);
-        
-        Box<T, dim> u_box, v_box;
-        u_sub_surface->get_box(u_box);
-        v_sub_surface->get_box(v_box);
-
-        //将u_box,v_box 转为interval vector
-        for (int index = 0; index < dim; ++index)
-        {
-            u_tangent_interval[index].m_interval[0] = u_box.Min[index];
-            u_tangent_interval[index].m_interval[1] = u_box.Max[index];
-
-            v_tangent_interval[index].m_interval[0] = v_box.Min[index];
-            v_tangent_interval[index].m_interval[1] = v_box.Max[index];
-        }
-        normal_interval = vector_product<T>(u_tangent_interval, v_tangent_interval);
-        return ENUM_NURBS::NURBS_SUCCESS;
-    }
-
-
-    template<typename surface_type, typename T = typename surface_type::Type, int dim = surface_type::dimension>
-    ENUM_NURBS eval_point_interval(const surface_type* surf, const Box<T, 2>& interval, Box<T, dim> &box)
-    {
-        surface_type* sub_surface = new surface_type();
-        std::unique_ptr<surface_type> raii = std::unique_ptr<surface_type>(sub_surface);
-
-        Box<T, 2> interval_copy = interval;
-        surf->sub_divide(interval_copy, *sub_surface);
-
-        sub_surface->get_box(box);
-        return ENUM_NURBS::NURBS_SUCCESS;
-    }
-
-
     //计算第一基本型和第二基本型
     template<typename T, int dim>
     ENUM_NURBS eval_first_and_second_fundenmental(const Eigen::Matrix<Eigen::Vector<T, dim>, 3, 3> ders, const Eigen::Vector<T, dim> &normal, 
@@ -69,7 +22,75 @@ namespace tnurbs
         return ENUM_NURBS::NURBS_SUCCESS;
     }
     
-    
+    template<typename surface_type>
+    struct bounding_box
+    {
+        using T = typename surface_type::Type;
+        static constexpr int dim = surface_type::dimension;
+		static ENUM_NURBS get_ders_bounding_box(int degree, const Eigen::MatrixX<surface_type*>& surf, const Box<T, 2>& interval, Eigen::MatrixX<Box<T, dim>>& box)
+		{
+			assert(degree < surf.cols() && degree < surf.rows());
+			box.resize(degree + 1, degree + 1);
+			if constexpr (surface_type::is_ratio == false)
+			{
+				for (int i = 0; i <= degree; ++i)
+				{
+					for (int j = 0; j <= degree - i; ++j)
+					{
+						surface_type sub_surface;
+						Box<T, 2> interval_copy = interval;
+						surf(i, j)->sub_divide(interval_copy, sub_surface);
+						sub_surface.get_box(box(i, j));
+					}
+				}
+				return ENUM_NURBS::NURBS_SUCCESS;
+			}
+			else
+			{
+				ENUM_NURBS error_code;
+				Eigen::MatrixX<int> bin = binary_coeff(degree + 1);
+				Eigen::MatrixX<Box<T, 1>> w_box;
+				w_box.resize(degree + 1, degree + 1);
+				for (int i = 0; i <= degree; ++i)
+				{
+					for (int j = 0; j <= degree - i; ++j)
+					{
+						surface_type sub_surface;
+						Box<T, 2> interval_copy = interval;
+						surf(i, j)->sub_divide(interval_copy, sub_surface);
+						Box<T, dim + 1> A;
+						sub_surface.get_ratio_box(A);
+						Box<T, dim> Aij;
+						Aij.Min = A.Min.template block<dim, 1>(0, 0);
+						Aij.Max = A.Max.template block<dim, 1>(0, 0);
+						w_box(i, j).Min[0] = A.Min[dim];
+						w_box(i, j).Max[0] = A.Max[dim];
+						for (int k = 1; k <= i; ++k)
+						{
+							Aij = Aij - box(i - k, j) * (w_box(k, 0) * bin(i, k));
+						}
+						for (int k = 1; k <= j; ++k)
+						{
+							Aij = Aij - box(i, j - k) * (w_box(0, k) * bin(j, k));
+						}
+						for (int k = 1; k <= i; ++k)
+						{
+							for (int r = 1; r <= j; ++r)
+							{
+								Aij = Aij - box(k, r) * (w_box(k, r) * (bin(i, k) * bin(j, r)));
+							}
+						}
+						error_code = interval_algorithm::divide(Aij, w_box(0, 0), box(i, j));
+						if (error_code != ENUM_NURBS::NURBS_SUCCESS)
+						{
+							return error_code;
+						}
+					}
+				}
+			}
+			return ENUM_NURBS::NURBS_SUCCESS;
+		}
+    };
 
     enum POINT_TYPE
     {
@@ -83,7 +104,6 @@ namespace tnurbs
     template<typename T, int dim>
     struct surf_surf_intersect_point
     {
-        //surf_surf_intersect_point<T, dim> *m_next;
         Eigen::Vector<T, dim> m_point;
         Eigen::Vector4<T> m_uv;
         Box<T, 4> m_priori_enclosure;
@@ -101,46 +121,33 @@ namespace tnurbs
 
 
     //面面相交的结果
-    template<typename surface_type, typename T = typename surface_type::Type, int dim = surface_type::dimension>
+    template<typename T, int dim>
     struct surf_surf_int
     {        
-        surface_type* m_left_surf;
-        surface_type* m_right_surf;
         std::vector<surfs_int_points_chat<T, dim>> m_int_chats;
         std::vector<surf_surf_intersect_point<T, dim>> m_isolate_points;
 
         //每个交点链表的交点的个数
-        ~surf_surf_int()
-        {
-            //if (m_left_surf)
-            //    delete m_left_surf;
-            //if (m_right_surf)
-            //    delete m_right_surf;
-        }
+        ~surf_surf_int() { }
     };
 
 
     // TODO: 整理和完善代码
-    template<typename surface_type, typename T = typename surface_type::Type, int dim = surface_type::dimension>
-    class trace_nurbs_surface
+    template<typename left_surface_type, typename right_surface_type>
+    class nurbs_surfaces_intersect
     {
+        using T = typename left_surface_type::Type;
+        static constexpr int dim = left_surface_type::dimension;
+
+        static_assert(std::is_same<left_surface_type::Type, right_surface_type::Type>::value, "left surface type is not same with right surface type");
+        static_assert(left_surface_type::dimension == right_surface_type::dimension, "left surface dimension not equal right surface dimensin");
+
     private:
-        surface_type* m_left_surface;
-        surface_type* m_right_surface;
-        
-        //ders of left surface
-        surface_type* m_left_u_tangent_surface;
-        surface_type* m_left_v_tangent_surface;
-        std::vector<surface_type*> m_left_dxx;
-        
-        //ders of right surface
-        surface_type* m_right_u_tangent_surface;
-        surface_type* m_right_v_tangent_surface;
-        std::vector<surface_type*> m_right_dxx;
+        Eigen::Matrix3<left_surface_type*> m_left_ders;
+        Eigen::Matrix3<right_surface_type*> m_right_ders;
 
-        surface_type* m_left_normal_surface;
-        surface_type* m_right_normal_surface;
-
+        left_surface_type* m_left_normal_surface;
+        right_surface_type* m_right_normal_surface;
         T m_angle_eps;
         Box<T, 4> m_product_box;
 
@@ -158,67 +165,129 @@ namespace tnurbs
         //std::vector<T> m_loop_angles;
 
     public:
-        surf_surf_int<surface_type> m_result;
+        surf_surf_int<T, dim> m_result;
+
+        // debug used
+        bool is_point_in_intcurve(const Eigen::Vector4<T>& param, bool is_transversal, size_t &index)
+        {
+            Eigen::Vector2<T> test_param = param.template block<2, 1>(2, 0);
+            index = 0;
+            for (surfs_int_points_chat<T, dim>& int_chat : m_result.m_int_chats)
+            {
+                if (is_transversal != int_chat.m_is_transversal)
+                {
+                    continue;
+                }
+                int int_points_count = int_chat.m_inter_points.size();
+                for (int index = 0; index < int_points_count - 1; ++index)
+                {
+                    const Box<T, 4>& priori_enclosure = int_chat.m_inter_points[index].m_priori_enclosure;
+                    if (priori_enclosure.is_contain_point(param))
+                    {
+                        Eigen::Vector4<T> current_param = int_chat.m_inter_points[index].m_uv;
+                        Eigen::Vector2<T> next_param = int_chat.m_inter_points[index + 1].m_uv.template block<2, 1>(2, 0);
+                        int type = is_transversal == true ? 0 : 3;
+                        if (index == 0 && int_chat.start_point_type == POINT_TYPE::SINGULAR)
+                        {
+							next_param  = int_chat.m_inter_points[index].m_uv.template block<2, 1>(2, 0);
+							current_param = int_chat.m_inter_points[index + 1].m_uv;
+
+							if (is_point_on_arc(current_param, next_param, test_param, priori_enclosure, type, int_chat.m_is_positive_direction == false) == true)
+							{
+								return true;
+							}
+                        }
+                        else
+                        {
+							if (is_point_on_arc(current_param, next_param, test_param, priori_enclosure, type, int_chat.m_is_positive_direction) == true)
+                            {
+								return true;
+							}
+						}
+                    }
+                }
+                index += 1;
+            }
+            return false;
+        }
 
     public:
-        trace_nurbs_surface() = delete;
-        trace_nurbs_surface(surface_type* left_surface, surface_type* right_surface) : m_left_surface(left_surface), m_right_surface(right_surface) { }
-        ~trace_nurbs_surface() 
+        nurbs_surfaces_intersect() = default;
+        ~nurbs_surfaces_intersect() 
         { 
-            //delete m_left_surface;
-            //delete m_right_surface;
-            delete m_left_u_tangent_surface;
-            delete m_left_v_tangent_surface;
-            delete m_right_u_tangent_surface;
-            delete m_right_v_tangent_surface;
-        }
-        ENUM_NURBS init(T space_eps, T angle_eps = TDEFAULTANGLETOL<T>::value)
-        {
-            m_left_u_tangent_surface = new surface_type();
-            m_left_v_tangent_surface = new surface_type();
-            m_right_u_tangent_surface = new surface_type();
-            m_right_v_tangent_surface = new surface_type();
-            m_left_normal_surface = new surface_type();
-            m_right_normal_surface = new surface_type();
-            //m_result = new surf_surf_int<surface_type>();
-            for (int index = 0; index < 3; ++index)
+            for (Eigen::Index col = 0; col < 3; ++col)
             {
-                m_left_dxx.push_back(new surface_type());
-                m_right_dxx.push_back(new surface_type());
+                for (Eigen::Index row = 0; row < 3; ++row)
+                {
+                    left_surface_type *left_surface = m_left_ders(row, col);
+                    if (left_surface != nullptr)
+                    {
+                        delete left_surface;
+                    }
+                    right_surface_type *right_surface = m_right_ders(row, col);
+                    if (right_surface != nullptr)
+                    {
+                        delete right_surface;
+                    }
+                }
             }
+        }
 
-            m_left_surface->tangent_u_surface(*m_left_u_tangent_surface);
-            m_left_surface->tangent_v_surface(*m_left_v_tangent_surface);
-            m_right_surface->tangent_u_surface(*m_right_u_tangent_surface);
-            m_right_surface->tangent_v_surface(*m_right_v_tangent_surface);
-
-            Box<T, dim> left_u_tangent_surface_box, left_v_tangent_surface_box, right_u_tangent_surface_box, right_v_tangent_surface_box;
-            m_left_u_tangent_surface->get_box(left_u_tangent_surface_box);
-            m_left_v_tangent_surface->get_box(left_v_tangent_surface_box);
-            m_right_u_tangent_surface->get_box(right_u_tangent_surface_box);
-            m_right_v_tangent_surface->get_box(right_v_tangent_surface_box);
+        ENUM_NURBS init(left_surface_type* left_surface, right_surface_type* right_surface, T angle_eps = 0.2)
+        {
+            m_left_ders(0, 0) = new left_surface_type(*left_surface);
+            m_left_ders(1, 0) = new left_surface_type();
+            m_left_ders(2, 0) = new left_surface_type();
+            m_left_ders(0, 1) = new left_surface_type();
+            m_left_ders(1, 1) = new left_surface_type();
+            m_left_ders(2, 1) = nullptr;
+            m_left_ders(0, 2) = new left_surface_type();
+            m_left_ders(1, 2) = nullptr;
+            m_left_ders(2, 2) = nullptr;
+            
+            m_right_ders(0, 0) = new right_surface_type(*right_surface);
+            m_right_ders(1, 0) = new right_surface_type();
+            m_right_ders(2, 0) = new right_surface_type();
+            m_right_ders(0, 1) = new right_surface_type();
+            m_right_ders(1, 1) = new right_surface_type();
+            m_right_ders(2, 1) = nullptr;
+            m_right_ders(0, 2) = new right_surface_type();
+            m_right_ders(1, 2) = nullptr;
+            m_right_ders(2, 2) = nullptr;
+            
+            m_left_ders(0, 0)->tangent_u_surface(*m_left_ders(1, 0));
+            m_left_ders(0, 0)->tangent_v_surface(*m_left_ders(0, 1));
 
             //Xuu
-            m_left_u_tangent_surface->tangent_u_surface(*(m_left_dxx[0]));
-            //Xuv = Xvu
-            m_left_u_tangent_surface->tangent_v_surface(*(m_left_dxx[1]));
+            m_left_ders(1, 0)->tangent_u_surface(*(m_left_ders(2, 0)));
+            //必须保证Xuv = Xvu, 对于beizer是必然满足的
+            m_left_ders(1, 0)->tangent_v_surface(*(m_left_ders(1, 1)));
             //Xvv
-            m_left_v_tangent_surface->tangent_v_surface(*(m_left_dxx[2]));
+            m_left_ders(0, 1)->tangent_v_surface(*(m_left_ders(0, 2)));
 
+            m_right_ders(0, 0)->tangent_u_surface(*m_right_ders(1, 0));
+            m_right_ders(0, 0)->tangent_v_surface(*m_right_ders(0, 1));
 
             //Yuu
-            m_right_u_tangent_surface->tangent_u_surface(*(m_right_dxx[0]));
-            //Yuv = Yvu
-            m_right_u_tangent_surface->tangent_v_surface(*(m_right_dxx[1]));
+            m_right_ders(1, 0)->tangent_u_surface(*(m_right_ders(2, 0)));
+            //必须保证Yuv = Yvu, 对于beizer是必然满足的
+            m_right_ders(1, 0)->tangent_v_surface(*(m_right_ders(1, 1)));
             //Yvv
-            m_right_v_tangent_surface->tangent_v_surface(*(m_right_dxx[2]));
+            m_right_ders(0, 1)->tangent_v_surface(*(m_right_ders(0, 2)));
 
-            m_left_surface->eval_normal_surface(*m_left_normal_surface);
-            m_right_surface->eval_normal_surface(*m_right_normal_surface);
+            if constexpr (left_surface_type::is_ratio == false)
+            {
+				m_left_normal_surface = new left_surface_type();
+                m_left_ders(0, 0)->eval_normal_surface(*m_left_normal_surface);
+            }
+            if constexpr (right_surface_type::is_ratio == false)
+            {
+				m_right_normal_surface = new right_surface_type();
+                m_right_ders(0, 0)->eval_normal_surface(*m_right_normal_surface);
+            }
 
             m_angle_eps = angle_eps;
-            m_product_box = m_left_surface->get_interval().product_box(m_right_surface->get_interval());
-
+            m_product_box = left_surface->get_interval().product_box(right_surface->get_interval());
             return ENUM_NURBS::NURBS_SUCCESS;
         }
 
@@ -226,39 +295,33 @@ namespace tnurbs
         ENUM_NURBS eval_tangent(const Eigen::Vector<T, 4> &initial_param, Eigen::Vector<T, dim> &tangent, 
             Eigen::Vector<T, 4>& param_tangent,  int type)
         {
-            Eigen::Vector<T, dim> Xu;
-            m_left_u_tangent_surface->point_on_surface(initial_param[0], initial_param[1], Xu);
-            Eigen::Vector<T, dim> Xv;
-            m_left_v_tangent_surface->point_on_surface(initial_param[0], initial_param[1], Xv);
+			Eigen::Matrix<Eigen::Vector<T, dim>, 2, 2> left_ders;
+			m_left_ders(0, 0)->template derivative_on_surface<1>(initial_param[0], initial_param[1], left_ders);
+			Eigen::Matrix<Eigen::Vector<T, dim>, 2, 2> right_ders;
+			m_right_ders(0, 0)->template derivative_on_surface<1>(initial_param[2], initial_param[3], right_ders);
 
-            Eigen::Vector<T, dim> Yu;
-            m_right_u_tangent_surface->point_on_surface(initial_param[2], initial_param[3], Yu);
-            Eigen::Vector<T, dim> Yv;
-            m_right_v_tangent_surface->point_on_surface(initial_param[2], initial_param[3], Yv);
-            Eigen::Vector<T, dim> Nx = Xu.cross(Xv);
-            T Nx_len = Nx.norm();
-            Nx.normalize();
-            Eigen::Vector<T, dim> Ny = Yu.cross(Yv);
-            T Ny_len = Ny.norm();
-            Ny.normalize();
+			Eigen::Vector<T, dim> left_normal = left_ders(1, 0).cross(left_ders(0, 1));
+            T left_normal_len = left_normal.norm();
+			left_normal.normalize();
+
+			Eigen::Vector<T, dim> right_normal = right_ders(1, 0).cross(right_ders(0, 1));
+            T right_normal_len = right_normal.norm();
+			right_normal.normalize();
             if (type == 0)
             {
-                tangent = Nx.cross(Ny);
+                tangent = left_normal.cross(right_normal);
                 tangent.normalize();
-                //return ENUM_NURBS::NURBS_SUCCESS;
             }
             else
             {
                 Eigen::Matrix<Eigen::Vector<T, dim>, 3, 3> left_ders;
-                m_left_surface->template derivative_on_surface<2>(initial_param[0], initial_param[1], left_ders);
                 Eigen::Matrix<Eigen::Vector<T, dim>, 3, 3> right_ders;
-                m_right_surface->template derivative_on_surface<2>(initial_param[2], initial_param[3], right_ders);
+                {
+                    // 这里和上面有重复计算，之后优化
+					m_left_ders(0, 0)->template derivative_on_surface<2>(initial_param[0], initial_param[1], left_ders);
+					m_right_ders(0, 0)->template derivative_on_surface<2>(initial_param[2], initial_param[3], right_ders);
+                }
 
-                Eigen::Vector<T, dim> left_normal = left_ders(1, 0).cross(left_ders(0, 1));
-                left_normal.normalize();
-
-                Eigen::Vector<T, dim> right_normal = right_ders(1, 0).cross(right_ders(0, 1));
-                right_normal.normalize();
                 T denominator = 1.0 / right_ders(1, 0).cross(right_ders(0, 1)).dot(right_normal);
                 T a11 = left_ders(1, 0).cross(right_ders(0, 1)).dot(right_normal) * denominator;
                 T a12 = left_ders(0, 1).cross(right_ders(0, 1)).dot(right_normal) * denominator;
@@ -303,10 +366,10 @@ namespace tnurbs
                 }
             }
                 
-            param_tangent[0] = tangent.cross(Xv).dot(Nx) / Nx_len;
-            param_tangent[1] = Xu.cross(tangent).dot(Nx) / Nx_len;
-            param_tangent[2] = tangent.cross(Yv).dot(Ny) / Ny_len;
-            param_tangent[3] = Yu.cross(tangent).dot(Ny) / Ny_len;
+            param_tangent[0] = tangent.cross(left_ders(0, 1)).dot(left_normal) / left_normal_len;
+            param_tangent[1] = left_ders(1, 0).cross(tangent).dot(left_normal) / left_normal_len;
+            param_tangent[2] = tangent.cross(right_ders(0, 1)).dot(right_normal) / right_normal_len;
+            param_tangent[3] = right_ders(1, 0).cross(tangent).dot(right_normal) / right_normal_len;
             return ENUM_NURBS::NURBS_SUCCESS; 
         }
             
@@ -319,7 +382,8 @@ namespace tnurbs
         {
             //目前仅仅支持三维
             static_assert(3 == dim, "dim != 3 is not supported");
-            static_assert(order == 1 || order == 2, "order != 1 && order != 2");
+            // static_assert(order == 1 || order == 2, "order != 1 && order != 2");
+            static_assert(order == 1, "order != 1");
             may_arrived_singular = false;
             //计算交线的切向, 两个曲面非相切的时候;
             Box<T, dim> left_normal_box, right_normal_box;
@@ -328,26 +392,47 @@ namespace tnurbs
 
             Box<T, 2> left_param_box(param_box.Min.template block<2, 1>(0, 0), param_box.Max.template block<2, 1>(0, 0));
             Box<T, 2> right_param_box(param_box.Min.template block<2, 1>(2, 0), param_box.Max.template block<2, 1>(2, 0));
-            eval_point_interval(m_left_u_tangent_surface, left_param_box, left_u_tangent_box);
-            eval_point_interval(m_left_v_tangent_surface, left_param_box, left_v_tangent_box);
-            eval_point_interval(m_right_u_tangent_surface, right_param_box, right_u_tangent_box);
-            eval_point_interval(m_right_v_tangent_surface, right_param_box, right_v_tangent_box);
+            if constexpr (left_surface_type::is_ratio == false)
+            {
+                m_left_ders(1, 0)->get_box(left_param_box, left_u_tangent_box);
+                m_left_ders(0, 1)->get_box(left_param_box, left_v_tangent_box);
+				//使用精确的normal_surface和使用两个box叉乘得到的结果竟然基本一样？？？？？？？
+                m_left_normal_surface->get_box(left_param_box, left_normal_box);
+            }
+            else
+            {
+				Eigen::MatrixX<Box<T, dim>> left_boxes;
+                ENUM_NURBS error_code;
+                error_code = bounding_box<left_surface_type>::get_ders_bounding_box(1, m_left_ders, left_param_box, left_boxes);
+                if (error_code != ENUM_NURBS::NURBS_SUCCESS)
+                {
+                    return error_code;
+                }
+                left_u_tangent_box = left_boxes(1, 0);
+                left_v_tangent_box = left_boxes(0, 1);
+                left_normal_box = interval_algorithm::cross(left_u_tangent_box, left_v_tangent_box);
+            }
+            if constexpr (right_surface_type::is_ratio == false)
+            {
+                m_right_ders(1, 0)->get_box(right_param_box, right_u_tangent_box);
+                m_right_ders(0, 1)->get_box(right_param_box, right_v_tangent_box);
+				//使用精确的normal_surface和使用两个box叉乘得到的结果竟然基本一样？？？？？？？
+                m_right_normal_surface->get_box(right_param_box, right_normal_box);
+            }
+            else
+            {
+				Eigen::MatrixX<Box<T, dim>> right_boxes;
+                ENUM_NURBS error_code;
+                error_code = bounding_box<right_surface_type>::get_ders_bounding_box(1, m_right_ders, right_param_box, right_boxes);
+				if (error_code != ENUM_NURBS::NURBS_SUCCESS)
+				{
+					return error_code;
+				}
+                right_u_tangent_box = right_boxes(1, 0);
+                right_v_tangent_box = right_boxes(0, 1);
+                right_normal_box = interval_algorithm::cross(right_u_tangent_box, right_v_tangent_box);
+            }
 
-            //使用精确的normal_surface和使用两个box叉乘得到的结果竟然基本一样？？？？？？？
-            eval_point_interval(m_left_normal_surface, left_param_box, left_normal_box);
-            eval_point_interval(m_right_normal_surface, right_param_box, right_normal_box);
-
-            Eigen::Matrix2<Box<T, dim>> left_dxx;
-            eval_point_interval(m_left_dxx[0], left_param_box, left_dxx(0, 0));
-            eval_point_interval(m_left_dxx[1], left_param_box, left_dxx(1, 0));
-            left_dxx(0, 1) = left_dxx(1, 0);
-            eval_point_interval(m_left_dxx[2], left_param_box, left_dxx(1, 1));
-
-            Eigen::Matrix2<Box<T, dim>> right_dxx;
-            eval_point_interval(m_right_dxx[0], right_param_box, right_dxx(0, 0));
-            eval_point_interval(m_right_dxx[1], right_param_box, right_dxx(1, 0));
-            right_dxx(0, 1) = right_dxx(1, 0);
-            eval_point_interval(m_right_dxx[2], right_param_box, right_dxx(1, 1));
 
             Box<T, dim> c;
             c = interval_algorithm::cross(left_normal_box, right_normal_box);
@@ -382,95 +467,106 @@ namespace tnurbs
             param_ders[0].set_index_interval(1, alpha_d[1]);
             param_ders[0].set_index_interval(2, beta_d[0]);
             param_ders[0].set_index_interval(3, beta_d[1]);
-            if constexpr (order == 2)
-            {
-                Box<T, dim> left_L;
-                left_L.Min.setConstant(0.0);
-                left_L.Max.setConstant(0.0);
+            // if constexpr (order == 2)
+            // {
+			// 	Eigen::Matrix2<Box<T, dim>> left_dxx;
+			// 	eval_point_interval(m_left_dxx[0], left_param_box, left_dxx(0, 0));
+			// 	eval_point_interval(m_left_dxx[1], left_param_box, left_dxx(1, 0));
+			// 	left_dxx(0, 1) = left_dxx(1, 0);
+			// 	eval_point_interval(m_left_dxx[2], left_param_box, left_dxx(1, 1));
+            // Eigen::Matrix2<Box<T, dim>> right_dxx;
+            // eval_point_interval(m_right_dxx[0], right_param_box, right_dxx(0, 0));
+            // eval_point_interval(m_right_dxx[1], right_param_box, right_dxx(1, 0));
+            // right_dxx(0, 1) = right_dxx(1, 0);
+            // eval_point_interval(m_right_dxx[2], right_param_box, right_dxx(1, 1));
 
-                Box<T, dim> right_L;
-                right_L.Min.setConstant(0.0);
-                right_L.Max.setConstant(0.0);
-                for (int i = 0; i < 2; ++i)
-                {
-                    for (int j = 0; j < 2; ++j)
-                    {
-                        left_L = left_L + left_dxx(i, j) * (alpha_d[i] * alpha_d[j]);
-                        right_L = right_L + right_dxx(i, j) * (beta_d[i] * beta_d[j]);
-                    }
-                }
+            //     Box<T, dim> left_L;
+            //     left_L.Min.setConstant(0.0);
+            //     left_L.Max.setConstant(0.0);
 
-                Eigen::Matrix2<Box<T, 1>> left_first_fundenmental;
-                left_first_fundenmental(0, 0) = interval_algorithm::dot(left_u_tangent_box, left_u_tangent_box);
-                left_first_fundenmental(1, 0) = left_first_fundenmental(0, 1) = interval_algorithm::dot(left_u_tangent_box, left_v_tangent_box);
-                left_first_fundenmental(1, 1) = interval_algorithm::dot(left_v_tangent_box, left_v_tangent_box);
-                Box<T, 1> left_first_det = left_first_fundenmental.determinant();
+            //     Box<T, dim> right_L;
+            //     right_L.Min.setConstant(0.0);
+            //     right_L.Max.setConstant(0.0);
+            //     for (int i = 0; i < 2; ++i)
+            //     {
+            //         for (int j = 0; j < 2; ++j)
+            //         {
+            //             left_L = left_L + left_dxx(i, j) * (alpha_d[i] * alpha_d[j]);
+            //             right_L = right_L + right_dxx(i, j) * (beta_d[i] * beta_d[j]);
+            //         }
+            //     }
 
-                Eigen::Matrix2<Box<T, 1>> right_first_fundenmental;
-                right_first_fundenmental(0, 0) = interval_algorithm::dot(right_u_tangent_box, right_u_tangent_box);
-                right_first_fundenmental(1, 0) = right_first_fundenmental(0, 1) = interval_algorithm::dot(right_u_tangent_box, right_v_tangent_box);
-                right_first_fundenmental(1, 1) = interval_algorithm::dot(right_v_tangent_box, right_v_tangent_box);
-                Box<T, 1> right_first_det = right_first_fundenmental.determinant();
+            //     Eigen::Matrix2<Box<T, 1>> left_first_fundenmental;
+            //     left_first_fundenmental(0, 0) = interval_algorithm::dot(left_u_tangent_box, left_u_tangent_box);
+            //     left_first_fundenmental(1, 0) = left_first_fundenmental(0, 1) = interval_algorithm::dot(left_u_tangent_box, left_v_tangent_box);
+            //     left_first_fundenmental(1, 1) = interval_algorithm::dot(left_v_tangent_box, left_v_tangent_box);
+            //     Box<T, 1> left_first_det = left_first_fundenmental.determinant();
+
+            //     Eigen::Matrix2<Box<T, 1>> right_first_fundenmental;
+            //     right_first_fundenmental(0, 0) = interval_algorithm::dot(right_u_tangent_box, right_u_tangent_box);
+            //     right_first_fundenmental(1, 0) = right_first_fundenmental(0, 1) = interval_algorithm::dot(right_u_tangent_box, right_v_tangent_box);
+            //     right_first_fundenmental(1, 1) = interval_algorithm::dot(right_v_tangent_box, right_v_tangent_box);
+            //     Box<T, 1> right_first_det = right_first_fundenmental.determinant();
 
 
-                Eigen::Vector<Box<T, 1>, 2> second_fundenmental_value;
-                second_fundenmental_value[0] = interval_algorithm::dot(left_L, left_normal_box);
-                second_fundenmental_value[1] = interval_algorithm::dot(right_L, right_normal_box);
-                Eigen::Matrix2<Box<T, 1>> mat;
-                mat(0, 0) = left_normal_len2;
-                mat(1, 1) = right_normal_len2;
-                mat(1, 0) = mat(0, 1) = interval_algorithm::dot(left_normal_box, right_normal_box);
-                Box<T, 1> mat_det = mat.determinant();
+            //     Eigen::Vector<Box<T, 1>, 2> second_fundenmental_value;
+            //     second_fundenmental_value[0] = interval_algorithm::dot(left_L, left_normal_box);
+            //     second_fundenmental_value[1] = interval_algorithm::dot(right_L, right_normal_box);
+            //     Eigen::Matrix2<Box<T, 1>> mat;
+            //     mat(0, 0) = left_normal_len2;
+            //     mat(1, 1) = right_normal_len2;
+            //     mat(1, 0) = mat(0, 1) = interval_algorithm::dot(left_normal_box, right_normal_box);
+            //     Box<T, 1> mat_det = mat.determinant();
 
-                Eigen::Matrix2<Box<T, 1>> b1 = mat;
-                b1.col(0) = second_fundenmental_value;
-                Box<T, 1> coeff1;
-                if (false == interval_algorithm::divide(b1.determinant(), mat_det, coeff1))
-                    return ENUM_NURBS::NURBS_ERROR;
+            //     Eigen::Matrix2<Box<T, 1>> b1 = mat;
+            //     b1.col(0) = second_fundenmental_value;
+            //     Box<T, 1> coeff1;
+            //     if (false == interval_algorithm::divide(b1.determinant(), mat_det, coeff1))
+            //         return ENUM_NURBS::NURBS_ERROR;
 
-                Eigen::Matrix2<Box<T, 1>> b2 = mat;
-                b2.col(1) = second_fundenmental_value;
-                Box<T, 1> coeff2;
-                if (false == interval_algorithm::divide(b2.determinant(), mat_det, coeff2))
-                    return ENUM_NURBS::NURBS_ERROR;
+            //     Eigen::Matrix2<Box<T, 1>> b2 = mat;
+            //     b2.col(1) = second_fundenmental_value;
+            //     Box<T, 1> coeff2;
+            //     if (false == interval_algorithm::divide(b2.determinant(), mat_det, coeff2))
+            //         return ENUM_NURBS::NURBS_ERROR;
 
-                Box<T, dim> c_dd = left_normal_box * coeff1 + right_normal_box * coeff2;
-                //交线的二阶导数
-                space_ders[1] = c_dd;
+            //     Box<T, dim> c_dd = left_normal_box * coeff1 + right_normal_box * coeff2;
+            //     //交线的二阶导数
+            //     space_ders[1] = c_dd;
 
-                Box<T, dim> temp = c_dd - left_L;
-                Eigen::Vector2<Box<T, 1>> dot_ders;
-                dot_ders[0] = interval_algorithm::dot(temp, left_u_tangent_box);
-                dot_ders[1] = interval_algorithm::dot(temp, left_v_tangent_box);
+            //     Box<T, dim> temp = c_dd - left_L;
+            //     Eigen::Vector2<Box<T, 1>> dot_ders;
+            //     dot_ders[0] = interval_algorithm::dot(temp, left_u_tangent_box);
+            //     dot_ders[1] = interval_algorithm::dot(temp, left_v_tangent_box);
 
-                b1 = left_first_fundenmental;
-                b1.col(0) = dot_ders;
-                if (false == interval_algorithm::divide(b1.determinant(), left_first_det, coeff1))
-                    return ENUM_NURBS::NURBS_ERROR;
-                b2 = left_first_fundenmental;
-                b2.col(1) = dot_ders;
-                if (false == interval_algorithm::divide(b2.determinant(), left_first_det, coeff2))
-                    return ENUM_NURBS::NURBS_ERROR;
+            //     b1 = left_first_fundenmental;
+            //     b1.col(0) = dot_ders;
+            //     if (false == interval_algorithm::divide(b1.determinant(), left_first_det, coeff1))
+            //         return ENUM_NURBS::NURBS_ERROR;
+            //     b2 = left_first_fundenmental;
+            //     b2.col(1) = dot_ders;
+            //     if (false == interval_algorithm::divide(b2.determinant(), left_first_det, coeff2))
+            //         return ENUM_NURBS::NURBS_ERROR;
 
-                param_ders[1].set_index_interval(0, coeff1);
-                param_ders[1].set_index_interval(1, coeff2);
+            //     param_ders[1].set_index_interval(0, coeff1);
+            //     param_ders[1].set_index_interval(1, coeff2);
 
-                temp = c_dd - right_L;
-                dot_ders[0] = interval_algorithm::dot(temp, right_u_tangent_box);
-                dot_ders[1] = interval_algorithm::dot(temp, right_v_tangent_box);
+            //     temp = c_dd - right_L;
+            //     dot_ders[0] = interval_algorithm::dot(temp, right_u_tangent_box);
+            //     dot_ders[1] = interval_algorithm::dot(temp, right_v_tangent_box);
 
-                b1 = right_first_fundenmental;
-                b1.col(0) = dot_ders;
-                if (false == interval_algorithm::divide(b1.determinant(), right_first_det, coeff1))
-                    return ENUM_NURBS::NURBS_ERROR;
-                b2 = right_first_fundenmental;
-                b2.col(1) = dot_ders;
-                if (false == interval_algorithm::divide(b2.determinant(), right_first_det, coeff2))
-                    return ENUM_NURBS::NURBS_ERROR;
+            //     b1 = right_first_fundenmental;
+            //     b1.col(0) = dot_ders;
+            //     if (false == interval_algorithm::divide(b1.determinant(), right_first_det, coeff1))
+            //         return ENUM_NURBS::NURBS_ERROR;
+            //     b2 = right_first_fundenmental;
+            //     b2.col(1) = dot_ders;
+            //     if (false == interval_algorithm::divide(b2.determinant(), right_first_det, coeff2))
+            //         return ENUM_NURBS::NURBS_ERROR;
 
-                param_ders[1].set_index_interval(2, coeff1);
-                param_ders[1].set_index_interval(3, coeff2);
-            }
+            //     param_ders[1].set_index_interval(2, coeff1);
+            //     param_ders[1].set_index_interval(3, coeff2);
+            // }
             return ENUM_NURBS::NURBS_SUCCESS;
         }
 
@@ -487,31 +583,72 @@ namespace tnurbs
             Box<T, dim> left_normal_box, right_normal_box;
             Box<T, dim> left_u_tangent_box, left_v_tangent_box;
             Box<T, dim> right_u_tangent_box, right_v_tangent_box;
-
+	        Box<T, dim> Xuu_box, Xuv_box, Xvv_box, Yuu_box, Yuv_box, Yvv_box;
             Box<T, 2> left_param_box(param_box.Min.template block<2, 1>(0, 0), param_box.Max.template block<2, 1>(0, 0));
             Box<T, 2> right_param_box(param_box.Min.template block<2, 1>(2, 0), param_box.Max.template block<2, 1>(2, 0));
-            eval_point_interval(m_left_u_tangent_surface, left_param_box, left_u_tangent_box);
-            eval_point_interval(m_left_v_tangent_surface, left_param_box, left_v_tangent_box);
-            eval_point_interval(m_right_u_tangent_surface, right_param_box, right_u_tangent_box);
-            eval_point_interval(m_right_v_tangent_surface, right_param_box, right_v_tangent_box);
+            if constexpr (left_surface_type::is_ratio == false)
+            {
+                m_left_ders(1, 0)->get_box(left_param_box, left_u_tangent_box);
+                m_left_ders(0, 1)->get_box(left_param_box, left_v_tangent_box);
+                m_left_ders(2, 0)->get_box(left_param_box, Xuu_box);
+                m_left_ders(1, 1)->get_box(left_param_box, Xuv_box);
+                m_left_ders(0, 2)->get_box(left_param_box, Xvv_box);
 
-            eval_point_interval(m_left_normal_surface, left_param_box, left_normal_box);
-            eval_point_interval(m_right_normal_surface, right_param_box, right_normal_box);
+				//使用精确的normal_surface和使用两个box叉乘得到的结果竟然基本一样？？？？？？？
+                m_left_normal_surface->get_box(left_param_box, left_normal_box);
+            }
+            else
+            {
+				Eigen::MatrixX<Box<T, dim>> left_boxes;
+                ENUM_NURBS error_code;
+                error_code = bounding_box<left_surface_type>::get_ders_bounding_box(2, m_left_ders, left_param_box, left_boxes);
+                if (error_code != ENUM_NURBS::NURBS_SUCCESS)
+                {
+                    return error_code;
+                }
+                left_u_tangent_box = left_boxes(1, 0);
+                left_v_tangent_box = left_boxes(0, 1);
+                Xuu_box = left_boxes(2, 0);
+                Xuv_box = left_boxes(1, 1);
+                Xvv_box = left_boxes(0, 2);
+
+                left_normal_box = interval_algorithm::cross(left_u_tangent_box, left_v_tangent_box);
+            }
+            if constexpr (right_surface_type::is_ratio == false)
+            {
+                m_right_ders(1, 0)->get_box(right_param_box, right_u_tangent_box);
+                m_right_ders(0, 1)->get_box(right_param_box, right_v_tangent_box);
+                m_right_ders(2, 0)->get_box(right_param_box, Yuu_box);
+                m_right_ders(1, 1)->get_box(right_param_box, Yuv_box);
+                m_right_ders(0, 2)->get_box(right_param_box, Yvv_box);
+
+				//使用精确的normal_surface和使用两个box叉乘得到的结果竟然基本一样？？？？？？？
+                m_right_normal_surface->get_box(right_param_box, right_normal_box);
+            }
+            else
+            {
+				Eigen::MatrixX<Box<T, dim>> right_boxes;
+                ENUM_NURBS error_code;
+                error_code = bounding_box<right_surface_type>::get_ders_bounding_box(2, m_right_ders, right_param_box, right_boxes);
+                if (error_code != ENUM_NURBS::NURBS_SUCCESS)
+                {
+                    return error_code;
+                }
+                right_u_tangent_box = right_boxes(1, 0);
+                right_v_tangent_box = right_boxes(0, 1);
+
+                Yuu_box = right_boxes(2, 0);
+                Yuv_box = right_boxes(1, 1);
+                Yvv_box = right_boxes(0, 2);
+
+                right_normal_box = interval_algorithm::cross(right_u_tangent_box, right_v_tangent_box);
+            }
+
+            // eval_point_interval(m_left_normal_surface, left_param_box, left_normal_box);
+            // eval_point_interval(m_right_normal_surface, right_param_box, right_normal_box);
 
             Box<T, 1> left_normal_len2 = interval_algorithm::dot(left_normal_box, left_normal_box);
             Box<T, 1> right_normal_len2 = interval_algorithm::dot(right_normal_box, right_normal_box);
-
-            Eigen::Matrix2<Box<T, dim>> left_dxx;
-            eval_point_interval(m_left_dxx[0], left_param_box, left_dxx(0, 0));
-            eval_point_interval(m_left_dxx[1], left_param_box, left_dxx(1, 0));
-            left_dxx(0, 1) = left_dxx(1, 0);
-            eval_point_interval(m_left_dxx[2], left_param_box, left_dxx(1, 1));
-
-            Eigen::Matrix2<Box<T, dim>> right_dxx;
-            eval_point_interval(m_right_dxx[0], right_param_box, right_dxx(0, 0));
-            eval_point_interval(m_right_dxx[1], right_param_box, right_dxx(1, 0));
-            right_dxx(0, 1) = right_dxx(1, 0);
-            eval_point_interval(m_right_dxx[2], right_param_box, right_dxx(1, 1));
 
             Box<T, 1> normal_dot = interval_algorithm::dot(left_normal_box, right_normal_box);
             Eigen::Vector<T, 1> zero_num;
@@ -548,14 +685,6 @@ namespace tnurbs
             Box<T, 1> a12 = interval_algorithm::dot(interval_algorithm::cross(left_v_tangent_box, right_v_tangent_box), conormal) * denominator_r;
             Box<T, 1> a21 = interval_algorithm::dot(interval_algorithm::cross(right_u_tangent_box, left_u_tangent_box), conormal) * denominator_r;
             Box<T, 1> a22 = interval_algorithm::dot(interval_algorithm::cross(right_u_tangent_box, left_v_tangent_box), conormal) * denominator_r;
-            Box<T, dim> Xuu_box, Xuv_box, Xvv_box, Yuu_box, Yuv_box, Yvv_box;
-            eval_point_interval(m_left_dxx[0], left_param_box, Xuu_box);
-            eval_point_interval(m_left_dxx[1], left_param_box, Xuv_box);
-            eval_point_interval(m_left_dxx[2], left_param_box, Xvv_box);
-
-            eval_point_interval(m_right_dxx[0], right_param_box, Yuu_box);
-            eval_point_interval(m_right_dxx[1], right_param_box, Yuv_box);
-            eval_point_interval(m_right_dxx[2], right_param_box, Yvv_box);
             
             Box<T, 1> left_L = interval_algorithm::dot(Xuu_box, conormal);
             Box<T, 1> left_M = interval_algorithm::dot(Xuv_box, conormal);
@@ -645,6 +774,7 @@ namespace tnurbs
 
 
 
+
         /// @brief 计算两个曲面交线在各自参数域的原像曲线的1-2阶微分
         /// @tparam surface_type 曲面类型
         /// @tparam T double, flaot...
@@ -666,7 +796,7 @@ namespace tnurbs
             param_ders.clear();
             space_ders.clear();
             Eigen::Matrix<Eigen::Vector<T, dim>, 3, 3> left_ders;
-            m_left_surface->template derivative_on_surface<2, 2>(param[0], param[1], left_ders);
+            m_left_ders(0, 0)->template derivative_on_surface<2, 2>(param[0], param[1], left_ders);
             Eigen::Vector<T, dim> left_normal = left_ders(1, 0).cross(left_ders(0, 1));
             left_normal.normalize();
             Eigen::Matrix2<T> left_first_fundenmental;
@@ -674,7 +804,7 @@ namespace tnurbs
             eval_first_and_second_fundenmental(left_ders, left_normal, left_first_fundenmental, left_second_fundenmental);
 
             Eigen::Matrix<Eigen::Vector<T, dim>, 3, 3> right_ders;
-            m_right_surface->template derivative_on_surface<2, 2>(param[2], param[3], right_ders);
+            m_right_ders(0, 0)->template derivative_on_surface<2, 2>(param[2], param[3], right_ders);
             Eigen::Vector<T, dim> right_normal = right_ders(1, 0).cross(right_ders(0, 1));
             right_normal.normalize();
             Eigen::Matrix2<T> right_first_fundenmental;
@@ -944,7 +1074,8 @@ namespace tnurbs
             //param_vec.normalize();
             Eigen::Vector2<T> test_vec = test_param - current_param;
             T project_len = test_vec.dot(param_vec);
-            if (project_len > -PRECISION<T>::value && project_len < vec_len + PRECISION<T>::value)
+            T eps = std::min(PRECISION<T>::value, TDEFAULT_ERROR<T>::value * vec_len);
+            if (project_len > -eps && project_len < vec_len + eps)
             {
                 return true;
             }
@@ -955,15 +1086,19 @@ namespace tnurbs
         bool is_point_on_arc(Eigen::Vector4<T>& current_param, Eigen::Vector2<T>& next_param, const Eigen::Vector2<T>& test_param, const Box<T, 4>& priori_enclosure, int type, bool is_positive)
         {
             Eigen::Vector<T, dim> test_point;
-            m_right_surface->point_on_surface(test_param[0], test_param[1], test_point);
+            m_right_ders(0, 0)->point_on_surface(test_param[0], test_param[1], test_point);                    
+            Eigen::Vector<T, dim> start_point, end_point;
+            m_right_ders(0, 0)->point_on_surface(current_param[2], current_param[3], start_point);
+            m_right_ders(0, 0)->point_on_surface(next_param[0], next_param[1], end_point);
+            T tolerance = type == 0 ? 1e-8 : 1e-4;
+            if ((test_point - start_point).norm() < tolerance || (test_point - end_point).norm() < tolerance)
+            {
+                return true;
+            }
             if (may_contain_param(current_param.template block<2, 1>(2, 0), next_param, test_param))
             {
                 for (int iter_index = 0; iter_index < 2 * SURFACE_ITERATE_DEEP; ++iter_index)
                 {
-                    Eigen::Vector<T, dim> start_point, end_point;
-
-                    m_right_surface->point_on_surface(current_param[2], current_param[3], start_point);
-                    m_right_surface->point_on_surface(next_param[0], next_param[1], end_point);
 
                     Eigen::Vector<T, dim> chord_vec = end_point - start_point;
                     T chord_length = chord_vec.norm();
@@ -975,17 +1110,22 @@ namespace tnurbs
                         test_length = -test_length;
                     }
                     Eigen::Vector4<T> next_init_param, intersect_param;
-                    estimate_next_param(current_param, priori_enclosure, test_length, next_init_param, type);
+                    ENUM_NURBS error_code = estimate_next_param(current_param, priori_enclosure, test_length, next_init_param, type);
+                    if (error_code != ENUM_NURBS::NURBS_SUCCESS)
+                    {
+                        std::cout << "error " << std::endl;
+                        return false;
+                    }
                     intersect_point_iteration(m_product_box, next_init_param, intersect_param);
                     Eigen::Vector<T, dim> intersec_point;
                     
-                    m_right_surface->point_on_surface(intersect_param[2], intersect_param[3], intersec_point);
+                    m_right_ders(0, 0)->point_on_surface(intersect_param[2], intersect_param[3], intersec_point);
                     //double dis = (intersec_point - test_point).norm();
-                    T tolerance = type == 0 ? 1e-8 : 1e-4;
                     if (priori_enclosure.is_contain_point(intersect_param) && (intersec_point - test_point).norm() < tolerance)
                     {
                         return true;
                     }
+                    T tt = (intersec_point - test_point).norm();
                     Eigen::Vector2<T> mid_param = intersect_param.template block<2, 1>(2, 0);
                   
                     bool flag1 = may_contain_param(current_param.template block<2, 1>(2, 0), mid_param, test_param);
@@ -998,16 +1138,19 @@ namespace tnurbs
                     if (flag1 == true)
                     {
                         next_param = mid_param;
+                        m_right_ders(0, 0)->point_on_surface(next_param[0], next_param[1], end_point);
                     }
                     else if (flag2 == true)
                     {
                         current_param.template block<2, 1>(2, 0) = mid_param;
-                        m_left_surface->find_point_on_surface(intersec_point, current_param[0], current_param[1]);
+                        m_right_ders(0, 0)->point_on_surface(current_param[2], current_param[3], start_point);
+                        m_left_ders(0, 0)->find_point_on_surface(intersec_point, current_param[0], current_param[1]);
                     }
                     else
                     {
                         break;
                     }
+
                 }
             }
             return false;
@@ -1214,8 +1357,43 @@ namespace tnurbs
                     Box<T, 2> left_param_box(priori_enclosure.Min.template block<2, 1>(0, 0), priori_enclosure.Max.template block<2, 1>(0, 0));
                     Box<T, 2> right_param_box(priori_enclosure.Min.template block<2, 1>(2, 0), priori_enclosure.Max.template block<2, 1>(2, 0));
                     Box<T, dim> left_normal_box, right_normal_box;
-                    eval_point_interval(m_left_normal_surface, left_param_box, left_normal_box);
-                    eval_point_interval(m_right_normal_surface, right_param_box, right_normal_box);
+					if constexpr (left_surface_type::is_ratio == false)
+					{
+						//使用精确的normal_surface和使用两个box叉乘得到的结果竟然基本一样？？？？？？？
+                        m_left_normal_surface->get_box(left_param_box, left_normal_box);
+					}
+					else
+					{
+						Eigen::MatrixX<Box<T, dim>> left_boxes;
+                        
+						ENUM_NURBS error_code = bounding_box<left_surface_type>::get_ders_bounding_box(1, m_left_ders, left_param_box, left_boxes);
+						if (error_code != ENUM_NURBS::NURBS_SUCCESS)
+						{
+                            angle_diff = M_PI;
+							return false;
+						}
+						left_normal_box = interval_algorithm::cross(left_boxes(1, 0), left_boxes(0, 1));
+					}
+					if constexpr (right_surface_type::is_ratio == false)
+					{
+						//使用精确的normal_surface和使用两个box叉乘得到的结果竟然基本一样？？？？？？？
+                        m_right_normal_surface->get_box(right_param_box, right_normal_box);
+					}
+					else
+					{
+						Eigen::MatrixX<Box<T, dim>> right_boxes;
+                        
+						ENUM_NURBS error_code = bounding_box<right_surface_type>::get_ders_bounding_box(1, m_right_ders, right_param_box, right_boxes);
+						if (error_code != ENUM_NURBS::NURBS_SUCCESS)
+						{
+                            angle_diff = M_PI;
+							return false;
+                    // eval_point_interval(m_left_normal_surface, left_param_box, left_normal_box);
+                    // eval_point_interval(m_right_normal_surface, right_param_box, right_normal_box);
+						}
+						right_normal_box = interval_algorithm::cross(right_boxes(1, 0), right_boxes(0, 1));
+					}
+
                     Eigen::Vector<T, dim> origin;
                     origin.setConstant(0.0);
                     cone<T, dim> normal_cone = point_box(left_normal_box, origin);
@@ -1241,8 +1419,41 @@ namespace tnurbs
                     Box<T, 2> left_param_box(priori_enclosure.Min.template block<2, 1>(0, 0), priori_enclosure.Max.template block<2, 1>(0, 0));
                     Box<T, 2> right_param_box(priori_enclosure.Min.template block<2, 1>(2, 0), priori_enclosure.Max.template block<2, 1>(2, 0));
                     Box<T, dim> left_normal_box, right_normal_box;
-                    eval_point_interval(m_left_normal_surface, left_param_box, left_normal_box);
-                    eval_point_interval(m_right_normal_surface, right_param_box, right_normal_box);
+					if constexpr (left_surface_type::is_ratio == false)
+					{
+						//使用精确的normal_surface和使用两个box叉乘得到的结果竟然基本一样？？？？？？？
+                        m_left_normal_surface->get_box(left_param_box, left_normal_box);
+					}
+					else
+					{
+						Eigen::MatrixX<Box<T, dim>> left_boxes;
+						ENUM_NURBS error_code = bounding_box<left_surface_type>::get_ders_bounding_box(1, m_left_ders, left_param_box, left_boxes);
+						if (error_code != ENUM_NURBS::NURBS_SUCCESS)
+						{
+                            angle_diff = M_PI;
+							return false;
+						}
+
+						left_normal_box = interval_algorithm::cross(left_boxes(1, 0), left_boxes(0, 1));
+					}
+
+					if constexpr (right_surface_type::is_ratio == false)
+					{
+						//使用精确的normal_surface和使用两个box叉乘得到的结果竟然基本一样？？？？？？？
+                        m_right_normal_surface->get_box(right_param_box, right_normal_box);
+					}
+					else
+					{
+						Eigen::MatrixX<Box<T, dim>> right_boxes;
+						ENUM_NURBS error_code = bounding_box<right_surface_type>::get_ders_bounding_box(1, m_right_ders, right_param_box, right_boxes);
+						if (error_code != ENUM_NURBS::NURBS_SUCCESS)
+						{
+                            angle_diff = M_PI;
+							return false;
+						}
+
+						right_normal_box = interval_algorithm::cross(right_boxes(1, 0), right_boxes(0, 1));
+					}
                     Eigen::Vector<T, dim> origin;
                     origin.setConstant(0.0);
                     cone<T, dim> normal_cone = point_box(left_normal_box, origin);
@@ -1277,8 +1488,10 @@ namespace tnurbs
             // bool left_surf_v_closed = left_surf->is_v_closed();
             // bool right_surf_u_closed = right_surf->is_u_closed();
             // bool right_surf_v_closed = right_surf->is_v_closed();
+           
+            // Eigen::Vector<T, dim> left_point, right_point;
+            Eigen::Matrix<Eigen::Vector<T, dim>, 2, 2> left_ders, right_ders;
 
-            Eigen::Vector<T, dim> left_point, right_point;
             Eigen::Vector<T, dim> vec;
             T min_distance = 100000;
             intersect_param = current_param;
@@ -1286,9 +1499,12 @@ namespace tnurbs
             //迭代次数需要修改
             for (int loop_index = 0; loop_index < 2 * SURFACE_ITERATE_DEEP; ++loop_index)
             {
-                m_left_surface->point_on_surface(current_param[0], current_param[1], left_point);
-                m_right_surface->point_on_surface(current_param[2], current_param[3], right_point);
-                vec = right_point - left_point;
+                m_left_ders(0, 0)->derivative_on_surface<1>(current_param[0], current_param[1], left_ders);
+                m_right_ders(0, 0)->derivative_on_surface<1>(current_param[2], current_param[3], right_ders);
+                // m_left_surface->point_on_surface(current_param[0], current_param[1], left_point);
+                // m_right_surface->point_on_surface(current_param[2], current_param[3], right_point);
+                // vec = right_point - left_point;
+                vec = right_ders(0, 0) - left_ders(0, 0);
                 T distance = vec.squaredNorm();
                 if (distance < min_distance)
                 {
@@ -1309,16 +1525,19 @@ namespace tnurbs
                 }
 
                 Eigen::Matrix<T, dim, 4> mat;
-                Eigen::Vector<T, dim> temp;
-                m_left_u_tangent_surface->point_on_surface(current_param[0], current_param[1], temp);
-                mat.col(0) = temp;
-                m_left_v_tangent_surface->point_on_surface(current_param[0], current_param[1], temp);
-                mat.col(1) = temp;
-                m_right_u_tangent_surface->point_on_surface(current_param[2], current_param[3], temp);
-                mat.col(2) = -1.0 * temp;
-                m_right_v_tangent_surface->point_on_surface(current_param[2], current_param[3], temp);
-                mat.col(3) = -1.0 * temp;
-
+                // Eigen::Vector<T, dim> temp;
+                // m_left_u_tangent_surface->point_on_surface(current_param[0], current_param[1], temp);
+                // mat.col(0) = temp;
+                mat.col(0) = left_ders(1, 0);
+                // m_left_v_tangent_surface->point_on_surface(current_param[0], current_param[1], temp);
+                // mat.col(1) = temp;
+                mat.col(1) = left_ders(0, 1);
+                // m_right_u_tangent_surface->point_on_surface(current_param[2], current_param[3], temp);
+                // mat.col(2) = -1.0 * temp;
+                mat.col(2) = -1.0 * right_ders(1, 0);
+                // m_right_v_tangent_surface->point_on_surface(current_param[2], current_param[3], temp);
+                // mat.col(3) = -1.0 * temp;
+                mat.col(3) = -1.0 * right_ders(0, 1);
                 Eigen::JacobiSVD<Eigen::Matrix<T, dim, 4>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(mat);
                 Eigen::Vector<T, 4> delta = matSvd.solve(vec);
                 if (matSvd.info() != Eigen::Success)
@@ -1368,8 +1587,8 @@ namespace tnurbs
             for (int loop_index = 0; loop_index < SURFACE_ITERATE_DEEP; ++loop_index)
             {
                 Eigen::Matrix<Eigen::Vector<T, dim>, 3, 3> left_derivatives, right_derivatives;
-                m_left_surface->template derivative_on_surface<2>(current_param[0], current_param[1], left_derivatives);
-                m_right_surface->template derivative_on_surface<2>(current_param[2], current_param[3], right_derivatives);
+                m_left_ders(0, 0)->template derivative_on_surface<2>(current_param[0], current_param[1], left_derivatives);
+                m_right_ders(0, 0)->template derivative_on_surface<2>(current_param[2], current_param[3], right_derivatives);
                 Eigen::Vector<T, dim + 1> vec;
                 vec.template block<dim, 1>(0, 0) =  right_derivatives(0, 0) - left_derivatives(0, 0);
                 
@@ -1449,7 +1668,9 @@ namespace tnurbs
             m_singular_boxes.push_back(singular_box);
             surf_surf_intersect_point<T, dim> singluar_point;
             singluar_point.m_uv = intersect_param;
-            m_left_surface->point_on_surface(intersect_param[0], intersect_param[1], singluar_point.m_point);
+            m_left_ders(0, 0)->point_on_surface(intersect_param[0], intersect_param[1], singluar_point.m_point);
+            Eigen::Vector<T, 4> translate(TDEFAULT_ERROR<T>::value, TDEFAULT_ERROR<T>::value, TDEFAULT_ERROR<T>::value, TDEFAULT_ERROR<T>::value);
+            singluar_point.m_priori_enclosure = Box<T, 4>(intersect_param - translate, intersect_param + translate);
             std::vector<Eigen::Vector4<T>> next_params(4);
             for (int index = 0; index < 2; ++index)
             {
@@ -1461,11 +1682,11 @@ namespace tnurbs
             }
 
             Eigen::Matrix<Eigen::Vector<T, dim>, 3, 3> left_ders;
-            m_left_surface->template derivative_on_surface<2, 2>(intersect_param[0], intersect_param[1], left_ders);
+            m_left_ders(0, 0)->template derivative_on_surface<2, 2>(intersect_param[0], intersect_param[1], left_ders);
             Eigen::Vector<T, dim> left_normal = left_ders(1, 0).cross(left_ders(0, 1));
             left_normal.normalize();
             Eigen::Matrix<Eigen::Vector<T, dim>, 3, 3> right_ders;
-            m_right_surface->template derivative_on_surface<2, 2>(intersect_param[2], intersect_param[3], right_ders);
+            m_right_ders(0, 0)->template derivative_on_surface<2, 2>(intersect_param[2], intersect_param[3], right_ders);
             Eigen::Vector<T, dim> right_normal = right_ders(1, 0).cross(right_ders(0, 1));
             right_normal.normalize();
             bool flag = left_normal.dot(right_normal) > 0;
@@ -1488,7 +1709,7 @@ namespace tnurbs
                     {
                         end_chat.m_is_transversal = false;
                         end_chat.m_inter_points[1].m_uv = singular_intersect_param;
-                        m_left_surface->point_on_surface(singular_intersect_param[0], singular_intersect_param[1], end_chat.m_inter_points[1].m_point);
+                        m_left_ders(0, 0)->point_on_surface(singular_intersect_param[0], singular_intersect_param[1], end_chat.m_inter_points[1].m_point);
                         end_chat.start_point_type = POINT_TYPE::SINGULAR;
 
                         T tangent_dot = current_param_ders[0].dot(param_ders[index / 2]);
@@ -1504,7 +1725,7 @@ namespace tnurbs
                 end_chat.m_is_transversal = true;
                 end_chat.start_point_type = POINT_TYPE::SINGULAR;
                 int_point[1].m_uv = next_params[index];
-                m_left_surface->point_on_surface(next_params[index][0], next_params[index][1], int_point[1].m_point);
+                m_left_ders(0, 0)->point_on_surface(next_params[index][0], next_params[index][1], int_point[1].m_point);
 
                 eval_preiamge_and_space_ders<1>(end_chat.m_inter_points[1].m_uv, current_param_ders, current_space_ders, 0);
                 T tangent_dot = current_param_ders[0].dot(param_ders[index / 2]);
@@ -1817,11 +2038,10 @@ namespace tnurbs
                 }
             }
 
-            // TODO: singular curve arrived to loop point
             surf_surf_intersect_point<T, dim> next_intpoint;
             next_intpoint.m_priori_enclosure = priori_enclosure;
             next_intpoint.m_uv = intersect_param;
-            m_left_surface->point_on_surface(intersect_param[0], intersect_param[1], next_intpoint.m_point);
+            m_left_ders(0, 0)->point_on_surface(intersect_param[0], intersect_param[1], next_intpoint.m_point);
             if (current_intpoints.start_point_type == POINT_TYPE::LOOP)
             {
                 if (is_closed(current_intpoints, next_intpoint, type))
@@ -1832,6 +2052,35 @@ namespace tnurbs
                 }
             }
 
+            if (current_intpoints.start_point_type == POINT_TYPE::SINGULAR)
+            {
+                for (int index = 0; index < m_loop_chats.size(); ++index)
+                {
+                    surf_surf_intersect_point<T, dim>& loop_point = m_loop_chats[index].m_inter_points.back();
+                    
+                    if (priori_enclosure.is_contain_point(loop_point.m_uv))
+                    {
+                        surf_surf_intersect_point<T, dim> current_point = current_intpoints.m_inter_points.back();
+                        Eigen::Vector2<T> next_param = intersect_param.template block<2, 1>(2, 0);
+                        Eigen::Vector2<T> test_param = loop_point.m_uv.template block<2, 1>(2, 0);
+                        if (is_point_on_arc(current_point.m_uv, next_param, test_param, priori_enclosure, type, current_intpoints.m_is_positive_direction))
+                        {
+                            is_stop = true;
+                            current_intpoint.m_priori_enclosure = priori_enclosure;
+                            // TODO: 处理priori_enclosure
+                            int points_count = m_loop_chats[index].m_inter_points.size();
+                            for (int ipoint_index = 1; ipoint_index < points_count; ++ipoint_index)
+                            {
+                                m_loop_chats[index].m_inter_points[ipoint_index].m_priori_enclosure = m_loop_chats[index].m_inter_points[ipoint_index - 1].m_priori_enclosure;
+                            }
+                            current_intpoints.m_inter_points.insert(current_intpoints.m_inter_points.end(), m_boundary_chats[index].m_inter_points.rbegin(), m_boundary_chats[index].m_inter_points.rend());
+
+                            m_loop_chats.erase(m_loop_chats.begin() + index);
+                            return ENUM_NURBS::NURBS_SUCCESS;
+                        }
+                    }
+                }
+            }
             current_intpoints.m_inter_points.back().m_priori_enclosure = priori_enclosure;
             current_intpoints.m_inter_points.push_back(next_intpoint);
             return ENUM_NURBS::NURBS_SUCCESS;
@@ -1842,7 +2091,7 @@ namespace tnurbs
             int index = 0;
             for (; index < MAXINTERSETORPOINTNUMBER; ++index)
             {
-                std::cout << index << std::endl;
+                // std::cout << index << std::endl;
                 bool arrived_bound = false;
                 bool is_arrived_singular = false;
                 if (trace_point(current_intpoints, is_stop, is_arrived_singular) != ENUM_NURBS::NURBS_SUCCESS)
@@ -1908,18 +2157,19 @@ namespace tnurbs
             std::vector<std::pair<Box<T, 2>, Box<T, 2>>> int_boxes;
             
             Box<T, dim> left_box, right_box;
-            m_left_surface->get_box(left_box);
-            m_right_surface->get_box(right_box);
+            m_left_ders(0, 0)->get_box(left_box);
+            m_right_ders(0, 0)->get_box(right_box);
             Box<T, dim> intersect_box;
             if (left_box.intersect(right_box, intersect_box))
             {
                 Box<T, 2> uv_box, st_box;
-                m_left_surface->get_uv_box(uv_box);
-                m_right_surface->get_uv_box(st_box);
+                m_left_ders(0, 0)->get_uv_box(uv_box);
+                m_right_ders(0, 0)->get_uv_box(st_box);
                 int_boxes.push_back(std::make_pair(uv_box, st_box));
             }
             
-            std::array<surface_type, 4> left_sub_surfaces, right_sub_surfaces;
+            std::array<left_surface_type, 4> left_sub_surfaces;
+            std::array<right_surface_type, 4> right_sub_surfaces;
             std::array<Box<T, dim>, 4> left_sub_boxes, right_sub_boxes;
             
             while (int_boxes.empty() == false)
@@ -1931,10 +2181,10 @@ namespace tnurbs
 
                 for (int index = 0; index < 4; ++index)
                 {
-                    m_left_surface->sub_divide(uv_patchs[index], left_sub_surfaces[index]);
+                    m_left_ders(0, 0)->sub_divide(uv_patchs[index], left_sub_surfaces[index]);
                     left_sub_surfaces[index].get_box(left_sub_boxes[index]);
 
-                    m_right_surface->sub_divide(st_patchs[index], right_sub_surfaces[index]);
+                    m_right_ders(0, 0)->sub_divide(st_patchs[index], right_sub_surfaces[index]);
                     right_sub_surfaces[index].get_box(right_sub_boxes[index]);
 
                 }
@@ -2036,61 +2286,108 @@ namespace tnurbs
         //目前只支持bezier情况
         ENUM_NURBS surafces_intersection2()
         {
+            std::clock_t s1 = std::clock();
             //先取等参线和曲面求交(非闭合)
-            //using curve_type = template surface_type::iso_curve_type;
-            typename surface_type::iso_curve_type curve1;
-            typename surface_type::iso_curve_type curve2;
-            typename surface_type::iso_curve_type curve3;
-            typename surface_type::iso_curve_type curve4;
+            using right_curve = typename right_surface_type::iso_curve_type;
+            using left_curve = typename left_surface_type::iso_curve_type;
+            right_curve curve1;
+            right_curve curve2;
+            right_curve curve3;
+            right_curve curve4;
+            std::array<T, 2> u_knots_end;
+            std::array<T, 2> v_knots_end;
+            m_right_ders(0, 0)->get_uv_knots_end(u_knots_end, v_knots_end);
+            m_right_ders(0, 0)->get_isoparameter_curve<ENUM_DIRECTION::U_DIRECTION>(u_knots_end[0], curve1);
+            m_right_ders(0, 0)->get_isoparameter_curve<ENUM_DIRECTION::U_DIRECTION>(u_knots_end[1], curve2);
+            m_right_ders(0, 0)->get_isoparameter_curve<ENUM_DIRECTION::V_DIRECTION>(v_knots_end[0], curve3);
+            m_right_ders(0, 0)->get_isoparameter_curve<ENUM_DIRECTION::V_DIRECTION>(v_knots_end[1], curve4);
 
-            Eigen::Vector3d point;
-            m_right_surface->point_on_surface(0.5, 0.5, point);
+            curve_surface_int<right_curve, left_surface_type> curve_surface_intersect;
+            curve_surface_intersect.init(&curve1, m_left_ders(0, 0));
+            curve_surface_intersect.run_intersect();
+            std::unordered_set<help<T, 4>, hash_help<T, 4>> remove_mult;
             
-            m_right_surface->get_isoparameter_curve<ENUM_DIRECTION::U_DIRECTION>(0.0, curve1);
-            m_right_surface->get_isoparameter_curve<ENUM_DIRECTION::U_DIRECTION>(1.0, curve2);
-            m_right_surface->get_isoparameter_curve<ENUM_DIRECTION::V_DIRECTION>(0.0, curve3);
-            m_right_surface->get_isoparameter_curve<ENUM_DIRECTION::V_DIRECTION>(1.0, curve4);
-
-           
-            std::vector<Eigen::Vector<T, 3>> int_params2 = bezier_curve_int_bezier_surface(curve2, *m_left_surface);
-            std::vector<Eigen::Vector<T, 3>> int_params1 = bezier_curve_int_bezier_surface(curve1, *m_left_surface);
-            std::vector<Eigen::Vector<T, 3>> int_params3 = bezier_curve_int_bezier_surface(curve3, *m_left_surface);
-            std::vector<Eigen::Vector<T, 3>> int_params4 = bezier_curve_int_bezier_surface(curve4, *m_left_surface);
-
-            //TODO:去重, 加细; 另一个曲面的四条边界
-            std::vector<Eigen::Vector4<T>> int_params;
-            for (auto param : int_params1)
+            for (auto& param : curve_surface_intersect.m_int_points)
             {
-                int_params.push_back(Eigen::Vector4<T>(param[1], param[2], 0.0, param[0]));
-            }
-            for (auto param : int_params2)
-            {
-                int_params.push_back(Eigen::Vector4<T>(param[1], param[2], 1.0, param[0]));
-            }
-            for (auto param : int_params3)
-            {
-                int_params.push_back(Eigen::Vector4<T>(param[1], param[2], param[0], 0));
-            }
-            for (auto param : int_params4)
-            {
-                int_params.push_back(Eigen::Vector4<T>(param[1], param[2], param[0], 1.0));
+                remove_mult.insert(Eigen::Vector4<T>(param.m_int_param[1], param.m_int_param[2], u_knots_end[0], param.m_int_param[0]));
             }
 
-            for (auto& param : int_params)
+            curve_surface_intersect.reset_curve(&curve2);
+            curve_surface_intersect.run_intersect();
+            for (auto& param : curve_surface_intersect.m_int_points)
+            {
+                remove_mult.insert(Eigen::Vector4<T>(param.m_int_param[1], param.m_int_param[2], u_knots_end[1], param.m_int_param[0]));
+            }
+
+            curve_surface_intersect.reset_curve(&curve3);
+            curve_surface_intersect.run_intersect();
+            for (auto& param : curve_surface_intersect.m_int_points)
+            {
+                remove_mult.insert(Eigen::Vector4<T>(param.m_int_param[1], param.m_int_param[2], param.m_int_param[0], v_knots_end[0]));
+            }
+
+            curve_surface_intersect.reset_curve(&curve4);
+            curve_surface_intersect.run_intersect();
+            for (auto& param : curve_surface_intersect.m_int_points)
+            {
+                remove_mult.insert(Eigen::Vector4<T>(param.m_int_param[1], param.m_int_param[2], param.m_int_param[0], u_knots_end[1]));
+            }
+
+            left_curve curve5;
+            left_curve curve6;
+            left_curve curve7;
+            left_curve curve8;
+            m_left_ders(0, 0)->get_uv_knots_end(u_knots_end, v_knots_end);
+            m_left_ders(0, 0)->get_isoparameter_curve<ENUM_DIRECTION::U_DIRECTION>(u_knots_end[0], curve5);
+            m_left_ders(0, 0)->get_isoparameter_curve<ENUM_DIRECTION::U_DIRECTION>(u_knots_end[1], curve6);
+            m_left_ders(0, 0)->get_isoparameter_curve<ENUM_DIRECTION::V_DIRECTION>(v_knots_end[0], curve7);
+            m_left_ders(0, 0)->get_isoparameter_curve<ENUM_DIRECTION::V_DIRECTION>(v_knots_end[1], curve8);
+            curve_surface_int<left_curve, right_surface_type> curve_surface_intersect2;
+            curve_surface_intersect2.init(&curve5, m_right_ders(0, 0));
+            curve_surface_intersect2.run_intersect();
+            
+            for (auto& param : curve_surface_intersect2.m_int_points)
+            {
+                remove_mult.insert(Eigen::Vector4<T>(u_knots_end[0], param.m_int_param[0], param.m_int_param[1], param.m_int_param[2]));
+            }
+
+            curve_surface_intersect2.reset_curve(&curve6);
+            curve_surface_intersect2.run_intersect();
+            for (auto& param : curve_surface_intersect2.m_int_points)
+            {
+                remove_mult.insert(Eigen::Vector4<T>(u_knots_end[1], param.m_int_param[0], param.m_int_param[1], param.m_int_param[2]));
+            }
+
+            curve_surface_intersect2.reset_curve(&curve7);
+            curve_surface_intersect2.run_intersect();
+            for (auto& param : curve_surface_intersect2.m_int_points)
+            {
+                remove_mult.insert(Eigen::Vector4<T>(param.m_int_param[0], v_knots_end[0], param.m_int_param[1], param.m_int_param[2]));
+            }
+
+            curve_surface_intersect2.reset_curve(&curve8);
+            curve_surface_intersect2.run_intersect();
+            for (auto& param : curve_surface_intersect2.m_int_points)
+            {
+                remove_mult.insert(Eigen::Vector4<T>(param.m_int_param[0],u_knots_end[1], param.m_int_param[1], param.m_int_param[2]));
+            }
+
+
+            for (auto& param : remove_mult)
             {
                 Eigen::Matrix<Eigen::Vector<T, dim>, 2, 2> left_ders;
-                m_left_surface->template derivative_on_surface<1>(param[0], param[1], left_ders);
+                m_left_ders(0, 0)->template derivative_on_surface<1>(param.m_point[0], param.m_point[1], left_ders);
                 Eigen::Matrix<Eigen::Vector<T, dim>, 2, 2> right_ders;
-                m_right_surface->template derivative_on_surface<1>(param[2], param[3], right_ders);
+                m_right_ders(0, 0)->template derivative_on_surface<1>(param.m_point[2], param.m_point[3], right_ders);
                 std::vector<surf_surf_intersect_point<T, dim>> current_intpoint(1);
-                current_intpoint[0].m_uv = param;
+                current_intpoint[0].m_uv = param.m_point;
                 current_intpoint[0].m_point = left_ders(0, 0);
-
                 Eigen::Vector<T, dim> left_normal = left_ders(1, 0).cross(left_ders(0, 1));
                 left_normal.normalize();
                 Eigen::Vector<T, dim> right_normal = right_ders(1, 0).cross(right_ders(0, 1));
                 right_normal.normalize();
                 
+                T distance = (right_ders(0, 0) - left_ders(0, 0)).norm();
                 bool transversal = true;
                 double cosTheta = left_normal.dot(right_normal);
                 double theta = std::acos(cosTheta);
@@ -2136,10 +2433,15 @@ namespace tnurbs
             {
                 return error_code;
             }
-
+            std::clock_t e1 = std::clock();
+            std::cout << "f1 : " << (e1 - s1) << std::endl;
             std::vector<std::pair<Box<T, 2>, Box<T, 2>>> sub_int_boxes;
             std::vector<char> is_tangent;
+            std::clock_t s2 = std::clock();
             get_initial_box(sub_int_boxes, is_tangent);
+            std::clock_t e2 = std::clock();
+            std::cout << "f2 : " << (e2 - s2) << std::endl;
+            std::clock_t s3 = std::clock();
             size_t intersect_count = sub_int_boxes.size();
             for (size_t index = 0; index < intersect_count; ++index)
             {
@@ -2166,14 +2468,14 @@ namespace tnurbs
                                 std::vector<Eigen::Matrix<T, 4, 1>> param_ders_temp;
                                 std::vector<Eigen::Matrix<T, dim, 1>> space_ders_temp;
                                 ENUM_NURBS error_code = eval_preiamge_and_space_ders<1>(singular_intersect_param, param_ders_temp, space_ders_temp, 3);
-                                if (error_code == ENUM_NURBS::NURBS_ISOLATED_TANGENTIAL_POINT)
-                                {
-                                    surf_surf_intersect_point<T, dim> isolate_point;
-                                    isolate_point.m_uv = singular_intersect_param;
-                                    m_right_surface->point_on_surface(singular_intersect_param[2], singular_intersect_param[3], isolate_point.m_point);
-                                    m_result.m_isolate_points.push_back(isolate_point);
-                                    continue;
-                                }
+                                if (error_code == ENUM_NURBS::NURBS_ISOLATED_TANGENTIAL_POINT) 
+								{
+									surf_surf_intersect_point<T, dim> isolate_point;
+									isolate_point.m_uv = singular_intersect_param;
+									m_right_ders(0, 0)->point_on_surface(singular_intersect_param[2], singular_intersect_param[3], isolate_point.m_point);
+									m_result.m_isolate_points.push_back(isolate_point);
+									continue;
+								}
                                 else if (param_ders_temp.size() == 1)
                                 {
                                     type = 3;
@@ -2209,7 +2511,7 @@ namespace tnurbs
                         }
                         surf_surf_intersect_point<T, dim> current_intpoint{};
                         current_intpoint.m_uv = intersect_param;
-                        m_right_surface->point_on_surface(intersect_param[2], intersect_param[3], current_intpoint.m_point);
+                        m_right_ders(0, 0)->point_on_surface(intersect_param[2], intersect_param[3], current_intpoint.m_point);
                         surfs_int_points_chat<T, dim> loop_points;
                         loop_points.m_inter_points.push_back(current_intpoint);
 
@@ -2226,7 +2528,17 @@ namespace tnurbs
                     }
                 }
             }            
+            std::clock_t e3 = std::clock();
+            std::cout << "f3 : " << (e3 - s3) << std::endl;
             return ENUM_NURBS::NURBS_SUCCESS;  
         }
     };
+
+
+
+
+
+
+
+
 }

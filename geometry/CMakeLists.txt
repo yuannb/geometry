@@ -39,7 +39,7 @@ list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/include/Topo")
 list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/include/Geo")
 list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/include/tools")
 list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/include/NurbsTools")
-
+list(APPEND EXTRA_INCLUDES "${PROJECT_INIT_PATH}/3rd/libhv/cpputil")
 list(APPEND EXTRA_INCLUDES "${PROJECT_INIT_PATH}/3rd/googletest/googletest/include")
 
 add_executable(GWB nurbs_test.cpp debug_used.cpp)

@@ -74,7 +74,7 @@ namespace tnurbs
     ENUM_NURBS find_nearst_point_on_curve_inner(const curve_type *cur, const curve_mesh_helper<curve_type> &mh,  const Eigen::Vector<T, dim> &point, T &min_dis, T &u, Eigen::Vector<T, dim> &nearst_point, T eps = TDEFAULT_ERROR<T>::value)
     {
         const curve_patch<curve_type> *current = mh.root;
-        
+        Box<T, 1> domain = cur->get_domain_box();
         //1.寻找曲线极值点; 先判断是否在包围盒内部
         while (current != nullptr)
         {
@@ -138,7 +138,11 @@ namespace tnurbs
                 //迭代
                 T current_u = (current->u_box.Min[0] + current->u_box.Max[0]) / 2.0;
                 Eigen::Vector<T, dim> current_point;
-                find_nearst_point_on_curve_inner<curve_type, typename curve_type::Type, curve_type::dimension>(cur, point, current_u, current->u_box, current_point, eps);
+                find_nearst_point_on_curve_inner<curve_type, typename curve_type::Type, curve_type::dimension>(cur, point, current_u, domain, current_point, eps);
+                if (mh.root->u_box.is_contain_point(Eigen::Vector<T, 1>(u)) == false)
+                {
+                    continue;
+                }
                 T current_dis = (current_point - point).norm();
                 if (min_dis > current_dis)
                 {
@@ -219,9 +223,9 @@ namespace tnurbs
         static constexpr int dim = curve_type::dimension;
     private:
         T m_eps = TDEFAULT_ERROR<T>::value;
-        T m_dist_eps = 0.1;
+        T m_dist_eps = 10000;
         T m_angle_eps = 0.1;
-        T m_chord_eps = 1.0;
+        T m_chord_eps = 10000;
         Box<T, dim> *m_box = nullptr;
         Box<T, 1> *m_u_box = nullptr;
         std::vector<curve_mesh_helper<curve_type>> m_mesh_help;
@@ -438,7 +442,7 @@ namespace tnurbs
         //先找曲面的极值点
         // int count = 0;
         surface_patch<surface_type> *current = mh.root;
-        
+        Box<T, 2> domain = surf->get_domain_box();
 
         //2.寻找曲面极值点; 先判断是否在包围盒内部
         while (current != nullptr)
@@ -543,7 +547,11 @@ namespace tnurbs
                 // num += 1;
                 // std::cout << num << std::endl;
                 // count += 1;
-                find_nearst_point_on_surface_inner<surface_type, typename surface_type::Type, surface_type::dimension>(surf, point, current_u, current_v, current->uv_box, current_point, eps);
+                find_nearst_point_on_surface_inner<surface_type, typename surface_type::Type, surface_type::dimension>(surf, point, current_u, current_v, domain, current_point, eps);
+                if (mh.root->uv_box.is_contain_point(Eigen::Vector2<T>(u, v)) == false)
+                {
+                    continue;
+                }
                 T current_dis = (current_point - point).norm();
                 if (min_dis > current_dis)
                 {
@@ -587,14 +595,6 @@ namespace tnurbs
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
-    template<typename T, int dim >
-    ENUM_NURBS find_nearst_point_on_surface_inner(const Eigen::Vector<T, dim>& nearst_point)
-    {
-        return ENUM_NURBS::NURBS_SUCCESS;
-    }
-
-
-
     template<typename surface_type>
     class surface_nearest
     {
@@ -603,9 +603,9 @@ namespace tnurbs
         static constexpr int dim = surface_type::dimension;
     private:
         T m_eps = TDEFAULT_ERROR<T>::value;
-        T m_dist_eps = 0.5;
+        T m_dist_eps = 10000;
         T m_angle_eps = 0.1;
-        T m_chord_eps = 1.0;
+        T m_chord_eps = 10000;
         Box<T, dim> *m_box = nullptr;
         Box<T, 2> *m_uv_box = nullptr;
 
@@ -760,7 +760,7 @@ namespace tnurbs
                 for (int u_index = 0; u_index < u_count; ++u_index)
                 {
                     surface_type* surf = nullptr;
-                    surface_mesh_helper<surface_type> temp_mh; 
+                    // surface_mesh_helper<surface_type> temp_mh; 
                     //Eigen::Vector<T, dim> tmep_point; 
                     Eigen::Matrix<T, dim, 1> tmep_point;
                     T temp_min_dis, temp_u, temp_v;

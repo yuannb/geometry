@@ -931,8 +931,8 @@ namespace tnurbs
     {
     public:
         using Type = T;
-        
-
+        static constexpr bool is_ratio = is_rational;
+        static constexpr int dimension = dim;
     private:
         static int constexpr rows = is_rational ? dim + 1 : dim;
         int m_degree;
@@ -1225,6 +1225,10 @@ namespace tnurbs
             return m_knots_vector;
         }
 
+        ENUM_NURBS get_different_knots_vector(std::vector<T> &vec) const
+        {
+            return  get_all_defference_knots(m_degree, m_knots_vector, vec);
+        }
         int get_degree() const
         {
             return m_degree;
@@ -2556,6 +2560,14 @@ namespace tnurbs
             nurbs_curve<T, dim, is_rational, -1, -1>* new_curve = new nurbs_curve<T, dim, is_rational, -1, -1>(new_knots_vector, new_control_points);
             curves.push_back(new_curve);
             return ENUM_NURBS::NURBS_SUCCESS;
+        }
+       
+        Box<T, 1> get_domain_box() const
+        {
+            Box<T, 1> domain;
+            domain.Min[0] = m_knots_vector[0];
+            domain.Max[0] = m_knots_vector[m_degree + m_control_points.cols()];
+            return domain;
         }
 
         //ENUM_NURBS tangent_surface(nurbs_curve<T, dim, is_rational, -1, -1> &tangent_curve) const

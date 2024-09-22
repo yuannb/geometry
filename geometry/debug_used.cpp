@@ -1,4 +1,6 @@
 #include "debug_used.h"
+#include <json.hpp>
+#include <fstream>
 
 namespace tnurbs
 {
@@ -413,6 +415,16 @@ namespace tnurbs
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
+    ENUM_NURBS save_obj2(const nurbs_surface<double, 3, -1, -1, -1, -1, true>& surf, const char* path)
+    {
+        surface_mesh_helper<nurbs_surface<double, 3, -1, -1, -1, -1, true>> mh;
+        disc_surface(&surf, mh, TDEFAULT_ERROR<double>::value, 10.0, 0.1, 1.0);
+        mesh<2> surface_mesh;
+        mesh_help_to_mesh(mh, surface_mesh);
+
+        save_obj(&surface_mesh, path);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
     ENUM_NURBS save_obj2(const nurbs_curve<double, 3, false, -1, -1>& curv, const char* path)
     {
         curve_mesh_helper<nurbs_curve<double, 3, false, -1, -1>> mh;
@@ -421,6 +433,164 @@ namespace tnurbs
         mesh_help_to_mesh(mh, curve_mesh);
 
         save_obj(&curve_mesh, path);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    ENUM_NURBS save_obj2(const nurbs_curve<double, 3, true, -1, -1>& curv, const char* path)
+    {
+        curve_mesh_helper<nurbs_curve<double, 3, true, -1, -1>> mh;
+        disc_curve(&curv, mh, TDEFAULT_ERROR<double>::value, 10.0, 0.1, 1.0);
+        mesh<1> curve_mesh;
+        mesh_help_to_mesh(mh, curve_mesh);
+
+        save_obj(&curve_mesh, path);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+    ENUM_NURBS save_chat_points(const std::vector<surfs_int_points_chat<double, 3>>& points_chats, const char* path)
+    {
+        nlohmann::json chat_json;
+        chat_json["Name"] = "surface_int_point_chats";
+        chat_json["CurveCount"] = points_chats.size();
+        int index = 0;
+        for (const auto& chat : points_chats)
+        {
+            chat_json["Curve" + std::to_string(index)] = {};
+            nlohmann::json& curve_data = chat_json["Curve" + std::to_string(index)];
+            curve_data["PointsCount"] = chat.m_inter_points.size();
+			curve_data["Point3d"] = {};
+			curve_data["Param"] = {};
+            curve_data["Transversal"] = chat.m_is_transversal;
+            for (const auto& int_point : chat.m_inter_points)
+            {
+				curve_data["Point3d"].push_back(int_point.m_point[0]);
+				curve_data["Point3d"].push_back(int_point.m_point[1]);
+				curve_data["Point3d"].push_back(int_point.m_point[2]);
+
+				curve_data["Param"].push_back(int_point.m_uv[0]);
+				curve_data["Param"].push_back(int_point.m_uv[1]);
+				curve_data["Param"].push_back(int_point.m_uv[2]);
+				curve_data["Param"].push_back(int_point.m_uv[3]);
+            }
+            index += 1;
+        }
+        std::ofstream outfile2(path);
+        outfile2 << chat_json;
+        outfile2.close();
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    ENUM_NURBS read_chat_points(std::vector<surfs_int_points_chat<double, 3>>& points_chat, const char* path)
+    {
+        nlohmann::json chat_json;
+        std::ifstream jfile(path);
+        jfile >> chat_json;
+        size_t curve_count = chat_json.at("CurveCount").get<size_t>();
+
+        points_chat.resize(curve_count);
+        for (size_t index = 0; index < curve_count; ++index)
+        {
+            surfs_int_points_chat<double, 3>& chat = points_chat[index];
+            nlohmann::json curve_data = chat_json["Curve" + std::to_string(index)];
+            nlohmann::json points_data = curve_data["Point3d"];
+            nlohmann::json param_data = curve_data["Param"];
+            size_t points_count = curve_data["PointsCount"].get<size_t>();
+            chat.m_inter_points.resize(points_count);
+            chat.m_is_transversal = curve_data["Transversal"].get<bool>();
+            for (size_t i = 0; i < points_count; ++i)
+            {
+                size_t k = i * 3;
+                chat.m_inter_points[i].m_point = Eigen::Vector3d(points_data[k].get<double>(), points_data[k + 1].get<double>(), points_data[k + 2].get<double>());
+                size_t j = i * 4;
+                chat.m_inter_points[i].m_uv = Eigen::Vector4d(param_data[j].get<double>(), param_data[1 + j].get<double>(), param_data[2 + j].get<double>(), param_data[3 + j].get<double>());
+            }
+        }
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+    ENUM_NURBS read_chat_points(surf_surf_int<double, 3>& int_data, const std::string& path)
+    {
+        nlohmann::json chat_json;
+        std::ifstream jfile(path);
+        jfile >> chat_json;
+        size_t curve_count = chat_json.at("CurveCount").get<size_t>();
+        std::vector<surfs_int_points_chat<double, 3>>& points_chat = int_data.m_int_chats;
+        points_chat.resize(curve_count);
+        for (size_t index = 0; index < curve_count; ++index)
+        {
+            surfs_int_points_chat<double, 3>& chat = points_chat[index];
+            nlohmann::json curve_data = chat_json["Curve" + std::to_string(index)];
+            nlohmann::json points_data = curve_data["Point3d"];
+            nlohmann::json param_data = curve_data["Param"];
+            size_t points_count = curve_data["PointsCount"].get<size_t>();
+            chat.m_inter_points.resize(points_count);
+            chat.m_is_transversal = curve_data["Transversal"].get<bool>();
+            for (size_t i = 0; i < points_count; ++i)
+            {
+                size_t k = i * 3;
+                chat.m_inter_points[i].m_point = Eigen::Vector3d(points_data[k].get<double>(), points_data[k + 1].get<double>(), points_data[k + 2].get<double>());
+                size_t j = i * 4;
+                chat.m_inter_points[i].m_uv = Eigen::Vector4d(param_data[j].get<double>(), param_data[1 + j].get<double>(), param_data[2 + j].get<double>(), param_data[3 + j].get<double>());
+            }
+        }
+        size_t isolate_point_count = chat_json["IsolatePointCount"].get<size_t>();
+        int_data.m_isolate_points.resize(isolate_point_count);
+        nlohmann::json isolate_points = chat_json["IsolatePoint"];
+        nlohmann::json isolate_param = chat_json["IsolateParam"];
+        for (size_t index = 0; index < isolate_point_count; ++index)
+        {
+            size_t k = index * 3;
+            int_data.m_isolate_points[index].m_point = Eigen::Vector3d(isolate_points[k].get<double>(), isolate_points[k + 1].get<double>(), isolate_points[k + 2].get<double>());
+            size_t j = index * 4;
+            int_data.m_isolate_points[index].m_uv = Eigen::Vector4d(isolate_param[j].get<double>(), isolate_param[j + 1].get<double>(), isolate_param[j + 2].get<double>(), isolate_param[j + 3].get<double>());
+        }
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    ENUM_NURBS save_chat_points(const surf_surf_int<double, 3>& points_chat, const char* path)
+    {
+        nlohmann::json chat_json;
+        const std::vector<surfs_int_points_chat<double, 3>>& curves_data = points_chat.m_int_chats;
+        chat_json["Name"] = "surface_int_point_chats";
+        chat_json["CurveCount"] = curves_data.size();
+        int index = 0;
+        for (const auto& chat : curves_data)
+        {
+            chat_json["Curve" + std::to_string(index)] = {};
+            nlohmann::json& curve_data = chat_json["Curve" + std::to_string(index)];
+            curve_data["PointsCount"] = chat.m_inter_points.size();
+			curve_data["Point3d"] = {};
+			curve_data["Param"] = {};
+            curve_data["Transversal"] = chat.m_is_transversal;
+            for (const auto& int_point : chat.m_inter_points)
+            {
+				curve_data["Point3d"].push_back(int_point.m_point[0]);
+				curve_data["Point3d"].push_back(int_point.m_point[1]);
+				curve_data["Point3d"].push_back(int_point.m_point[2]);
+
+				curve_data["Param"].push_back(int_point.m_uv[0]);
+				curve_data["Param"].push_back(int_point.m_uv[1]);
+				curve_data["Param"].push_back(int_point.m_uv[2]);
+				curve_data["Param"].push_back(int_point.m_uv[3]);
+            }
+            index += 1;
+        }
+        const std::vector<surf_surf_intersect_point<double, 3>>& isolate_data = points_chat.m_isolate_points;
+        chat_json["IsolateParam"] = {};
+        chat_json["IsolatePoint"] = {};
+        chat_json["IsolatePointCount"] = isolate_data.size();
+        for (const auto& isolate : isolate_data)
+        {
+            chat_json["IsolatePoint"].push_back(isolate.m_point[0]);
+            chat_json["IsolatePoint"].push_back(isolate.m_point[1]);
+            chat_json["IsolatePoint"].push_back(isolate.m_point[2]);
+            
+            chat_json["IsolateParam"].push_back(isolate.m_uv[0]);
+            chat_json["IsolateParam"].push_back(isolate.m_uv[1]);
+            chat_json["IsolateParam"].push_back(isolate.m_uv[2]);
+            chat_json["IsolateParam"].push_back(isolate.m_uv[3]);
+        }
+        std::ofstream outfile2(path);
+        outfile2 << chat_json;
+        outfile2.close();
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 }

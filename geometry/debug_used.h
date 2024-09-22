@@ -5,6 +5,7 @@
 #include "nurbs_curve.h"
 #include "nurbs_surface.h" 
 #include "discret.h"
+#include "vodes.h"
 namespace tnurbs
 {
     void save_box(const std::vector<Box<double, 2>>& boxes, const char* path);
@@ -49,7 +50,22 @@ namespace tnurbs
 
     ENUM_NURBS save_obj2(const nurbs_surface<double, 3, -1, -1, -1, -1, false>& surf, const char* path);
 
+    ENUM_NURBS save_obj2(const nurbs_surface<double, 3, -1, -1, -1, -1, true>& surf, const char* path);
+
     ENUM_NURBS save_obj2(const nurbs_curve<double, 3, false, -1, -1>& curv, const char* path);
+
+    ENUM_NURBS save_obj2(const nurbs_curve<double, 3, true, -1, -1>& curv, const char* path);
+
+    ENUM_NURBS save_chat_points(const std::vector<surfs_int_points_chat<double, 3>>& points_chat, const char* path);
+    
+    ENUM_NURBS read_chat_points(std::vector<surfs_int_points_chat<double, 3>>& points_chat, const char* path);
+
+    ENUM_NURBS save_chat_points(const surf_surf_int<double, 3>& points_chat, const char* path);
+    
+    ENUM_NURBS read_chat_points(std::vector<surfs_int_points_chat<double, 3>>& points_chat, const char* path);
+
+    ENUM_NURBS read_chat_points(surf_surf_int<double, 3>& points_chat, const std::string& path);
+
 
 } // namespace tnurbs
 

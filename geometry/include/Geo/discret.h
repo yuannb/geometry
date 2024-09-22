@@ -1118,6 +1118,11 @@ namespace tnurbs
                 
                 if (begin_it == temp_indexs.end() || end_it == temp_indexs.end())
                     indexs.push_back(current->point_index[2]);
+                else if (begin_it > end_it)
+                {
+                    //todo
+                    continue;
+                }
                 else
                     indexs.insert(indexs.end(), begin_it, end_it);
             }
