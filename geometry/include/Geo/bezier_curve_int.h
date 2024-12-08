@@ -628,6 +628,392 @@ namespace tnurbs
         return int_params;
     }
 
+    enum class curve_curve_int_type 
+    {
+        UNKNOWN = -1,
+        NORMAL = 0,
+        TANGENT = 1
+    };
+
+    template<typename T, int dim>
+    struct curve_curve_int_point
+    {
+        Eigen::Vector2<T> m_int_param;
+        Eigen::Vector<T, dim> m_int_point;
+        curve_curve_int_type int_type{ curve_curve_int_type::UNKNOWN};
+    };
+
+    // 需要保证两条曲线的合法性，此类不管理曲线的内存(还未测试)
+    template<typename left_curve_type, typename right_curve_type>
+    class curve_curve_int
+    {
+        static_assert(std::is_same<typename left_curve_type::Type, typename right_curve_type::Type>::value, "left curve type is not same with right curve type");
+        static_assert(left_curve_type::dimension == right_curve_type::dimension, "left curve dimension not equal right curve dimensin");
+        
+        using T = typename left_curve_type::Type;
+        static constexpr int dim = left_curve_type::dimension;
+        left_curve_type* m_left_curve;
+        right_curve_type* m_right_curve;
+        
+        struct remove_help
+        {
+            T m_eps;
+            curve_curve_int_point<T, dim> m_int_point;
+            remove_help(const curve_curve_int_point<T, dim>& int_point, T eps = TDEFAULT_ERROR<T>::value)
+            {
+                m_eps = eps; 
+                m_int_point = int_point; 
+            }
+            ~remove_help() { }
+            const bool operator==(const remove_help &right) const
+            {
+                if ((m_int_point.m_int_point - right.m_int_point.m_int_point).squaredNorm() < m_eps * m_eps)
+                    return true;
+                return false;
+            }
+        };
+
+        class remove_hash_help 
+        {
+        public:
+            size_t operator()(const remove_help& hero)const {
+                std::string temp;
+
+                for (int index = 0; index < dim; ++index)
+                {
+                    temp += (std::to_string(hero.m_int_point.m_int_point[index]) + ",");
+                }
+                return std::hash<std::string>()(temp);
+            }
+        };
+
+    public:
+        std::vector<curve_curve_int_point<T, dim>> m_int_points;
+        T m_tolerance;
+        ENUM_NURBS m_error_code;
+
+
+		curve_curve_int() = default;
+		ENUM_NURBS reset_curves(left_curve_type* left_curve, right_curve_type* right_curve)
+		{
+			m_left_curve = left_curve;
+			m_right_curve = right_curve;
+			m_int_points.clear();
+			return ENUM_NURBS::NURBS_SUCCESS;
+		}
+		ENUM_NURBS init(left_curve_type* left_curve, right_curve_type* right_curve, T tol = PRECISION<T>::value)
+		{
+			m_left_curve = left_curve;
+			m_right_curve = right_curve;
+			m_int_points.clear();
+            m_tolerance = tol;
+			return ENUM_NURBS::NURBS_SUCCESS;
+		}
+
+		//迭代加细交点(周期性曲面待处理)(TODO: 重构)
+		ENUM_NURBS intersect_point_iteration(const Box<T, 3>& domian, Eigen::Vector<T, 2> current_param, Eigen::Vector<T, 2>& intersect_param)
+		{
+			// TODO: closed
+			Eigen::Vector<Eigen::Vector<T, dim>, 2> left_point_ders;
+			Eigen::Vector<Eigen::Vector<T, dim>, 2> right_point_ders;
+			Eigen::Vector<T, dim> vec;
+			T min_distance = 100000;
+			intersect_param = current_param;
+
+			//迭代次数需要修改
+			for (int loop_index = 0; loop_index < 2 * SURFACE_ITERATE_DEEP; ++loop_index)
+			{
+				m_left_curve->template derivative_on_curve<1>(current_param[0], left_point_ders);
+				m_right_curve->template derivative_on_curve<1>(current_param[1], right_point_ders);
+				vec = right_point_ders(0, 0) - left_point_ders[0];
+				T distance = vec.squaredNorm();
+				if (distance < min_distance)
+				{
+					min_distance = distance;
+					intersect_param = current_param;
+
+					bool flag = true;
+					for (int index = 0; index < dim; ++index)
+					{
+						if (std::abs(vec[index]) > PRECISION<T>::value)
+						{
+							flag = false;
+							break;
+						}
+					}
+					if (flag == true)
+						return ENUM_NURBS::NURBS_SUCCESS;
+				}
+
+				Eigen::Matrix<T, dim, 2> mat;
+				mat.col(0) = left_point_ders[1];
+				mat.col(1) = -1.0 * right_point_ders[1];
+
+				Eigen::JacobiSVD<Eigen::Matrix<T, dim, 3>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(mat);
+				Eigen::Vector<T, 2> delta = matSvd.solve(vec);
+				if (matSvd.info() != Eigen::Success)
+					return ENUM_NURBS::NURBS_ERROR;
+
+				Eigen::Vector<T, 2> next_param = current_param + delta;
+				for (int index = 0; index < 2; ++index)
+				{
+					if (next_param[index] < domian.Min[index])
+						next_param[index] = domian.Min[index];
+					else if (next_param[index] > domian.Max[index])
+						next_param[index] = domian.Max[index];
+				}
+
+				current_param = next_param;
+			}
+
+			return ENUM_NURBS::NURBS_ERROR;
+		}
+
+
+		//迭代加细交点(周期性曲面待处理)(TODO: 重构)
+		ENUM_NURBS intersect_point_singular_iteration(const Box<T, 3>& domian, Eigen::Vector<T, 2> current_param, Eigen::Vector<T, 2>& intersect_param)
+		{
+			// TODO: closed
+			Eigen::Vector<Eigen::Vector<T, dim>, 3> left_point_ders;
+			Eigen::Vector<Eigen::Vector<T, dim>, 3> right_point_ders;
+			//Eigen::Vector<T, dim> left_point, right_point;
+			Eigen::Vector<T, dim + 1> vec;
+			T min_distance = 100000;
+			intersect_param = current_param;
+
+			//迭代次数需要修改
+			for (int loop_index = 0; loop_index < 2 * SURFACE_ITERATE_DEEP; ++loop_index)
+			{
+				m_left_curve->template derivative_on_curve<2>(current_param[0], left_point_ders);
+				m_right_curve->template derivative_on_curve<2>(current_param[1], right_point_ders);
+				vec.template block<dim, 1>(0, 0) = right_point_ders[0] - left_point_ders[0];
+                Eigen::Vector<T, dim> cross_vec = right_point_ders[1].cross(left_point_ders[1]);
+				T tangent_len1 = left_point_ders[1].norm();
+				T tangent_len2 = right_point_ders[1].norm();
+				T coeff = -1.0 / (tangent_len1 * tangent_len2);
+				vec[dim] = cross_vec.squaredNorm() * coeff;
+
+				T distance = vec.squaredNorm();
+				if (distance < min_distance)
+				{
+					min_distance = distance;
+					intersect_param = current_param;
+
+					bool flag = true;
+					for (int index = 0; index <= dim; ++index)
+					{
+						if (std::abs(vec[index]) > PRECISION<T>::value)
+						{
+							flag = false;
+							break;
+						}
+					}
+					if (flag == true)
+						return ENUM_NURBS::NURBS_SUCCESS;
+				}
+
+				Eigen::Matrix<T, dim + 1, 2> mat;
+				mat.template block<dim, 1>(0, 0) = left_point_ders[1];
+                mat.template block<dim, 1>(0, 1) = -1.0 * right_point_ders[1];
+				mat(dim, 0) = 2 * cross_vec.dot(right_point_ders[1].cross(left_point_ders[2])) * coeff;
+				mat(dim, 2) = 2 * cross_vec.dot(right_point_ders[2].cross(left_point_ders[1])) * coeff;
+
+				Eigen::JacobiSVD<Eigen::Matrix<T, dim + 1, 2>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(mat);
+				Eigen::Vector<T, 2> delta = matSvd.solve(vec);
+				if (matSvd.info() != Eigen::Success)
+					return ENUM_NURBS::NURBS_ERROR;
+
+				Eigen::Vector<T, 2> next_param = current_param + delta;
+				for (int index = 0; index < 2; ++index)
+				{
+					if (next_param[index] < domian.Min[index])
+						next_param[index] = domian.Min[index];
+					else if (next_param[index] > domian.Max[index])
+						next_param[index] = domian.Max[index];
+				}
+
+				current_param = next_param;
+			}
+
+			return ENUM_NURBS::NURBS_ERROR;
+		}
+
+        std::vector<curve_curve_int_point<T, dim>> bezier_curve_int_bezier_curve(const left_curve_type& left, const right_curve_type& right)
+		{
+			int left_degree = left.get_degree();
+			int right_degree = left.get_degree();
+			std::array<int, 2> degrees{ left_degree, right_degree };
+			auto left_control_points = left.get_control_points();
+			auto right_control_points = right.get_control_points();
+
+			int count = (left_degree + 1) * (right_degree + 1);
+			Eigen::Matrix<T, dim, Eigen::Dynamic> coeff(dim, count);
+			Index<2> index;
+			index.reset();
+			index.set_bounds(degrees);
+			for (int i = 0; i < count; ++i)
+			{
+				if constexpr (left_curve_type::is_ratio == false && right_curve_type::is_ratio == false)
+				{
+					coeff.col(i) = left_control_points.col(index.m_index[0]) - right_control_points.col(index.m_index[1]);
+				}
+				else if constexpr (left_curve_type::is_ratio == true && right_curve_type::is_ratio == true)
+				{
+					coeff.col(i) = left_control_points.template block<dim, 1>(0, index.m_index[0]) * right_control_points(dim, index.m_index[1]) -
+						right_control_points.template block<dim, 1>(0, index.m_index[1]) * left_control_points(dim, index.m_index[0]);
+				}
+				else if constexpr (left_curve_type::is_ratio == true && right_curve_type::is_ratio == false)
+				{
+					coeff.col(i) = left_control_points.template block<dim, 1>(0, index.m_index[0]) -
+						right_control_points.col(index.m_index[1]) * left_control_points(dim, index.m_index[0]);
+				}
+				else
+				{
+					coeff.col(i) = left_control_points.col(index.m_index[0]) * right_control_points(dim, index.m_index[1]) -
+						right_control_points.template block<dim, 1>(0, index.m_index[1]);
+				}
+				index.add_one();
+			}
+
+			smspe<T, dim, 2> solver;
+			solver.init(coeff, degrees);
+			std::vector<Box<T, 3>> int_boxes;
+			solver.compute_ipp(int_boxes);
+            std::vector<curve_curve_int_point<T, dim>> int_points;
+			Box<T, 2> domian;
+            std::array<T, 2> curve_ends_knots;
+            left.get_ends_knots(curve_ends_knots);
+			domian.Min[0] = curve_ends_knots[0];
+			domian.Max[0] = curve_ends_knots[1];
+            
+            right.get_ends_knots(curve_ends_knots);
+			domian.Min[1] = curve_ends_knots[0];
+			domian.Max[1] = curve_ends_knots[1];
+            Eigen::Vector<T, 2> result_param;
+			for (Box<T, 2>&int_box : int_boxes)
+			{
+				bool flag = false;
+				int_box.Min[0] = domian.Min[0] + (domian.Max[0] - domian.Min[0]) * int_box.Min[0];
+				int_box.Max[0] = domian.Min[0] + (domian.Max[0] - domian.Min[0]) * int_box.Max[0];
+				int_box.Min[1] = domian.Min[1] + (domian.Max[1] - domian.Min[1]) * int_box.Min[1];
+				int_box.Max[1] = domian.Min[1] + (domian.Max[1] - domian.Min[1]) * int_box.Max[1];
+
+                Eigen::Vector<T, 2> initial_param = int_box.get_middle_point();
+                Eigen::Vector<T, 2> param;
+				if (ENUM_NURBS::NURBS_SUCCESS == intersect_point_iteration(domian, initial_param, param))
+				{
+					if (int_box.is_contain_point(param, TDEFAULT_ERROR<T>::value))
+					{
+						flag = true;
+						result_param = param;
+						initial_param = param;
+					}
+				}
+                bool is_tangent = false;
+				if (ENUM_NURBS::NURBS_SUCCESS == intersect_point_singular_iteration(domian, initial_param, param))
+				{
+					if (int_box.is_contain_point(param, TDEFAULT_ERROR<T>::value))
+					{
+						flag = true;
+                        is_tangent = true;
+						result_param = param;
+					}
+				}
+				if (flag == true)
+				{
+                    int_points.push_back(curve_curve_int_point<T, dim>{});
+                    curve_curve_int_point<T, dim>& end = int_points.back();
+                    end.int_type = is_tangent == true ? curve_curve_int_type::TANGENT : curve_curve_int_type::NORMAL;
+                    end.m_int_param = result_param;
+                    m_left_curve->point_on_curve(result_param[0], end.m_int_point);
+				}
+			}
+
+			//TODO: 去重
+			// std::unordered_set<help<T, 3>, hash_help<T, 3>> remove_mult;
+			// for (const Eigen::Vector<T, 3>&param : iter_int_params)
+			// {
+			// 	help<T, 3> h(param);
+			// 	remove_mult.insert(h);
+			// }
+			// iter_int_params.clear();
+			// for (auto it = remove_mult.begin(); it != remove_mult.end(); ++it)
+			// {
+			// 	iter_int_params.push_back(it->m_point);
+			// }
+
+			return int_points;
+		}
+
+        void get_curves_int_pair(std::vector<std::pair<left_curve_type, right_curve_type>>& int_curves_pairs)
+        {
+            // TOOD: 分层碰撞; 内存管理
+
+            std::vector<left_curve_type *> left_sub_curves;
+            m_left_curve->decompose_to_bezier(left_sub_curves);
+
+            std::vector<left_curve_type *> right_sub_curves;
+            m_right_curve->decompose_to_bezier(right_sub_curves);
+            
+            size_t left_curves_count = left_sub_curves.size();
+            size_t right_curves_count = right_sub_curves.size();
+            std::vector<Box<T, dim>> left_curve_boxes;
+            std::vector<Box<T, dim>> right_curve_boxes;
+            for (size_t curve_index = 0; curve_index < left_curves_count; ++curve_index)
+            {
+                left_curve_boxes.push_back(Box<T, dim>());
+                left_sub_curves[curve_index]->get_box(left_curve_boxes.back());
+            }
+            for (size_t curve_index = 0; curve_index < right_curves_count; ++curve_index)
+            {
+                right_curve_boxes.push_back(Box<T, dim>());
+                right_sub_curves[curve_index]->get_box(right_curve_boxes.back());
+            }
+            Box<T, dim> int_box;
+            for (size_t left_curve_index = 0; left_curve_index < left_curves_count; ++left_curve_index)
+            {
+                for (size_t right_curve_index = 0; right_curve_index < right_curves_count; ++right_curve_index)
+                {
+					if (left_curve_boxes[left_curve_index].intersect(right_curve_boxes[right_curve_index], int_box) == true)
+					{
+						int_curves_pairs.push_back(std::make_pair(left_curve_type(*left_sub_curves[left_curve_index]), right_curve_type(*right_sub_curves[right_curve_index])));
+					}
+                }
+            }
+            for (size_t curve_index = 0; curve_index < left_curves_count; ++curve_index)
+            {
+                delete left_sub_curves[curve_index];
+            }
+            for (size_t curve_index = 0; curve_index < right_curves_count; ++curve_index)
+            {
+                delete right_sub_curves[curve_index];
+            }
+            return;
+        }
+        void run_intersect()
+        {
+            std::vector<std::pair<left_curve_type, right_curve_type>> curves_pairs;
+            get_curves_int_pair(curves_pairs);
+           
+			std::unordered_set<remove_help, remove_hash_help> remove_mult;
+            for (auto& curve_pair : curves_pairs)
+            {
+                std::vector<curve_curve_int_point<T, dim>> int_points = bezier_curve_int_bezier_curve(curves_pairs.first, curves_pairs.second); 
+                for (curve_curve_int_point<T, dim>& int_point : int_points)
+                {
+                    remove_help h(int_point);
+                    remove_mult.insert(h);
+                }
+            }
+            // m_int_points.insert(m_int_points.end(), remove_mult.begin(), remove_mult.end()); 
+            for (auto it = remove_mult.begin(); it != remove_mult.end(); ++it)
+            {
+                m_int_points.push_back(it->m_int_point);
+            }
+            return;
+        }
+    };
+
     //TODO: is_rationl = true
     template<typename T, int dim, bool is_rational = false>
     std::vector<Eigen::Vector<T, 3>> bezier_curve_int_bezier_surface(const bezier_curve<T, dim, is_rational, -1>& left, const bezier_surface<T, dim, -1, -1, is_rational>& right)
@@ -677,8 +1063,8 @@ namespace tnurbs
         //迭代次数需要修改
         for (int loop_index = 0; loop_index < 2 * SURFACE_ITERATE_DEEP; ++loop_index)
         {
-            left.derivative_on_curve<1>(current_param[0], left_point_ders);
-            right.derivative_on_surface<1>(current_param[1], current_param[2], right_point_ders);
+            left.template derivative_on_curve<1>(current_param[0], left_point_ders);
+            right.template derivative_on_surface<1>(current_param[1], current_param[2], right_point_ders);
             vec = right_point_ders(0, 0) - left_point_ders[0];
             T distance = vec.squaredNorm();
             if (distance < min_distance)
@@ -741,8 +1127,8 @@ namespace tnurbs
         //迭代次数需要修改
         for (int loop_index = 0; loop_index < 2 * SURFACE_ITERATE_DEEP; ++loop_index)
         {
-            left.derivative_on_curve<2>(current_param[0], left_point_ders);
-            right.derivative_on_surface<2>(current_param[1], current_param[2], right_point_ders);
+            left.template derivative_on_curve<2>(current_param[0], left_point_ders);
+            right.template derivative_on_surface<2>(current_param[1], current_param[2], right_point_ders);
             vec.template block<dim, 1>(0, 0) = right_point_ders(0, 0) - left_point_ders[0];
             Eigen::Vector<T, dim> surface_normal = right_point_ders(1, 0).cross(right_point_ders(0, 1));
             T normal_len = surface_normal.norm();
@@ -881,12 +1267,20 @@ namespace tnurbs
 
         return iter_int_params;
     }
+    enum class curve_surface_int_type 
+    {
+        UNKNOWN = -1,
+        NORMAL = 0,
+        TANGENT = 1
+    };
+
 
     template<typename T, int dim>
     struct curve_surface_int_point
     {
         Eigen::Vector3<T> m_int_param;
         Eigen::Vector<T, dim> m_int_point;
+        curve_surface_int_type int_type{curve_surface_int_type::UNKNOWN};
     };
 
     template<typename curve_type, typename surface_type>
@@ -895,11 +1289,46 @@ namespace tnurbs
         using T = typename curve_type::Type;
         static constexpr int dim = curve_type::dimension;
 
-        static_assert(std::is_same<curve_type::Type, surface_type::Type>::value, "curve type is not same with surface type");
+        static_assert(std::is_same<typename curve_type::Type, typename surface_type::Type>::value, "curve type is not same with surface type");
         static_assert(curve_type::dimension == surface_type::dimension, "curve dimension not equal surface dimensin");
 
         curve_type* m_curve;
         surface_type* m_surface;
+        struct remove_help
+        {
+            T m_eps;
+            curve_surface_int_point<T, dim> m_int_point;
+            remove_help(const curve_surface_int_point<T, dim>& int_point, T eps = TDEFAULT_ERROR<T>::value)
+            {
+                m_eps = eps; 
+                m_int_point = int_point; 
+            }
+            ~remove_help() { }
+            const bool operator==(const remove_help &right) const
+            {
+                if ((m_int_point.m_int_point - right.m_int_point.m_int_point).squaredNorm() < m_eps * m_eps)
+                    return true;
+                return false;
+            }
+        };
+
+        class remove_hash_help 
+        {
+        public:
+            size_t operator()(const remove_help& hero)const {
+                std::string temp;
+
+                for (int index = 0; index < dim; ++index)
+                {
+                    temp += (std::to_string(hero.m_int_point.m_int_point[index]) + ",");
+                }
+                return std::hash<std::string>()(temp);
+            }
+        };
+        // 
+
+
+        
     public: 
         std::vector<curve_surface_int_point<T, dim>> m_int_points;
         T m_tolerance;
@@ -932,8 +1361,8 @@ namespace tnurbs
 			//迭代次数需要修改
 			for (int loop_index = 0; loop_index < 2 * SURFACE_ITERATE_DEEP; ++loop_index)
 			{
-				m_curve->derivative_on_curve<1>(current_param[0], left_point_ders);
-				m_surface->derivative_on_surface<1>(current_param[1], current_param[2], right_point_ders);
+				m_curve->template derivative_on_curve<1>(current_param[0], left_point_ders);
+				m_surface->template derivative_on_surface<1>(current_param[1], current_param[2], right_point_ders);
 				vec = right_point_ders(0, 0) - left_point_ders[0];
 				T distance = vec.squaredNorm();
 				if (distance < min_distance)
@@ -994,8 +1423,8 @@ namespace tnurbs
 			//迭代次数需要修改
 			for (int loop_index = 0; loop_index < 2 * SURFACE_ITERATE_DEEP; ++loop_index)
 			{
-				m_curve->derivative_on_curve<2>(current_param[0], left_point_ders);
-				m_surface->derivative_on_surface<2>(current_param[1], current_param[2], right_point_ders);
+				m_curve->template derivative_on_curve<2>(current_param[0], left_point_ders);
+				m_surface->template derivative_on_surface<2>(current_param[1], current_param[2], right_point_ders);
 				vec.template block<dim, 1>(0, 0) = right_point_ders(0, 0) - left_point_ders[0];
 				Eigen::Vector<T, dim> surface_normal = right_point_ders(1, 0).cross(right_point_ders(0, 1));
 				T normal_len = surface_normal.norm();
@@ -1050,8 +1479,7 @@ namespace tnurbs
 			return ENUM_NURBS::NURBS_ERROR;
 		}
 
-
-        std::vector<Eigen::Vector<T, dim>> bezier_curve_int_bezier_surface(const curve_type& left, const surface_type& right)
+        std::vector<curve_surface_int_point<T, dim>> bezier_curve_int_bezier_surface(const curve_type& left, const surface_type& right)
 		{
 			int left_degree = left.get_degree();
 			auto right_control_points = right.get_control_points();
@@ -1093,7 +1521,7 @@ namespace tnurbs
 			solver.init(coeff, degrees);
 			std::vector<Box<T, 3>> int_boxes;
 			solver.compute_ipp(int_boxes);
-			std::vector<Eigen::Vector<T, 3>> iter_int_params;
+            std::vector<curve_surface_int_point<T, dim>> int_points;
 			Box<T, 3> domian;
             std::array<T, 2> curve_ends_knots;
             left.get_ends_knots(curve_ends_knots);
@@ -1127,17 +1555,23 @@ namespace tnurbs
 						initial_param = param;
 					}
 				}
+                bool is_tangent = false;
 				if (ENUM_NURBS::NURBS_SUCCESS == intersect_point_singular_iteration(domian, initial_param, param))
 				{
 					if (int_box.is_contain_point(param, TDEFAULT_ERROR<T>::value))
 					{
 						flag = true;
+                        is_tangent = true;
 						result_param = param;
 					}
 				}
 				if (flag == true)
 				{
-					iter_int_params.push_back(result_param);
+                    int_points.push_back(curve_surface_int_point<T, dim>{});
+                    curve_surface_int_point<T, dim>& end = int_points.back();
+                    end.int_type = is_tangent == true ? curve_surface_int_type::TANGENT : curve_surface_int_type::NORMAL;
+                    end.m_int_param = result_param;
+                    m_curve->point_on_curve(result_param[0], end.m_int_point);
 				}
 			}
 
@@ -1154,7 +1588,7 @@ namespace tnurbs
 			// 	iter_int_params.push_back(it->m_point);
 			// }
 
-			return iter_int_params;
+			return int_points;
 		}
 
         void get_curve_surface_int_pair(std::vector<std::pair<curve_type, surface_type>>& int_curve_surface_pairs)
@@ -1217,23 +1651,20 @@ namespace tnurbs
             std::vector<std::pair<curve_type, surface_type>> curve_surface_pairs;
             get_curve_surface_int_pair(curve_surface_pairs);
            
-			std::unordered_set<help<T, 3>, hash_help<T, 3>> remove_mult;
-            for (const auto& curve_surface_pair : curve_surface_pairs)
+			std::unordered_set<remove_help, remove_hash_help> remove_mult;
+            for (auto& curve_surface_pair : curve_surface_pairs)
             {
-                std::vector<Eigen::Vector<T, dim>> int_points = bezier_curve_int_bezier_surface(curve_surface_pair.first, curve_surface_pair.second);
-				//TODO: 去重
-				for (const Eigen::Vector<T, 3>&param : int_points)
-				{
-					help<T, 3> h(param);
-					remove_mult.insert(h);
-				}
+                std::vector<curve_surface_int_point<T, dim>> int_points = bezier_curve_int_bezier_surface(curve_surface_pair.first, curve_surface_pair.second); 
+                for (curve_surface_int_point<T, dim>& int_point : int_points)
+                {
+                    remove_help h(int_point);
+                    remove_mult.insert(h);
+                }
             }
+            // m_int_points.insert(m_int_points.end(), remove_mult.begin(), remove_mult.end()); 
             for (auto it = remove_mult.begin(); it != remove_mult.end(); ++it)
             {
-                m_int_points.push_back(curve_surface_int_point<T, dim>{});
-                curve_surface_int_point<T, dim>& end = m_int_points.back();
-                end.m_int_param= it->m_point;
-                m_curve->point_on_curve(end.m_int_param[0], end.m_int_point);
+                m_int_points.push_back(it->m_int_point);
             }
             return;
         }

@@ -66,6 +66,7 @@ namespace tnurbs
 
     ENUM_NURBS read_chat_points(surf_surf_int<double, 3>& points_chat, const std::string& path);
 
+    ENUM_NURBS save_chat_points_file(const surf_surf_int<double, 3>& points_chat, const char* path);
 
 } // namespace tnurbs
 

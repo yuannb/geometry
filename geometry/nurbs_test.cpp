@@ -17,9 +17,9 @@
 #include "bezier_curve_int.h"
 using namespace tnurbs;
 
-//vsÖÐassertÖÐÖ¹µ÷ÊÔ²é¿´¶ÑÕ»ÔÚ´úÂëÖÐÌí¼ÓÏÂÃæµÄº¯Êý
+//vsï¿½ï¿½assertï¿½ï¿½Ö¹ï¿½ï¿½ï¿½Ô²é¿´ï¿½ï¿½Õ»ï¿½Ú´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Äºï¿½ï¿½ï¿½
 //_set_error_mode(_OUT_TO_MSGBOX);
-const std::string src_path = "../../intersectData/";
+const std::string src_path = "../intersectData/";
 
 using nunbs_curve3d = nurbs_curve<double, 3, false, -1, -1>;
 using nurbs_curve3d = nurbs_curve<double, 3, true, -1, -1>;
@@ -1236,8 +1236,8 @@ TEST(BEZIER_INT, test2)
     control_points2(2) = points13;
     control_points2(3) = points14;
     nurbs_surface<double, 3, -1, -1, -1, -1, false> *test_surface2 = new nurbs_surface<double, 3, -1, -1, -1, -1, false>(u_knots_vector2, v_knots_vector2, control_points2);
-    // save_obj2(*test_surface, "test_surface.obj");
-    // save_obj2(*test_surface2, "test_surface2.obj");
+    save_obj2(*test_surface, "test_surface.obj");
+    save_obj2(*test_surface2, "test_surface2.obj");
     _set_error_mode(_OUT_TO_MSGBOX);
     nurbs_surfaces_intersect<nunbs_surface3d, nunbs_surface3d> ts;
     ts.init(test_surface, test_surface2);
@@ -1246,8 +1246,11 @@ TEST(BEZIER_INT, test2)
     // save_chat_points(intersection, "BEZIER_INTtest2.json");
     size_t curve_count = intersection.m_int_chats.size();
     size_t isolate_point_count = intersection.m_isolate_points.size();
+    // save_chat_points_file(intersection, "intersectcurve.obj");
     surf_surf_int<double, 3> test_data;
-    read_chat_points(test_data, src_path + "BEZIER_INTtest2.json");
+    const std::string path("D:\\geometry\\intersectData\\BEZIER_INTtest2.json");
+    // read_chat_points(test_data, src_path + "BEZIER_INTtest2.json");
+    read_chat_points(test_data, path);
     EXPECT_EQ(curve_count, test_data.m_int_chats.size());
     EXPECT_EQ(isolate_point_count, test_data.m_isolate_points.size());
 
@@ -1262,7 +1265,7 @@ TEST(BEZIER_INT, test2)
         for (size_t i = 2; i < points_count; ++i)
         {
             size_t current_index;
-            flag = ts.is_point_in_intcurve(int_chat.m_inter_points[index].m_uv, int_chat.m_is_transversal, current_index);
+            flag = ts.is_point_in_intcurve(int_chat.m_inter_points[i].m_uv, int_chat.m_is_transversal, current_index);
             EXPECT_TRUE(flag);
             EXPECT_EQ(current_index, curve_index);
         }
@@ -1347,7 +1350,9 @@ TEST(BEZIER_INT, test3)
     size_t curve_count = intersection.m_int_chats.size();
     size_t isolate_point_count = intersection.m_isolate_points.size();
     surf_surf_int<double, 3> test_data;
-    read_chat_points(test_data, src_path + "BEZIER_INTtest3.json");
+    const std::string path("D:\\geometry\\intersectData\\BEZIER_INTtest3.json");
+    read_chat_points(test_data, path);
+    // read_chat_points(test_data, src_path + "BEZIER_INTtest3.json");
     EXPECT_EQ(curve_count, test_data.m_int_chats.size());
     EXPECT_EQ(isolate_point_count, test_data.m_isolate_points.size());
 
@@ -1362,7 +1367,7 @@ TEST(BEZIER_INT, test3)
         for (size_t i = 2; i < points_count; ++i)
         {
             size_t current_index;
-            flag = ts.is_point_in_intcurve(int_chat.m_inter_points[index].m_uv, int_chat.m_is_transversal, current_index);
+            flag = ts.is_point_in_intcurve(int_chat.m_inter_points[i].m_uv, int_chat.m_is_transversal, current_index);
             EXPECT_TRUE(flag);
             EXPECT_EQ(current_index, curve_index);
         }
@@ -1446,7 +1451,8 @@ TEST(BEZIER_INT, test4)
     size_t curve_count = intersection.m_int_chats.size();
     size_t isolate_point_count = intersection.m_isolate_points.size();
     surf_surf_int<double, 3> test_data;
-    read_chat_points(test_data, src_path + "BEZIER_INTtest4.json");
+    const std::string path("D:\\geometry\\intersectData\\BEZIER_INTtest4.json");
+    read_chat_points(test_data, path);
     EXPECT_EQ(curve_count, test_data.m_int_chats.size());
     EXPECT_EQ(isolate_point_count, test_data.m_isolate_points.size());
 
@@ -1461,7 +1467,7 @@ TEST(BEZIER_INT, test4)
         for (size_t i = 2; i < points_count; ++i)
         {
             size_t current_index;
-            flag = ts.is_point_in_intcurve(int_chat.m_inter_points[index].m_uv, int_chat.m_is_transversal, current_index);
+            flag = ts.is_point_in_intcurve(int_chat.m_inter_points[i].m_uv, int_chat.m_is_transversal, current_index);
             EXPECT_TRUE(flag);
             EXPECT_EQ(current_index, curve_index);
         }
@@ -1603,7 +1609,8 @@ TEST(BEZIER_INT, test5)
     size_t curve_count = intersection.m_int_chats.size();
     size_t isolate_point_count = intersection.m_isolate_points.size();
     surf_surf_int<double, 3> test_data;
-    read_chat_points(test_data, src_path + "BEZIER_INTtest5.json");
+    const std::string path("D:\\geometry\\intersectData\\BEZIER_INTtest5.json");
+    read_chat_points(test_data, path);
     EXPECT_EQ(curve_count, test_data.m_int_chats.size());
     EXPECT_EQ(isolate_point_count, test_data.m_isolate_points.size());
 
@@ -1618,7 +1625,7 @@ TEST(BEZIER_INT, test5)
         for (size_t i = 2; i < points_count; ++i)
         {
             size_t current_index;
-            flag = ts.is_point_in_intcurve(int_chat.m_inter_points[index].m_uv, int_chat.m_is_transversal, current_index);
+            flag = ts.is_point_in_intcurve(int_chat.m_inter_points[i].m_uv, int_chat.m_is_transversal, current_index);
             EXPECT_TRUE(flag);
             EXPECT_EQ(current_index, curve_index);
         }
@@ -1699,7 +1706,8 @@ TEST(BEZIER_INT, test6)
     size_t curve_count = intersection.m_int_chats.size();
     size_t isolate_point_count = intersection.m_isolate_points.size();
     surf_surf_int<double, 3> test_data;
-    read_chat_points(test_data, src_path + "BEZIER_INTtest6.json");
+    const std::string path("D:\\geometry\\intersectData\\BEZIER_INTtest6.json");
+    read_chat_points(test_data, path);
     EXPECT_EQ(curve_count, test_data.m_int_chats.size());
     EXPECT_EQ(isolate_point_count, test_data.m_isolate_points.size());
 
@@ -1714,7 +1722,7 @@ TEST(BEZIER_INT, test6)
         for (size_t i = 2; i < points_count; ++i)
         {
             size_t current_index;
-            flag = ts.is_point_in_intcurve(int_chat.m_inter_points[index].m_uv, int_chat.m_is_transversal, current_index);
+            flag = ts.is_point_in_intcurve(int_chat.m_inter_points[i].m_uv, int_chat.m_is_transversal, current_index);
             EXPECT_TRUE(flag);
             EXPECT_EQ(current_index, curve_index);
         }
@@ -1797,7 +1805,8 @@ TEST(BEZIER_INT, test7)
     size_t curve_count = intersection.m_int_chats.size();
     size_t isolate_point_count = intersection.m_isolate_points.size();
     surf_surf_int<double, 3> test_data;
-    read_chat_points(test_data, src_path + "BEZIER_INTtest7.json");
+    const std::string path("D:\\geometry\\intersectData\\BEZIER_INTtest7.json");
+    read_chat_points(test_data, path);
     EXPECT_EQ(curve_count, test_data.m_int_chats.size());
     EXPECT_EQ(isolate_point_count, test_data.m_isolate_points.size());
 
@@ -1808,11 +1817,11 @@ TEST(BEZIER_INT, test7)
         bool flag = ts.is_point_in_intcurve(int_chat.m_inter_points[1].m_uv, int_chat.m_is_transversal, curve_index);
         EXPECT_TRUE(flag);
         size_t points_count = int_chat.m_inter_points.size();
-        EXPECT_TRUE(points_count < 1.2 * intersection.m_int_chats[curve_index].m_inter_points.size());
+        EXPECT_TRUE(1.2 * points_count > intersection.m_int_chats[curve_index].m_inter_points.size());
         for (size_t i = 2; i < points_count; ++i)
         {
             size_t current_index;
-            flag = ts.is_point_in_intcurve(int_chat.m_inter_points[index].m_uv, int_chat.m_is_transversal, current_index);
+            flag = ts.is_point_in_intcurve(int_chat.m_inter_points[i].m_uv, int_chat.m_is_transversal, current_index);
             EXPECT_TRUE(flag);
             EXPECT_EQ(current_index, curve_index);
         }
@@ -1887,6 +1896,8 @@ TEST(BEZIER_INT, test8)
     control_points2(3) = points14;
     nurbs_surface<double, 3, -1, -1, -1, -1, false>* test_surface2 = new nurbs_surface<double, 3, -1, -1, -1, -1, false>(u_knots_vector2, v_knots_vector2, control_points2);
     _set_error_mode(_OUT_TO_MSGBOX);
+    // save_obj2(*test_surface, "test_surface.obj");
+    // save_obj2(*test_surface2, "test_surface2.obj");
     nurbs_surfaces_intersect<nunbs_surface3d, nunbs_surface3d> ts;
     ts.init(test_surface, test_surface2);
     ts.surafces_intersection2();
@@ -1895,7 +1906,8 @@ TEST(BEZIER_INT, test8)
     size_t curve_count = intersection.m_int_chats.size();
     size_t isolate_point_count = intersection.m_isolate_points.size();
     surf_surf_int<double, 3> test_data;
-    read_chat_points(test_data, src_path + "BEZIER_INTtest8.json");
+    const std::string path("D:\\geometry\\intersectData\\BEZIER_INTtest8.json");
+    read_chat_points(test_data, path);
     EXPECT_EQ(curve_count, test_data.m_int_chats.size());
     EXPECT_EQ(isolate_point_count, test_data.m_isolate_points.size());
 
@@ -1910,7 +1922,7 @@ TEST(BEZIER_INT, test8)
         for (size_t i = 2; i < points_count; ++i)
         {
             size_t current_index;
-            flag = ts.is_point_in_intcurve(int_chat.m_inter_points[index].m_uv, int_chat.m_is_transversal, current_index);
+            flag = ts.is_point_in_intcurve(int_chat.m_inter_points[i].m_uv, int_chat.m_is_transversal, current_index);
             EXPECT_TRUE(flag);
             EXPECT_EQ(current_index, curve_index);
         }
@@ -1993,7 +2005,8 @@ TEST(BEZIER_INT, test9)
     size_t curve_count = intersection.m_int_chats.size();
     size_t isolate_point_count = intersection.m_isolate_points.size();
     surf_surf_int<double, 3> test_data;
-    read_chat_points(test_data, src_path + "BEZIER_INTtest9.json");
+    const std::string path("D:\\geometry\\intersectData\\BEZIER_INTtest9.json");
+    read_chat_points(test_data, path);
     EXPECT_EQ(curve_count, test_data.m_int_chats.size());
     EXPECT_EQ(isolate_point_count, test_data.m_isolate_points.size());
 
@@ -2008,7 +2021,7 @@ TEST(BEZIER_INT, test9)
         for (size_t i = 2; i < points_count; ++i)
         {
             size_t current_index;
-            flag = ts.is_point_in_intcurve(int_chat.m_inter_points[index].m_uv, int_chat.m_is_transversal, current_index);
+            flag = ts.is_point_in_intcurve(int_chat.m_inter_points[i].m_uv, int_chat.m_is_transversal, current_index);
             EXPECT_TRUE(flag);
             EXPECT_EQ(current_index, curve_index);
         }
@@ -2085,7 +2098,8 @@ TEST(BEZIER_INT, test10)
     size_t curve_count = intersection.m_int_chats.size();
     size_t isolate_point_count = intersection.m_isolate_points.size();
     surf_surf_int<double, 3> test_data;
-    read_chat_points(test_data, src_path + "BEZIER_INTtest10.json");
+    const std::string path("D:\\geometry\\intersectData\\BEZIER_INTtest10.json");
+    read_chat_points(test_data, path);
     EXPECT_EQ(curve_count, test_data.m_int_chats.size());
     EXPECT_EQ(isolate_point_count, test_data.m_isolate_points.size());
 
@@ -2100,7 +2114,7 @@ TEST(BEZIER_INT, test10)
         for (size_t i = 2; i < points_count; ++i)
         {
             size_t current_index;
-            flag = ts.is_point_in_intcurve(int_chat.m_inter_points[index].m_uv, int_chat.m_is_transversal, current_index);
+            flag = ts.is_point_in_intcurve(int_chat.m_inter_points[i].m_uv, int_chat.m_is_transversal, current_index);
             EXPECT_TRUE(flag);
             EXPECT_EQ(current_index, curve_index);
         }
@@ -2241,7 +2255,8 @@ TEST(BEZIER_INT, test12)
     size_t curve_count = intersection.m_int_chats.size();
     size_t isolate_point_count = intersection.m_isolate_points.size();
     surf_surf_int<double, 3> test_data;
-    read_chat_points(test_data, src_path + "BEZIER_INTtest12.json");
+    const std::string path("D:\\geometry\\intersectData\\BEZIER_INTtest12.json");
+    read_chat_points(test_data, path);
     EXPECT_EQ(curve_count, test_data.m_int_chats.size());
     EXPECT_EQ(isolate_point_count, test_data.m_isolate_points.size());
 
@@ -2256,7 +2271,7 @@ TEST(BEZIER_INT, test12)
         for (size_t i = 2; i < points_count; ++i)
         {
             size_t current_index;
-            flag = ts.is_point_in_intcurve(int_chat.m_inter_points[index].m_uv, int_chat.m_is_transversal, current_index);
+            flag = ts.is_point_in_intcurve(int_chat.m_inter_points[i].m_uv, int_chat.m_is_transversal, current_index);
             EXPECT_TRUE(flag);
             EXPECT_EQ(current_index, curve_index);
         }
@@ -2322,6 +2337,6 @@ int main(int argc, char **argv)
 {
     testing::InitGoogleTest(&argc, argv);
     
-    // ::testing::FLAGS_gtest_filter = "BEZIER_INT.test2";
+    ::testing::FLAGS_gtest_filter = "BEZIER_INT.test*";
     return RUN_ALL_TESTS();
 }

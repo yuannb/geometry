@@ -317,7 +317,7 @@ namespace tnurbs
             int curves_count = m_curves.size();
             for (int index = 0; index < curves_count; ++index)
             {
-                find_nearst_point_on_curve_inner<curve_type, curve_type::Type, curve_type::dimension>(m_curves[index].get(), m_mesh_help[index], point, min_dis, u, nearst_point, m_eps);
+                find_nearst_point_on_curve_inner<curve_type, typename curve_type::Type, curve_type::dimension>(m_curves[index].get(), m_mesh_help[index], point, min_dis, u, nearst_point, m_eps);
             }
             return ENUM_NURBS::NURBS_SUCCESS;
         }
@@ -765,7 +765,7 @@ namespace tnurbs
                     Eigen::Matrix<T, dim, 1> tmep_point;
                     T temp_min_dis, temp_u, temp_v;
                     Eigen::Vector<T, dim> temp_nearst_point;
-                    find_nearst_point_on_surface_inner<surface_type, surface_type::Type, surface_type::dimension>(m_surfaces(v_index, u_index).get(), m_mesh_help(v_index, u_index), point, min_distance, u, v, nearest_point, m_eps);
+                    find_nearst_point_on_surface_inner<surface_type,typename surface_type::Type, surface_type::dimension>(m_surfaces(v_index, u_index).get(), m_mesh_help(v_index, u_index), point, min_distance, u, v, nearest_point, m_eps);
                     //find_nearst_point_on_surface_inner<surface_type::Type, surface_type::dimension>(point);
                     if (min_distance < m_eps)
                         return ENUM_NURBS::NURBS_SUCCESS;
@@ -777,7 +777,7 @@ namespace tnurbs
             for (int index = 0; index < u_curves_count; ++index)
             {
                 T temp_min_dis = min_distance;
-                find_nearst_point_on_curve_inner<curve_type, curve_type::Type, curve_type::dimension>(m_u_curves[index].get(), m_u_curve_mesh_help[index], point, temp_min_dis, v, nearest_point, m_eps);
+                find_nearst_point_on_curve_inner<curve_type,typename curve_type::Type, curve_type::dimension>(m_u_curves[index].get(), m_u_curve_mesh_help[index], point, temp_min_dis, v, nearest_point, m_eps);
                 if (temp_min_dis < min_distance)
                 {
                     min_distance = temp_min_dis;
@@ -791,7 +791,7 @@ namespace tnurbs
             for (int index = 0; index < v_curves_count; ++index)
             {
                 T temp_min_dis = min_distance;
-                find_nearst_point_on_curve_inner<curve_type, curve_type::Type, curve_type::dimension>(m_v_curves[index].get(), m_v_curve_mesh_help[index], point, temp_min_dis, u, nearest_point, m_eps);
+                find_nearst_point_on_curve_inner<curve_type, typename curve_type::Type, curve_type::dimension>(m_v_curves[index].get(), m_v_curve_mesh_help[index], point, temp_min_dis, u, nearest_point, m_eps);
                 if (temp_min_dis < min_distance)
                 {
                     min_distance = temp_min_dis;

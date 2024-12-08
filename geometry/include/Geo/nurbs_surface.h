@@ -2157,7 +2157,7 @@ namespace tnurbs
         {
             nurbs_surface<T, dim, -1, -1, -1, -1, is_rational> *copy_surface = new nurbs_surface<T, dim, -1, -1, -1, -1, is_rational>(*this);
             if (direction == ENUM_DIRECTION::V_DIRECTION)
-                copy_surface.reverse_uv();
+                copy_surface->reverse_uv();
 
             Eigen::VectorX<Eigen::Matrix<T, point_size, -1>> copy_nurbs_surface_control_points = copy_surface->get_control_points();
             int v_control_points_count = copy_nurbs_surface_control_points.rows();

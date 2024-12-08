@@ -8,7 +8,7 @@
 //         "name": "(Windows) 启动",
 //         "type": "cppvsdbg",
 //         "request": "launch",
-//         "program": "C:/Users/Administrator/Desktop/workbench/build/Debug/GWB.exe",
+//         "program": "D:/geometry/geometry/build/Debug/GWB.exe",
 //         "args": [],
 //         "stopAtEntry": false,
 //         "cwd": "${fileDirname}",

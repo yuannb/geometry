@@ -1019,13 +1019,14 @@ namespace tnurbs
             Eigen::Vector<Eigen::Vector<T, degree + 1>, 2> arrays;
             int current_index = 0;
             int next_index = 1;
-            Eigen::Vector<T, degree + 1> &current_array = arrays[0];
+            // Eigen::Vector<T, degree + 1> &current_array = arrays[0];
 
             arrays[0].setConstant(0.0);
+            arrays[1].setConstant(0.0);
             arrays[0][0] = 1.0;
             for (int k = 1; k <= new_n; ++k)
             {
-                Eigen::Vector<T, degree + 1> &current_array = arrays[current_array];
+                Eigen::Vector<T, degree + 1> &current_array = arrays[current_index];
                 Eigen::Vector<T, degree + 1> &next_array = arrays[next_index];
                 next_array.setConstant(0.0);
 

@@ -593,6 +593,22 @@ namespace tnurbs
         outfile2.close();
         return ENUM_NURBS::NURBS_SUCCESS;
     }
+    ENUM_NURBS save_chat_points_file(const surf_surf_int<double, 3>& points_chat, const char* path)
+    {
+        std::vector<Eigen::Vector3d> points;
+        const std::vector<surfs_int_points_chat<double, 3>>& curves_data = points_chat.m_int_chats;
+        for (const auto& chat : curves_data)
+        {
+            size_t points_count = chat.m_inter_points.size();
+            for (const auto& int_point : chat.m_inter_points)
+            {
+                points.push_back(int_point.m_point);
+            }
+        }
+        save_obj(points, path);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
 }
 
 

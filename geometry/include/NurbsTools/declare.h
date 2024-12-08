@@ -47,7 +47,7 @@ namespace tnurbs
     {
         constexpr static float value = 1e-5;
     };
-
+    
 
     template<typename T>
     struct TDEFAULTANGLETOL
@@ -528,11 +528,11 @@ namespace tnurbs
 
 };
 
-    template<typename T, int dim>
-    struct Eigen::NumTraits<Box<T, dim>> : Eigen::NumTraits<T>
-    {
+    // template<typename T, int dim>
+    // struct Eigen::NumTraits<Box<T, dim>> : Eigen::NumTraits<T>
+    // {
 
-    };
+    // };
 
     template<typename T, int dim>
     ENUM_NURBS create_box(const Eigen::Vector<T, dim>& center, T len, Box<T, dim> &box)
@@ -547,4 +547,35 @@ namespace tnurbs
     }
 
 }
+namespace Eigen
+{
+    template<typename Scalar, int dim>
+    struct NumTraits<tnurbs::Box<Scalar, dim>> 
+    {
+        typedef tnurbs::Box<Scalar, dim> BoxType;
+        typedef typename NumTraits<Scalar>::Real RealScalar;
+        typedef tnurbs::Box<RealScalar, dim> Real;
+        typedef typename NumTraits<Scalar>::NonInteger NonIntegerScalar;
+        typedef tnurbs::Box<NonIntegerScalar, dim> NonInteger;
+        typedef BoxType & Nested;
+        typedef typename NumTraits<Scalar>::Literal Literal;
 
+        enum {
+          IsComplex = NumTraits<Scalar>::IsComplex,
+          IsInteger = NumTraits<Scalar>::IsInteger,
+          IsSigned  = NumTraits<Scalar>::IsSigned,
+          RequireInitialization = 1,
+          ReadCost = HugeCost,
+          AddCost  = HugeCost,
+          MulCost  = HugeCost
+        };
+
+         EIGEN_DEVICE_FUNC EIGEN_CONSTEXPR
+         static inline RealScalar epsilon() { return NumTraits<RealScalar>::epsilon(); }
+         EIGEN_DEVICE_FUNC EIGEN_CONSTEXPR
+         static inline RealScalar dummy_precision() { return NumTraits<RealScalar>::dummy_precision(); }
+    
+         EIGEN_CONSTEXPR
+         static inline int digits10() { return NumTraits<Scalar>::digits10(); }
+    };   
+}
