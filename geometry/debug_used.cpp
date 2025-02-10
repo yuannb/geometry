@@ -593,6 +593,82 @@ namespace tnurbs
         outfile2.close();
         return ENUM_NURBS::NURBS_SUCCESS;
     }
+
+    ENUM_NURBS save_points_to_json(const std::vector<Eigen::Vector3d>& points, const char* path)
+    {
+        nlohmann::json chat_json;
+        chat_json["Name"] = "Point3D_Data";
+        chat_json["PointsCount"] = points.size();
+        int index = 0;
+        chat_json["coordinates"] = {};
+        for (const auto& point : points)
+        {
+            chat_json["coordinates"].push_back(point[0]);
+            chat_json["coordinates"].push_back(point[1]);
+            chat_json["coordinates"].push_back(point[2]);
+        }
+        std::ofstream outfile2(path);
+        outfile2 << chat_json;
+        outfile2.close();
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+    ENUM_NURBS save_points_to_json(const std::vector<Eigen::Vector2d>& points, const char* path)
+    {
+        nlohmann::json chat_json;
+        chat_json["Name"] = "Point3D_Data";
+        chat_json["PointsCount"] = points.size();
+        int index = 0;
+        chat_json["coordinates"] = {};
+        for (const auto& point : points)
+        {
+            chat_json["coordinates"].push_back(point[0]);
+            chat_json["coordinates"].push_back(point[1]);
+        }
+        std::ofstream outfile2(path);
+        outfile2 << chat_json;
+        outfile2.close();
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+    ENUM_NURBS read_points_from_json(std::vector<Eigen::Vector3d>& points, const std::string& path)
+    {
+        points.clear();
+        nlohmann::json chat_json;
+        std::ifstream jfile(path);
+        jfile >> chat_json;
+        size_t points_count = chat_json.at("PointsCount").get<size_t>();
+        points.resize(points_count);
+        for (size_t index = 0; index < points_count; ++index)
+        {
+            nlohmann::json points_data = chat_json["coordinates"];
+            for (size_t i = 0; i < points_count; ++i)
+            {
+                size_t k = i * 3;
+                Eigen::Vector3d p = Eigen::Vector3d(points_data[k].get<double>(), points_data[k + 1].get<double>(), points_data[k + 2].get<double>());
+                points.push_back(p);
+            }
+        }
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+    ENUM_NURBS read_points_from_json(std::vector<Eigen::Vector2d>& points, const std::string& path)
+    {
+        points.clear();
+        nlohmann::json chat_json;
+        std::ifstream jfile(path);
+        jfile >> chat_json;
+        size_t points_count = chat_json.at("PointsCount").get<size_t>();
+        points.resize(points_count);
+        nlohmann::json points_data = chat_json["coordinates"];
+		for (size_t i = 0; i < points_count; ++i)
+		{
+			size_t k = i * 2;
+			Eigen::Vector2d p = Eigen::Vector2d(points_data[k].get<double>(), points_data[k + 1].get<double>());
+			points[i] = p;
+		}
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+
+
     ENUM_NURBS save_chat_points_file(const surf_surf_int<double, 3>& points_chat, const char* path)
     {
         std::vector<Eigen::Vector3d> points;

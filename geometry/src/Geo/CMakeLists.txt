@@ -2,7 +2,7 @@
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 add_compile_options(-fPIC)
 
-file(GLOB INC_FILES ${gwb_global_dir}/include/Geo/*.h)
+file(GLOB INC_FILES ${gwb_global_dir}/include/Geo/*.h ${gwb_global_dir}/include/NurbsTools/*.h)
 file(GLOB SRC_FILES *.cpp)
 
 add_library(geo ${INC_FILES} ${SRC_FILES})

@@ -31,7 +31,7 @@ namespace tnurbs
         size_t index = find_min_ycoord(points);
         std::swap(points[index], points[0]);
         Eigen::Vector2<T> start_point = points[0];
-        std::sort(points.begin() + 1, points.end(), [&start_point](Eigen::Vector2<T> first, Eigen::Vector2<T> second) -> bool
+        std::sort(points.begin() + 1, points.end(), [&start_point](const Eigen::Vector2<T>& first, const Eigen::Vector2<T>& second) -> bool
         {
             Eigen::Vector2<T> v1 = first - start_point;
             Eigen::Vector2<T> v2 = second - start_point;

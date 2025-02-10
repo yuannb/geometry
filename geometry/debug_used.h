@@ -68,5 +68,10 @@ namespace tnurbs
 
     ENUM_NURBS save_chat_points_file(const surf_surf_int<double, 3>& points_chat, const char* path);
 
+    ENUM_NURBS save_points_to_json(const std::vector<Eigen::Vector3d>& points, const char* path);
+    ENUM_NURBS read_points_from_json(std::vector<Eigen::Vector3d>& points, const std::string& path);
+    
+    ENUM_NURBS save_points_to_json(const std::vector<Eigen::Vector2d>& points, const char* path);
+    ENUM_NURBS read_points_from_json(std::vector<Eigen::Vector2d>& points, const std::string& path);
 } // namespace tnurbs
 

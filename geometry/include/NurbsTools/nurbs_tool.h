@@ -1582,10 +1582,10 @@ namespace tnurbs
             Eigen::Array<T, Eigen::Dynamic, 1> second_coeff(iter_step + 1, 1);
             second_coeff[iter_step] = 0.0;
 
-            Eigen::Array<T, Eigen::Dynamic, 1> first_coeff_numerator = left.block(degree - iter_step, 0, iter_step, 1).array();
-            Eigen::Array<T, Eigen::Dynamic, 1> second_coeff_numerator = right.block(0, 0, iter_step, 1).array();
+            const Eigen::Array<T, Eigen::Dynamic, 1>& first_coeff_numerator = left.block(degree - iter_step, 0, iter_step, 1).array();
+            const Eigen::Array<T, Eigen::Dynamic, 1>& second_coeff_numerator = right.block(0, 0, iter_step, 1).array();
 
-            Eigen::Array<T, Eigen::Dynamic, 1> coeff_denominator = first_coeff_numerator + second_coeff_numerator;
+            const Eigen::Array<T, Eigen::Dynamic, 1>& coeff_denominator = first_coeff_numerator + second_coeff_numerator;
 
             first_coeff.block(1, 0, iter_step, 1) = first_coeff_numerator / coeff_denominator;
             second_coeff.block(0, 0, iter_step, 1) = second_coeff_numerator / coeff_denominator;
@@ -2050,6 +2050,11 @@ namespace tnurbs
             const Eigen::Matrix<T, point_size, Eigen::Dynamic> &old_control_points, T u, int span, int repeat_count,
             Eigen::Matrix<T, point_size, Eigen::Dynamic> &new_control_points)
     {
+        if (r == 0)
+        {
+            new_control_points = old_control_points;
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
         new_control_points.resize(point_size, control_points_count + r);
         new_control_points.block(0, 0, point_size, span - degree + 1) = old_control_points.block(0, 0, point_size, span - degree + 1);
         new_control_points.block(0, span - repeat_count + r,point_size, control_points_count - span + repeat_count)
@@ -4446,7 +4451,6 @@ namespace tnurbs
     template<typename T>
     int konts_multiple(T &u, const Eigen::VectorX<T> knots, int degree, int &idx, T eps = KNOTS_EPS<T>::value)
     {
-        
         find_span<T, ENUM_LIMITDIRECTION::LEFT>(u, degree, knots, idx);
         if (u - knots[idx] < eps)
         {
@@ -4491,6 +4495,73 @@ namespace tnurbs
         }
 
         return -1;
+    }
+
+    template<typename T>
+    int find_konts_multiple(const T& u, const Eigen::VectorX<T> knots, int degree, int& idx, T eps = KNOTS_EPS<T>::value)
+    {
+        find_span<T, ENUM_LIMITDIRECTION::LEFT>(u, degree, knots, idx);
+        if (u - knots[idx] < eps)
+        {
+            int mul = 1;
+            for (int index = idx - 1; index >= 0; --index)
+            {
+                if (knots[index] == knots[index + 1])
+                {
+                    mul += 1;
+                }
+                else
+                    break;
+            }
+            return mul;
+        }
+
+        else if (knots[idx + 1] - u < eps)
+        {
+            int knots_count = knots.size();
+            int mul = 1;
+            for (int index = idx + 1; index < knots_count; ++index)
+            {
+                if (knots[index] == knots[index - 1])
+                {
+                    mul += 1;
+					idx += 1;
+                }
+                else
+                {
+                    break;
+                }
+            }
+            return mul;
+        }
+        else
+        {
+            return 0;
+        }
+
+        return -1;
+    }
+
+    template<typename T>
+    int split_knots_at_param(const T& u, const Eigen::VectorX<T>& knots, int degree, int& idx, std::array<Eigen::VectorX<T>, 2>& result, T eps = KNOTS_EPS<T>::value)
+    {
+        // 参数不能在断点处
+        int mul = find_konts_multiple(u, knots, degree, idx, eps);
+        int left_knots_count = idx + (degree - mul + 2);
+        int right_knots_count = knots.rows() - idx + degree;
+        // assert(left_knots_count > 0);
+        // assert(right_knots_count > 0);
+
+        result[0].resize(left_knots_count);
+        result[1].resize(right_knots_count);
+
+        result[0].block(0, 0, left_knots_count, 1) = knots.block(0, 0, left_knots_count, 1);
+        result[0].block(left_knots_count - (degree + 1), 0, degree + 1, 1).setConstant(u);
+
+        result[1].block(0, 0, right_knots_count, 1) = knots.block(knots.rows() - right_knots_count, 0, right_knots_count, 1);
+        result[1].block(0, 0, degree + 1, 1).setConstant(u);
+
+        return mul;
     }
 
 }

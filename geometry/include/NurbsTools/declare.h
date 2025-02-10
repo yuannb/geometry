@@ -340,7 +340,27 @@ namespace tnurbs
             }
             return sub_boxes;
         }
+        
+        Eigen::Matrix2<Box<T, 2>> split_at_param(const Eigen::Vector<T, dim>& param) const
+        {
+            static_assert(dim == 2, "dim != 2");
+            Eigen::Matrix2<Box<T, 2>> sub_boxes;
+            Eigen::Vector<T, 2> dir = (Max - Min) * 0.5;
+            sub_boxes(0, 0).Min = Min;
+            sub_boxes(0, 0).Max = param;
 
+            sub_boxes(0, 1).Min = Eigen::Vector2<T>(param[0], Min[1]);
+            sub_boxes(0, 1).Max = Eigen::Vector2<T>(Max[0], param[1]);
+            
+            
+            sub_boxes(1, 0).Min = Eigen::Vector2<T>(Min[0], param[1]);
+            sub_boxes(1, 0).Max = Eigen::Vector2<T>(param[0], Max[1]);
+            
+            
+            sub_boxes(1, 1).Min = param;
+            sub_boxes(1, 1).Max = Max;
+            return sub_boxes;
+        }
         bool intersect(const Box &box, Box &intersect_box) const
         {
             for (int index = 0; index < dim; ++index)
@@ -524,10 +544,47 @@ namespace tnurbs
             return result;
         }
 
+        void enlarge(const Eigen::Vector<T, dim>& point)
+        {
+            for (int index = 0; index < dim; ++index)
+            {
+                Min[index] = std::min(Min[index], point[index]);
+                Max[index] = std::max(Max[index], point[index]);
+            }
+            return;
+        }
+
+
+        bool unit(Box<T, dim>& point)
+        {
+            enlarge(point.Min);
+            enlarge(point.Max);
+            return true;
+        }
+
+        void move_vector(const Eigen::Vector<T, dim>& vec)
+        {
+            Min += vec;
+            Max += vec;
+            return;
+        }
+
 
 
 };
-
+       template<typename T, int dim> 
+       Box<T, dim> envelop_points(std::vector<Eigen::Vector<T, dim>>& points)
+       {
+           Box<T, dim> box;
+           T max = std::numeric_limits<T>::max();
+           box.Min.setConstant(max);
+           box.Max.setConstant(-max);
+           for (const auto point : points)
+           {
+               box.enlarge(point);
+           }
+           return box;
+       };
     // template<typename T, int dim>
     // struct Eigen::NumTraits<Box<T, dim>> : Eigen::NumTraits<T>
     // {
