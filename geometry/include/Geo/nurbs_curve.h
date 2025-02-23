@@ -1310,14 +1310,22 @@ namespace tnurbs
             find_span<T, flag>(u, m_degree, m_knots_vector, index);
             Eigen::Matrix<T, Eigen::Dynamic, n + 1> ders(m_degree + 1, n + 1);
             ders_basis_funs<T, n>(index, m_degree, u, m_knots_vector, ders);
-            Eigen::Vector<Eigen::Vector<T, rows>, n + 1> temp;
-            for (int idx = 0; idx <= n; ++idx)
+            if constexpr (is_rational == false)
             {
-                Eigen::Vector<T, rows> vec = m_control_points.block(0, index - m_degree, rows, m_degree + 1) * ders.col(idx);
-                temp[idx] = vec;
+				for (int idx = 0; idx <= n; ++idx)
+				{
+					result[idx] = m_control_points.block(0, index - m_degree, rows, m_degree + 1) * ders.col(idx);
+				}
             }
-            result = rat_curve_derivs_project<T, is_rational, rows>::project_point_to_euclidean_space(temp);
-            
+            else
+            {
+				Eigen::Vector<Eigen::Vector<T, rows>, n + 1> temp;
+				for (int idx = 0; idx <= n; ++idx)
+				{
+					temp[idx] = m_control_points.block(0, index - m_degree, rows, m_degree + 1) * ders.col(idx);
+				}
+				result = std::move(rat_curve_derivs_project<T, is_rational, rows>::project_point_to_euclidean_space(temp));
+            }
             return ENUM_NURBS::NURBS_SUCCESS;
         }
 
@@ -1466,8 +1474,8 @@ namespace tnurbs
             if (insert_knots.size() == 0)
                 return ENUM_NURBS::NURBS_SUCCESS;
             refine_knots_vector_curve<T, rows>(knots_size, m_degree, m_knots_vector, m_control_points, insert_knots, new_knots_vector, new_control_points);
-            m_knots_vector = new_knots_vector;
-            m_control_points = new_control_points;
+            m_knots_vector = std::move(new_knots_vector);
+            m_control_points = std::move(new_control_points);
             return ENUM_NURBS::NURBS_SUCCESS;
         }
 
@@ -2433,7 +2441,6 @@ namespace tnurbs
 
         ENUM_NURBS sub_divide(Box<T, 1> &u_box)
         {
-            nurbs_curve<T, dim, is_rational, -1, -1> temp_nurbs(m_knots_vector, m_control_points);
             int u_begin_index;
             int u_begin_mul = konts_multiple<T>(u_box.Min[0],  m_knots_vector, m_degree, u_begin_index);
             int u_begin_insert_num = std::max(0, m_degree - u_begin_mul);
@@ -2443,23 +2450,34 @@ namespace tnurbs
             Eigen::VectorX<T> insert_knots(u_begin_insert_num + u_end_insert_num);
             insert_knots.block(0, 0, u_begin_insert_num, 1).setConstant(u_box.Min[0]);
             insert_knots.block(u_begin_insert_num, 0, u_end_insert_num, 1).setConstant(u_box.Max[0]);
-            temp_nurbs.refine_knots_vector(insert_knots);
+            
+            // nurbs_curve<T, dim, is_rational, -1, -1> temp_nurbs;
+            // temp_nurbs.m_control_points = std::move(m_control_points);
+            // temp_nurbs.m_knots_vector = std::move(m_knots_vector);
+            // temp_nurbs.m_degree = m_degree;
+            // temp_nurbs.refine_knots_vector(insert_knots);
+            refine_knots_vector(insert_knots);
 
             int u_new_knots_count = 2 * m_degree + 2 + u_end_index - u_begin_index - u_begin_mul;
 
-            Eigen::Matrix<T, rows, Eigen::Dynamic> new_control_points;
-            Eigen::Matrix<T, rows, Eigen::Dynamic> points = temp_nurbs.get_control_points();
+            // Eigen::Matrix<T, rows, Eigen::Dynamic> new_control_points;
+            // auto& points = temp_nurbs.m_control_points;
+            // auto& temp_u_knots = temp_nurbs.m_knots_vector;
+            auto& points = m_control_points;
+            auto& temp_u_knots = m_knots_vector;
+            // Eigen::Matrix<T, rows, Eigen::Dynamic> points = temp_nurbs.get_control_points();
             Eigen::VectorX<T> u_new_knots(u_new_knots_count);
-            Eigen::VectorX<T> temp_u_knots = temp_nurbs.get_knots_vector();
+            // Eigen::VectorX<T> temp_u_knots = temp_nurbs.get_knots_vector();
             u_new_knots[0] = u_box.Min[0];
             u_new_knots[u_new_knots_count - 1] = u_box.Max[0];
             u_new_knots.block(1, 0, u_new_knots_count - 2, 1) = temp_u_knots.block(std::max(u_begin_index, 1), 0, u_new_knots_count - 2, 1);
             
             int u_start = std::max(u_begin_index - 1, 0);
-            new_control_points = points.block(0, u_start, rows, u_new_knots_count - m_degree - 1);
+            // new_control_points = points.block(0, u_start, rows, u_new_knots_count - m_degree - 1);
             
-            m_control_points = new_control_points;
-            m_knots_vector = u_new_knots;
+            m_control_points = std::move(points.block(0, u_start, rows, u_new_knots_count - m_degree - 1).eval());
+            // m_control_points = std::move(new_control_points);
+            m_knots_vector = std::move(u_new_knots);
             return ENUM_NURBS::NURBS_SUCCESS;
         }
 

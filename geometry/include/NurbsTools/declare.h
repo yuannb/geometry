@@ -3,6 +3,7 @@
 #include <Eigen/Dense>
 #include <Eigen/Core>
 #include <math.h>
+#include <algorithm>
 // using M_PI
 namespace tnurbs
 {
@@ -493,8 +494,11 @@ namespace tnurbs
                     T x2 = Min[index] * right.Max[index];
                     T x3 = Max[index] * right.Min[index];
                     T x4 = Max[index] * right.Max[index];
-                    result.Min[index] = std::min({ x1, x2, x3, x4 });
-                    result.Max[index] = std::max({ x1, x2, x3, x4 });
+                    auto min_max_element = std::minmax({ x1, x2, x3, x4 });
+                    result.Min[index] = min_max_element.first;
+                    result.Max[index] = min_max_element.second;
+                    // result.Min[index] = std::min({ x1, x2, x3, x4 });
+                    // result.Max[index] = std::max({ x1, x2, x3, x4 });
                 }
                 return result;
             }
@@ -506,8 +510,11 @@ namespace tnurbs
                     T x2 = Min[index] * right.Max[0];
                     T x3 = Max[index] * right.Min[0];
                     T x4 = Max[index] * right.Max[0];
-                    result.Min[index] = std::min({ x1, x2, x3, x4 });
-                    result.Max[index] = std::max({ x1, x2, x3, x4 });
+                    auto min_max_element = std::minmax({ x1, x2, x3, x4 });
+                    result.Min[index] = min_max_element.first;
+                    result.Max[index] = min_max_element.second;
+                    // result.Min[index] = std::min({ x1, x2, x3, x4 });
+                    // result.Max[index] = std::max({ x1, x2, x3, x4 });
                 }
                 return result;
             }

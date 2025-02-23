@@ -176,8 +176,8 @@ namespace tnurbs
         Box<T, 3> cross(const Box<T, 3>& left, const Box<T, 3>& right)
         {
             Box<T, 3> result;
-            std::array<Box<T, 1>, 3> lhs = left.sperate_box();
-            std::array<Box<T, 1>, 3> rhs = right.sperate_box();
+            const std::array<Box<T, 1>, 3>& lhs = left.sperate_box();
+            const std::array<Box<T, 1>, 3>& rhs = right.sperate_box();
             result.set_index_interval(0, lhs[1] * rhs[2] - lhs[2] * rhs[1]);
             result.set_index_interval(1, lhs[2] * rhs[0] - lhs[0] * rhs[2]);
             result.set_index_interval(2, lhs[0] * rhs[1] - lhs[1] * rhs[0]);
@@ -190,8 +190,8 @@ namespace tnurbs
             Box<T, 1> result;
             result.Min[0] = 0;
             result.Max[0] = 0;
-            std::array<Box<T, 1>, dim> lhs = left.sperate_box();
-            std::array<Box<T, 1>, dim> rhs = right.sperate_box();
+            const std::array<Box<T, 1>, dim>& lhs = left.sperate_box();
+            const std::array<Box<T, 1>, dim>& rhs = right.sperate_box();
             
             for (int index = 0; index < dim; ++index)
             {

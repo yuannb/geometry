@@ -660,6 +660,7 @@ namespace tnurbs
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
+
     /// @brief  计算所有在u处不为0的阶数为degree的基函数的值
     /// @tparam T double float int...
     /// @param i u \in [u_i, u_(i + 1))
@@ -684,27 +685,39 @@ namespace tnurbs
             right[index] = knots_vector[i + 1 + index] - u;
         }
         Eigen::Vector<T, Eigen::Dynamic> iterArray(degree + 2);
+        // iterArray.resize(degree + 2);
         iterArray.setConstant(0.0);
         iterArray[degree] = 1.0;
-        for (int iter_step = 1; iter_step <= degree; ++iter_step)
+        // auto& first_coeff = iter_arrays<T>::first_coeff;
+        // auto& second_coeff = iter_arrays<T>::second_coeff;
+        Eigen::ArrayX<T> first_coeff(degree + 1, 1);
+        Eigen::Array<T, Eigen::Dynamic, 1> second_coeff(degree + 1, 1);
+        // Eigen::Array<T, Eigen::Dynamic, 1> first_coeff_numerator;
+        // Eigen::Array<T, Eigen::Dynamic, 1> second_coeff_numerator;
+        // Eigen::Array<T, Eigen::Dynamic, 1> coeff_denominator;
+	    for (int iter_step = 1; iter_step <= degree; ++iter_step)
         {
             //u - u_j 列
-            Eigen::Array<T, Eigen::Dynamic, 1> first_coeff(iter_step + 1, 1);
+            // Eigen::Array<T, Eigen::Dynamic, 1> first_coeff(iter_step + 1, 1);
             first_coeff[0] = 0.0;
-            Eigen::Array<T, Eigen::Dynamic, 1> second_coeff(iter_step + 1, 1);
+            // Eigen::Array<T, Eigen::Dynamic, 1> second_coeff(iter_step + 1, 1);
             second_coeff[iter_step] = 0.0;
 
-            Eigen::Array<T, Eigen::Dynamic, 1> first_coeff_numerator = left.block(degree - iter_step, 0, iter_step, 1).array();
-            Eigen::Array<T, Eigen::Dynamic, 1> second_coeff_numerator = right.block(0, 0, iter_step, 1).array();
+            const auto& first_coeff_numerator = left.block(degree - iter_step, 0, iter_step, 1).array();
+            const auto& second_coeff_numerator = right.block(0, 0, iter_step, 1).array();
 
-            Eigen::Array<T, Eigen::Dynamic, 1> coeff_denominator = first_coeff_numerator + second_coeff_numerator;
+            const auto& coeff_denominator = first_coeff_numerator + second_coeff_numerator;
 
             first_coeff.block(1, 0, iter_step, 1) = first_coeff_numerator / coeff_denominator;
             second_coeff.block(0, 0, iter_step, 1) = second_coeff_numerator / coeff_denominator;
-            Eigen::Array<T, Eigen::Dynamic, 1> left_part = first_coeff * iterArray.block(degree - iter_step, 0, iter_step + 1, 1).array();
-            Eigen::Array<T, Eigen::Dynamic, 1> right_part = second_coeff * iterArray.block(degree - iter_step + 1, 0, iter_step + 1, 1).array();
-            iterArray.block(degree - iter_step, 0, iter_step + 1, 1) = left_part + right_part;
+            // Eigen::Array<T, Eigen::Dynamic, 1> left_part = first_coeff * iterArray.block(degree - iter_step, 0, iter_step + 1, 1).array();
+            // Eigen::Array<T, Eigen::Dynamic, 1> right_part = second_coeff * iterArray.block(degree - iter_step + 1, 0, iter_step + 1, 1).array();
+            // iterArray.block(degree - iter_step, 0, iter_step + 1, 1) = left_part + right_part;
+            first_coeff.block(0, 0, iter_step + 1, 1) *= iterArray.block(degree - iter_step, 0, iter_step + 1, 1).array();
+            second_coeff.block(0, 0, iter_step + 1, 1) *= iterArray.block(degree - iter_step + 1, 0, iter_step + 1, 1).array();
+            iterArray.block(degree - iter_step, 0, iter_step + 1, 1) = first_coeff.block(0, 0, iter_step + 1, 1) + second_coeff.block(0, 0, iter_step + 1, 1);
         }
+        // iterArray = iterArray.block(0, 0, degree + 1, 1).eval();
         result = iterArray.block(0, 0, degree + 1, 1);
         return ENUM_NURBS::NURBS_SUCCESS;
     }
@@ -1454,47 +1467,66 @@ namespace tnurbs
         iterArray[degree] = 1.0;
         ndu(0, 0) = 1.0;
 
+        Eigen::Array<T, Eigen::Dynamic, 1> first_coeff(degree + 1, 1);
+        Eigen::Array<T, Eigen::Dynamic, 1> second_coeff(degree + 1, 1);
         for (int iter_step = 1; iter_step <= degree; ++iter_step)
         {
             //u - u_j 列
-            Eigen::Array<T, Eigen::Dynamic, 1> first_coeff(iter_step + 1, 1);
+            // Eigen::Array<T, Eigen::Dynamic, 1> first_coeff(iter_step + 1, 1);
             first_coeff[0] = 0.0;
-            Eigen::Array<T, Eigen::Dynamic, 1> second_coeff(iter_step + 1, 1);
+            // Eigen::Array<T, Eigen::Dynamic, 1> second_coeff(iter_step + 1, 1);
             second_coeff[iter_step] = 0.0;
 
-            Eigen::Array<T, Eigen::Dynamic, 1> first_coeff_numerator = left.block(degree - iter_step, 0, iter_step, 1).array();
-            Eigen::Array<T, Eigen::Dynamic, 1> second_coeff_numerator = right.block(0, 0, iter_step, 1).array();
+            const auto& first_coeff_numerator = left.block(degree - iter_step, 0, iter_step, 1).array();
+            const auto& second_coeff_numerator = right.block(0, 0, iter_step, 1).array();
 
-            Eigen::Array<T, Eigen::Dynamic, 1> coeff_denominator = first_coeff_numerator + second_coeff_numerator;
+            const auto& coeff_denominator = first_coeff_numerator + second_coeff_numerator;
 
             first_coeff.block(1, 0, iter_step, 1) = first_coeff_numerator / coeff_denominator;
             second_coeff.block(0, 0, iter_step, 1) = second_coeff_numerator / coeff_denominator;
-            Eigen::Array<T, Eigen::Dynamic, 1> left_part = first_coeff * iterArray.block(degree - iter_step, 0, iter_step + 1, 1).array();
-            Eigen::Array<T, Eigen::Dynamic, 1> right_part = second_coeff * iterArray.block(degree - iter_step + 1, 0, iter_step + 1, 1).array();
-            iterArray.block(degree - iter_step, 0, iter_step + 1, 1) = left_part + right_part;
+            first_coeff.block(0, 0, iter_step + 1, 1) *= iterArray.block(degree - iter_step, 0, iter_step + 1, 1).array();
+            second_coeff.block(0, 0, iter_step + 1, 1) *= iterArray.block(degree - iter_step + 1, 0, iter_step + 1, 1).array();;
 
-            ndu.block(0, iter_step, iter_step + 1, 1) = left_part + right_part;
+            // const Eigen::Array<T, Eigen::Dynamic, 1>& left_part = first_coeff * iterArray.block(degree - iter_step, 0, iter_step + 1, 1).array();
+            // const Eigen::Array<T, Eigen::Dynamic, 1>& right_part = second_coeff * iterArray.block(degree - iter_step + 1, 0, iter_step + 1, 1).array();
+            // iterArray.block(degree - iter_step, 0, iter_step + 1, 1) = left_part + right_part;
+            iterArray.block(degree - iter_step, 0, iter_step + 1, 1) = first_coeff.block(0, 0, iter_step + 1, 1) + second_coeff.block(0, 0, iter_step + 1, 1);
+            ndu.block(0, iter_step, iter_step + 1, 1) = iterArray.block(degree - iter_step, 0, iter_step + 1, 1);
+
+            // ndu.block(0, iter_step, iter_step + 1, 1) = left_part + right_part;
             ndu.block(iter_step, 0, 1, iter_step) = coeff_denominator.transpose();
         }
 
         result.col(0) = ndu.col(degree);
 
+		// Eigen::Vector<Eigen::Vector<T, Eigen::Dynamic>, 2> arrays;
+		std::array<Eigen::Array<T, Eigen::Dynamic, 1>, 2> arrays;
+        arrays[0].resize(degree + 1);
+        arrays[1].resize(degree + 1);
+        // T coefft = static_cast<T>(std::tgamma<int>(degree + 1));
+        //Eigen::VectorX<T> temp_r;
+        //Eigen::VectorX<T> temp_l;
+        std::vector<T> gammas(degree + 1);
+        gammas[0] = 1;
+        for (int index = 1; index <= degree; ++index)
+        {
+            gammas[index] = index * gammas[index - 1];
+        }
+        
+        const auto& denominator = ndu.transpose();
         for (int r = i - degree; r <= i; ++r) //对基函数进行循环
         {
-            Eigen::Vector<Eigen::Vector<T, Eigen::Dynamic>, 2> arrays;
-            arrays[0].resize(degree + 1);
             arrays[0].setConstant(0.0);
-            arrays[1].resize(degree + 1);
             arrays[1].setConstant(0.0);
             int current_index = 0;
             int next_index = 1;
             
-            arrays[0].setConstant(0.0);
+            // arrays[0].setConstant(0.0);
             arrays[0][0] = 1.0;
             for (int k = 1; k <= new_n; ++k)
             {
-                Eigen::Vector<T, Eigen::Dynamic> &current_array = arrays[current_index];
-                Eigen::Vector<T, Eigen::Dynamic> &next_array = arrays[next_index];
+                auto &current_array = arrays[current_index];
+                auto &next_array = arrays[next_index];
                 next_array.setConstant(0.0);
 
                 int left_num = r - (i - degree) - k;
@@ -1505,32 +1537,40 @@ namespace tnurbs
 
                 // int col_of_array = std::max(0, degree - i + r - 1);
                 int col_of_array = std::max(0, degree - i + r - k);
-                Eigen::Array<T, Eigen::Dynamic, 1> denominator = ndu.block(degree + 1 - k, col_of_array, 1, next_array_length).transpose();
+                // const auto& denominator = ndu.block(degree + 1 - k, col_of_array, 1, next_array_length).transpose();
                 int current_left_index = left_index;
                 int current_right_index = right_index;
                 if (left_index == 0)
                 {
-                    next_array[0] = current_array[0] / denominator(0, 0);
+                    // next_array[0] = current_array[0] / denominator(0, 0);
+                    next_array[0] = current_array[0] / denominator(col_of_array, degree + 1 - k);
                     current_left_index += 1;
                 }
                 if (right_index == k)
                 {
-                    next_array[k] = -current_array[k - 1] / denominator(next_array_length - 1, 0);
+                    // next_array[k] = -current_array[k - 1] / denominator(next_array_length - 1, 0);
+                    next_array[k] = -current_array[k - 1] / denominator(next_array_length + col_of_array - 1, degree + 1 - k);
                     current_right_index -= 1;
                 }
                 if (current_right_index >= current_left_index)
                 {
                     int arrayLength = current_right_index - current_left_index + 1;
                     next_array.block(current_left_index, 0, arrayLength, 1) = (current_array.block(current_left_index, 0, arrayLength, 1) -
-                        current_array.block(current_left_index - 1, 0, arrayLength, 1)).array() / denominator.block(current_left_index - left_index, 0, arrayLength, 1).array();
+                        current_array.block(current_left_index - 1, 0, arrayLength, 1)) / denominator.block(col_of_array + current_left_index - left_index, degree + 1 - k, arrayLength, 1).array();
                 }
 
                 left_num = std::max(0, left_num);
-                Eigen::VectorX<T> temp_r = ndu.block(left_num, degree - k,  next_array_length, 1);
-                Eigen::VectorX<T> temp_l = next_array.block(left_index, 0, next_array_length, 1);
-                result(r - (i - degree), k) = std::tgamma<int>(degree + 1) / std::tgamma<int>(degree - k + 1) *
-                            temp_l.dot(temp_r);
+                Eigen::Map<Eigen::VectorX<T>> temp_l(&ndu(left_num, degree - k), next_array_length);
+                Eigen::Map<Eigen::VectorX<T>> temp_r(&next_array(left_index, 0), next_array_length);
+                // Eigen::VectorX<T> temp_r = ndu.block(left_num, degree - k, next_array_length, 1);
+                // Eigen::VectorX<T> temp_l = next_array.block(left_index, 0, next_array_length, 1);
+                // temp_r = ndu.block(left_num, degree - k,  next_array_length, 1);
+                // temp_l = next_array.block(left_index, 0, next_array_length, 1);
+                // result(r - (i - degree), k) =  coefft / std::tgamma<int>(degree - k + 1) *
+                //             temp_l.dot(temp_r);
 
+                result(r - (i - degree), k) =  gammas[degree] / gammas[degree - k] *
+                            temp_l.dot(temp_r);
                 std::swap(current_index, next_index);
             }
         }
@@ -1574,36 +1614,52 @@ namespace tnurbs
         iterArray[degree] = 1.0;
         ndu(0, 0) = 1.0;
 
+		Eigen::Array<T, Eigen::Dynamic, 1> first_coeff(degree + 1, 1);
+		Eigen::Array<T, Eigen::Dynamic, 1> second_coeff(degree + 1, 1);
         for (int iter_step = 1; iter_step <= degree; ++iter_step)
         {
             //u - u_j 列
-            Eigen::Array<T, Eigen::Dynamic, 1> first_coeff(iter_step + 1, 1);
+            // Eigen::Array<T, Eigen::Dynamic, 1> first_coeff(iter_step + 1, 1);
             first_coeff[0] = 0.0;
-            Eigen::Array<T, Eigen::Dynamic, 1> second_coeff(iter_step + 1, 1);
+            // Eigen::Array<T, Eigen::Dynamic, 1> second_coeff(iter_step + 1, 1);
             second_coeff[iter_step] = 0.0;
 
-            const Eigen::Array<T, Eigen::Dynamic, 1>& first_coeff_numerator = left.block(degree - iter_step, 0, iter_step, 1).array();
-            const Eigen::Array<T, Eigen::Dynamic, 1>& second_coeff_numerator = right.block(0, 0, iter_step, 1).array();
+            const auto& first_coeff_numerator = left.block(degree - iter_step, 0, iter_step, 1).array();
+            const auto& second_coeff_numerator = right.block(0, 0, iter_step, 1).array();
 
-            const Eigen::Array<T, Eigen::Dynamic, 1>& coeff_denominator = first_coeff_numerator + second_coeff_numerator;
+            const auto& coeff_denominator = first_coeff_numerator + second_coeff_numerator;
 
             first_coeff.block(1, 0, iter_step, 1) = first_coeff_numerator / coeff_denominator;
             second_coeff.block(0, 0, iter_step, 1) = second_coeff_numerator / coeff_denominator;
-            Eigen::Array<T, Eigen::Dynamic, 1> left_part = first_coeff * iterArray.block(degree - iter_step, 0, iter_step + 1, 1).array();
-            Eigen::Array<T, Eigen::Dynamic, 1> right_part = second_coeff * iterArray.block(degree - iter_step + 1, 0, iter_step + 1, 1).array();
-            iterArray.block(degree - iter_step, 0, iter_step + 1, 1) = left_part + right_part;
+            // Eigen::Array<T, Eigen::Dynamic, 1> left_part = first_coeff.block(0, 0, iter_step + 1, 1)* iterArray.block(degree - iter_step, 0, iter_step + 1, 1).array();
+            // Eigen::Array<T, Eigen::Dynamic, 1> right_part = second_coeff.block(0, 0, iter_step + 1, 1) * iterArray.block(degree - iter_step + 1, 0, iter_step + 1, 1).array();
+            // iterArray.block(degree - iter_step, 0, iter_step + 1, 1) = left_part + right_part;
 
-            ndu.block(0, iter_step, iter_step + 1, 1) = left_part + right_part;
+            // ndu.block(0, iter_step, iter_step + 1, 1) = left_part + right_part;
+            // ndu.block(iter_step, 0, 1, iter_step) = coeff_denominator.transpose();
+            first_coeff.block(0, 0, iter_step + 1, 1) *= iterArray.block(degree - iter_step, 0, iter_step + 1, 1).array();
+            second_coeff.block(0, 0, iter_step + 1, 1) *= iterArray.block(degree - iter_step + 1, 0, iter_step + 1, 1).array();
+            iterArray.block(degree - iter_step, 0, iter_step + 1, 1) = first_coeff.block(0, 0, iter_step + 1, 1) + second_coeff.block(0, 0, iter_step + 1, 1);
+
+            ndu.block(0, iter_step, iter_step + 1, 1) = iterArray.block(degree - iter_step, 0, iter_step + 1, 1);
             ndu.block(iter_step, 0, 1, iter_step) = coeff_denominator.transpose();
         }
 
-        result.col(0) = ndu.col(degree);
-
+        result.col(0) = ndu.block(0, degree, degree + 1, 1);
+        // result.col(0) = ndu.col(degree);
+		
+        Eigen::Vector<Eigen::Vector<T, Eigen::Dynamic>, 2> arrays;
+		arrays[0].resize(degree + 1);
+		arrays[1].resize(degree + 1);
+        // T coeff = static_cast<T>(std::tgamma<int>(degree + 1));
+        std::vector<T> gammas(degree + 1);
+        gammas[0] = 1;
+        for (int index = 1; index <= degree; ++index)
+        {
+            gammas[index] = index * gammas[index - 1];
+        }
         for (int r = i - degree; r <= i; ++r) //对基函数进行循环
         {
-            Eigen::Vector<Eigen::Vector<T, Eigen::Dynamic>, 2> arrays;
-            arrays[0].resize(degree + 1);
-            arrays[1].resize(degree + 1);
             int current_index = 0;
             int next_index = 1;
 
@@ -1611,8 +1667,8 @@ namespace tnurbs
             arrays[0][0] = 1.0;
             for (int k = 1; k <= new_n; ++k)
             {
-                Eigen::Vector<T, Eigen::Dynamic> &current_array = arrays[current_index];
-                Eigen::Vector<T, Eigen::Dynamic> &next_array = arrays[next_index];
+                auto &current_array = arrays[current_index];
+                auto &next_array = arrays[next_index];
                 next_array.setConstant(0.0);
 
                 int left_num = r - (i - degree) - k;
@@ -1623,7 +1679,7 @@ namespace tnurbs
 
                 // int col_of_array = std::max(0, degree - i + r - 1);
                 int col_of_array = std::max(0, degree - i + r - k);
-                Eigen::Array<T, Eigen::Dynamic, 1> denominator = ndu.block(degree + 1 - k, col_of_array, 1, next_array_length).transpose();
+                const auto& denominator = ndu.block(degree + 1 - k, col_of_array, 1, next_array_length).transpose();
                 int current_left_index = left_index;
                 int current_right_index = right_index;
                 if (left_index == 0)
@@ -1644,10 +1700,21 @@ namespace tnurbs
                 }
 
                 left_num = std::max(0, left_num);
-                Eigen::VectorX<T> temp_r = ndu.block(left_num, degree - k,  next_array_length, 1);
-                Eigen::VectorX<T> temp_l = next_array.block(left_index, 0, next_array_length, 1);
-                result(r - (i - degree), k) = std::tgamma<int>(degree + 1) / std::tgamma<int>(degree - k + 1) *
+                Eigen::Map<Eigen::VectorX<T>> temp_l(&ndu(left_num, degree - k), next_array_length);
+                Eigen::Map<Eigen::VectorX<T>> temp_r(&next_array(left_index, 0), next_array_length);
+                // Eigen::VectorX<T> temp_r = ndu.block(left_num, degree - k, next_array_length, 1);
+                // Eigen::VectorX<T> temp_l = next_array.block(left_index, 0, next_array_length, 1);
+                // temp_r = ndu.block(left_num, degree - k,  next_array_length, 1);
+                // temp_l = next_array.block(left_index, 0, next_array_length, 1);
+                // result(r - (i - degree), k) =  coefft / std::tgamma<int>(degree - k + 1) *
+                //             temp_l.dot(temp_r);
+
+                result(r - (i - degree), k) =  gammas[degree] / gammas[degree - k] *
                             temp_l.dot(temp_r);
+                // const Eigen::VectorX<T>& temp_r = ndu.block(left_num, degree - k,  next_array_length, 1);
+                // const Eigen::VectorX<T>& temp_l = next_array.block(left_index, 0, next_array_length, 1);
+                // result(r - (i - degree), k) = coeff / std::tgamma<int>(degree - k + 1) *
+                //             temp_l.dot(temp_r);
 
                 std::swap(current_index, next_index);
             }
@@ -2350,7 +2417,9 @@ namespace tnurbs
                 else
                 {
                     alpha /= (new_knots_vector[k + l] - knots_vector[i - degree + l]);
-                    new_control_points.col(ind - 1) = alpha * new_control_points.col(ind - 1) + (1.0 - alpha) * new_control_points.col(ind);
+                    new_control_points.col(ind - 1) *= alpha;
+                    new_control_points.col(ind - 1) += (1.0 - alpha) * new_control_points.col(ind);
+                    // new_control_points.col(ind - 1) = alpha * new_control_points.col(ind - 1) + (1.0 - alpha) * new_control_points.col(ind);
                 }
             }
             new_knots_vector[k] = insert_knots[j];
@@ -4449,7 +4518,7 @@ namespace tnurbs
     }
 
     template<typename T>
-    int konts_multiple(T &u, const Eigen::VectorX<T> knots, int degree, int &idx, T eps = KNOTS_EPS<T>::value)
+    int konts_multiple(T &u, const Eigen::VectorX<T>& knots, int degree, int &idx, T eps = KNOTS_EPS<T>::value)
     {
         find_span<T, ENUM_LIMITDIRECTION::LEFT>(u, degree, knots, idx);
         if (u - knots[idx] < eps)

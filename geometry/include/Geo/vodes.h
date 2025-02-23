@@ -846,8 +846,8 @@ namespace tnurbs
 				// left_v_tangent_box = boxes[1];
 				// left_normal_box = boxes[2];
 				// left_surface_type u_tangent_surf, v_tangent_surf, sub_surf;
-				left_surface_type  sub_surf;
-				m_left_ders(0, 0)->sub_divide(left_param_box, sub_surf);
+				const left_surface_type&  sub_surf = m_left_ders(0, 0)->sub_divide2(left_param_box);
+				// m_left_ders(0, 0)->sub_divide(left_param_box, sub_surf);
 				sub_surf.tangent_u_surface_box(left_u_tangent_box);
 				sub_surf.tangent_v_surface_box(left_v_tangent_box);
 				// sub_surf.tangent_u_surface(u_tangent_surf);
@@ -883,8 +883,8 @@ namespace tnurbs
 				// right_normal_box = boxes[2];
 				
 				// right_surface_type u_tangent_surf, v_tangent_surf, sub_surf;
-				right_surface_type sub_surf;
-				m_right_ders(0, 0)->sub_divide(right_param_box, sub_surf);
+				const right_surface_type& sub_surf = m_right_ders(0, 0)->sub_divide2(right_param_box);
+				// m_right_ders(0, 0)->sub_divide(right_param_box, sub_surf);
 				sub_surf.tangent_u_surface_box(right_u_tangent_box);
 				sub_surf.tangent_v_surface_box(right_v_tangent_box);
 				// sub_surf.tangent_u_surface(u_tangent_surf);
@@ -1180,23 +1180,33 @@ namespace tnurbs
 			Eigen::Matrix<Eigen::Vector<T, dim>, 3, 3> right_ders;
 			if (type == 0)
 			{
-				Eigen::Matrix<Eigen::Vector<T, dim>, 2, 2> left_ders_temp;
-				m_left_ders(0, 0)->template derivative_on_surface<1, 1>(param[0], param[1], left_ders_temp);
-				for (int i = 0; i < 2; ++i)
+				if constexpr (left_surface_type::is_ratio == false && right_surface_type::is_ratio == false)
 				{
-					for (int j = 0; j < 2; ++j)
-					{
-						left_ders(i, j) = left_ders_temp(i, j);
-					}
+					m_left_ders(1, 0)->point_on_surface(param[0], param[1], left_ders(1, 0));
+					m_left_ders(0, 1)->point_on_surface(param[0], param[1], left_ders(0, 1));
+					m_right_ders(1, 0)->point_on_surface(param[2], param[3], right_ders(1, 0));
+					m_right_ders(0, 1)->point_on_surface(param[2], param[3], right_ders(0, 1));
 				}
-				
-				Eigen::Matrix<Eigen::Vector<T, dim>, 2, 2> right_ders_temp;
-				m_right_ders(0, 0)->template derivative_on_surface<1, 1>(param[2], param[3], right_ders_temp);
-				for (int i = 0; i < 2; ++i)
+				else
 				{
-					for (int j = 0; j < 2; ++j)
+					Eigen::Matrix<Eigen::Vector<T, dim>, 2, 2> left_ders_temp;
+					m_left_ders(0, 0)->template derivative_on_surface<1, 1>(param[0], param[1], left_ders_temp);
+					for (int i = 0; i < 2; ++i)
 					{
-						right_ders(i, j) = right_ders_temp(i, j);
+						for (int j = 0; j < 2; ++j)
+						{
+							left_ders(i, j) = left_ders_temp(i, j);
+						}
+					}
+
+					Eigen::Matrix<Eigen::Vector<T, dim>, 2, 2> right_ders_temp;
+					m_right_ders(0, 0)->template derivative_on_surface<1, 1>(param[2], param[3], right_ders_temp);
+					for (int i = 0; i < 2; ++i)
+					{
+						for (int j = 0; j < 2; ++j)
+						{
+							right_ders(i, j) = right_ders_temp(i, j);
+						}
 					}
 				}
 			}
@@ -1376,7 +1386,8 @@ namespace tnurbs
 		/// @param space_ders space_ders.col(0)为交线的点, space_ders.col(1)为交线的一阶微分, space_ders.col(1)为交先的二阶微分
 		/// @return 错误码
 		template<int order>
-		ENUM_NURBS eval_preiamge_and_space_ders(const Eigen::Vector<T, 4>& param, std::vector<Eigen::Matrix<T, 4, order>>& param_ders, std::vector<Eigen::Matrix<T, dim, order>>& space_ders, int type)
+		ENUM_NURBS eval_preiamge_and_space_ders(const Eigen::Vector<T, 4>& param, std::vector<Eigen::Matrix<T, 4, order>>& param_ders, std::vector<Eigen::Matrix<T, dim, order>>& space_ders, 
+												std::array<T, 4>& ks, std::array<T, 2>& left_EG, std::array<T, 2>& right_EG, int type)
 		{
 			static_assert(3 == dim, "3 != dim");
 
@@ -1389,7 +1400,10 @@ namespace tnurbs
 			Eigen::Matrix2<T> left_first_fundenmental;
 			Eigen::Matrix2<T> left_second_fundenmental;
 			eval_first_and_second_fundenmental(left_ders, left_normal, left_first_fundenmental, left_second_fundenmental);
-
+			ks[0] = left_second_fundenmental(0, 0) / left_first_fundenmental(0, 0);
+			ks[1] = left_second_fundenmental(1, 1) / left_first_fundenmental(1, 1);
+			left_EG[0] = left_first_fundenmental(0, 0);
+			left_EG[1] = left_first_fundenmental(1, 1);
 			Eigen::Matrix<Eigen::Vector<T, dim>, 3, 3> right_ders;
 			m_right_ders(0, 0)->template derivative_on_surface<2, 2>(param[2], param[3], right_ders);
 			Eigen::Vector<T, dim> right_normal = right_ders(1, 0).cross(right_ders(0, 1));
@@ -1397,7 +1411,11 @@ namespace tnurbs
 			Eigen::Matrix2<T> right_first_fundenmental;
 			Eigen::Matrix2<T> right_second_fundenmental;
 			eval_first_and_second_fundenmental(right_ders, right_normal, right_first_fundenmental, right_second_fundenmental);
-
+			
+			ks[2] = right_second_fundenmental(0, 0) / right_first_fundenmental(0, 0);
+			ks[3] = right_second_fundenmental(1, 1) / right_first_fundenmental(1, 1);
+			right_EG[0] = right_first_fundenmental(0, 0);
+			right_EG[1] = right_first_fundenmental(1, 1);
 			Eigen::Vector<T, dim> tangent;
 			if (type == 0)
 			{
@@ -1599,7 +1617,7 @@ namespace tnurbs
 				//k1 *= step;
 
 				Eigen::Vector<T, 4> mid_param = initial_param + 0.5 * k1;
-				if (domain.is_contain_point(mid_param) == false)
+				if (m_product_box.is_contain_point(mid_param) == false)
 				{
 					step /= 1.2;
 					continue;
@@ -1614,7 +1632,7 @@ namespace tnurbs
 				//T dis2 = k21.norm();
 				//k2 *= step;
 				mid_param = initial_param + 0.5 * k2;
-				if (domain.is_contain_point(mid_param) == false)
+				if (m_product_box.is_contain_point(mid_param) == false)
 				{
 					step /= 1.2;
 					continue;
@@ -1629,7 +1647,7 @@ namespace tnurbs
 				//T dis3 = k31.norm();
 				//k3 *= step;
 				mid_param = initial_param + k3;
-				if (domain.is_contain_point(mid_param) == false)
+				if (m_product_box.is_contain_point(mid_param) == false)
 				{
 					step /= 1.2;
 					continue;
@@ -1645,7 +1663,7 @@ namespace tnurbs
 				//k4 *= step;
 
 				next_param = initial_param + (k1 + 2 * k2 + 2 * k3 + k4) / 6.0;
-				if (domain.is_contain_point(next_param) == false)
+				if (m_product_box.is_contain_point(next_param) == false)
 				{
 					step /= 1.2;
 					continue;
@@ -1716,7 +1734,6 @@ namespace tnurbs
 					{
 						return true;
 					}
-					T tt = (intersec_point - test_point).norm();
 					Eigen::Vector2<T> mid_param = intersect_param.template block<2, 1>(2, 0);
 
 					bool flag1 = may_contain_param(current_param.template block<2, 1>(2, 0), mid_param, test_param);
@@ -2046,17 +2063,6 @@ namespace tnurbs
 			T sacle = 1.0;
 
 			Eigen::Vector4<T> end_param = initial_param + bigger_step_size * param_tangent_vector;
-			// for (int i = 0; i < 4; ++i)
-			// {
-			// 	if (end_param[i] > m_product_box.Max[i])
-			// 	{
-			// 		sacle = std::min(sacle, (m_product_box.Max[i] - initial_param[i]) / (end_param[i] - initial_param[i]));
-			// 	}
-			// 	else if (end_param[i] < m_product_box.Min[i])
-			// 	{
-			// 		sacle = std::min(sacle, (m_product_box.Min[i] - initial_param[i]) / (end_param[i] - initial_param[i]));
-			// 	}
-			// }
 			end_param = initial_param + (bigger_step_size * sacle) * param_tangent_vector;
 			for (int i = 0; i < 4; ++i)
 			{
@@ -2064,108 +2070,27 @@ namespace tnurbs
 				priori_enclosure.Max[i] = std::max(initial_param[i], end_param[i]);
 				priori_enclosure.Max[i] += 1e-6;
 				priori_enclosure.Min[i] -= 1e-6;
-				// if (priori_enclosure.Max[i] - priori_enclosure.Min[i] < 1e-6)
-				// {
-				// }
 			}
 
 			// TODO: 
 			priori_enclosure.intersect(m_product_box, priori_enclosure);
 			if ((priori_enclosure.Max - priori_enclosure.Min).norm() < 1e-8) 
 			{
+				smalll_step_size /= 2.0;
 				return false;
 			}
-			// if (ENUM_NURBS::NURBS_SUCCESS != eval_priori_enclosure_inner(initial_box, initial_box, bigger_step_size, priori_enclosure, type, may_arrived_singular, transversal))
-			// {
-			// 	angle_diff = 4.0;
-			// 	return false;
-			// }
 
 			while (loopCount > 0)
 			{
 				loopCount -= 1;
-				//if (loopCount == 4)
-				//{
-				//    Eigen::Vector<T, 4> &min = priori_enclosure.Min;
-				//    Eigen::Vector<T, 4> &max = priori_enclosure.Max;
-
-				//    for (int index = 0; index < 2; ++index)
-				//    {
-				//        T startIndex = 2 * index;
-				//        if ((max[startIndex] - min[startIndex]) > 10 * (max[startIndex + 1] - min[startIndex + 1]))
-				//        {
-				//            T mid = (max[1 + startIndex] + min[1 + startIndex]) / 2.0;
-				//            T len = (max[startIndex] - min[startIndex]) / 10;
-				//            max[1 + startIndex] = mid + len;
-				//            min[1 + startIndex] = mid - len;
-				//        }
-				//        else if ((max[1 + startIndex] - min[1 + startIndex]) > 10 * (max[startIndex] - min[startIndex]))
-				//        {
-				//            T mid = (max[startIndex] + min[startIndex]) / 2.0;
-				//            T len = (max[1 + startIndex] - min[1 + startIndex]) / 10;
-				//            max[startIndex] = mid + len;
-				//            min[startIndex] = mid - len;
-				//        }
-				//    }
-				//    priori_enclosure.intersect(m_product_box, priori_enclosure);
-				//}
 				Box<T, 4> next_priori_enclosure;
 				smalll_step_size /= 2.0;
 				if (ENUM_NURBS::NURBS_SUCCESS != eval_priori_enclosure_inner(initial_param, priori_enclosure, smalll_step_size, next_priori_enclosure, type, may_arrived_singular, transversal))
 				{
-					// Box<T, 2> left_param_box(priori_enclosure.Min.template block<2, 1>(0, 0), priori_enclosure.Max.template block<2, 1>(0, 0));
-					// Box<T, 2> right_param_box(priori_enclosure.Min.template block<2, 1>(2, 0), priori_enclosure.Max.template block<2, 1>(2, 0));
-					// Box<T, dim> left_normal_box, right_normal_box;
-					// if constexpr (left_surface_type::is_ratio == false)
-					// {
-					// 	//使用精确的normal_surface和使用两个box叉乘得到的结果竟然基本一样？？？？？？？
-					// 	m_left_normal_surface->get_box(left_param_box, left_normal_box);
-					// }
-					// else
-					// {
-					// 	Eigen::MatrixX<Box<T, dim>> left_boxes;
-
-					// 	ENUM_NURBS error_code = bounding_box<left_surface_type>::get_ders_bounding_box(1, m_left_ders, left_param_box, left_boxes);
-					// 	if (error_code != ENUM_NURBS::NURBS_SUCCESS)
-					// 	{
-					// 		angle_diff = M_PI;
-					// 		return false;
-					// 	}
-					// 	left_normal_box = interval_algorithm::cross(left_boxes(1, 0), left_boxes(0, 1));
-					// }
-					// if constexpr (right_surface_type::is_ratio == false)
-					// {
-					// 	//使用精确的normal_surface和使用两个box叉乘得到的结果竟然基本一样？？？？？？？
-					// 	m_right_normal_surface->get_box(right_param_box, right_normal_box);
-					// }
-					// else
-					// {
-					// 	Eigen::MatrixX<Box<T, dim>> right_boxes;
-
-					// 	ENUM_NURBS error_code = bounding_box<right_surface_type>::get_ders_bounding_box(1, m_right_ders, right_param_box, right_boxes);
-					// 	if (error_code != ENUM_NURBS::NURBS_SUCCESS)
-					// 	{
-					// 		angle_diff = M_PI;
-					// 		return false;
-					// 	}
-					// 	right_normal_box = interval_algorithm::cross(right_boxes(1, 0), right_boxes(0, 1));
-					// }
-
-					// Eigen::Vector<T, dim> origin;
-					// origin.setConstant(0.0);
-					// cone<T, dim> normal_cone = point_box(left_normal_box, origin);
-					// angle_diff = normal_cone.m_angle;
-					// normal_cone = point_box(right_normal_box, origin);
-					// angle_diff = std::max(angle_diff, normal_cone.m_angle);
-
 					return false;
 				}
 				if (priori_enclosure.is_contain_box(next_priori_enclosure))
 				{
-					//if (ENUM_NURBS::NURBS_SUCCESS != eval_priori_enclosure_inner(initial_box, next_priori_enclosure, smalll_step_size, priori_enclosure, type, may_arrived_singular, transversal))
-					//{
-					//	return false;
-					//}
 					return true;
 				}
 				
@@ -2175,61 +2100,11 @@ namespace tnurbs
 					Box<T, 4> temp_box = next_priori_enclosure;
 					if (ENUM_NURBS::NURBS_SUCCESS != eval_priori_enclosure_inner(initial_param, temp_box, smalll_step_size, next_priori_enclosure, type, may_arrived_singular, transversal))
 					{
-						// priori_enclosure = temp_box;
-						// Box<T, 2> left_param_box(priori_enclosure.Min.template block<2, 1>(0, 0), priori_enclosure.Max.template block<2, 1>(0, 0));
-						// Box<T, 2> right_param_box(priori_enclosure.Min.template block<2, 1>(2, 0), priori_enclosure.Max.template block<2, 1>(2, 0));
-						// Box<T, dim> left_normal_box, right_normal_box;
-						// if constexpr (left_surface_type::is_ratio == false)
-						// {
-						// 	//使用精确的normal_surface和使用两个box叉乘得到的结果竟然基本一样？？？？？？？
-						// 	m_left_normal_surface->get_box(left_param_box, left_normal_box);
-						// }
-						// else
-						// {
-						// 	Eigen::MatrixX<Box<T, dim>> left_boxes;
-						// 	ENUM_NURBS error_code = bounding_box<left_surface_type>::get_ders_bounding_box(1, m_left_ders, left_param_box, left_boxes);
-						// 	if (error_code != ENUM_NURBS::NURBS_SUCCESS)
-						// 	{
-						// 		angle_diff = M_PI;
-						// 		return false;
-						// 	}
-
-						// 	left_normal_box = interval_algorithm::cross(left_boxes(1, 0), left_boxes(0, 1));
-						// }
-
-						// if constexpr (right_surface_type::is_ratio == false)
-						// {
-						// 	//使用精确的normal_surface和使用两个box叉乘得到的结果竟然基本一样？？？？？？？
-						// 	m_right_normal_surface->get_box(right_param_box, right_normal_box);
-						// }
-						// else
-						// {
-						// 	Eigen::MatrixX<Box<T, dim>> right_boxes;
-						// 	ENUM_NURBS error_code = bounding_box<right_surface_type>::get_ders_bounding_box(1, m_right_ders, right_param_box, right_boxes);
-						// 	if (error_code != ENUM_NURBS::NURBS_SUCCESS)
-						// 	{
-						// 		angle_diff = M_PI;
-						// 		return false;
-						// 	}
-
-						// 	right_normal_box = interval_algorithm::cross(right_boxes(1, 0), right_boxes(0, 1));
-						// }
-						// Eigen::Vector<T, dim> origin;
-						// origin.setConstant(0.0);
-						// cone<T, dim> normal_cone = point_box(left_normal_box, origin);
-						// angle_diff = normal_cone.m_angle;
-						// normal_cone = point_box(right_normal_box, origin);
-						// angle_diff = std::max(angle_diff, normal_cone.m_angle);
-
 						return false;
 					}
 					if (temp_box.is_contain_box(next_priori_enclosure))
 					{
 						priori_enclosure = temp_box;
-						//if (ENUM_NURBS::NURBS_SUCCESS != eval_priori_enclosure_inner(initial_box, next_priori_enclosure, smalll_step_size, priori_enclosure, type, may_arrived_singular, transversal))
-						//{
-						//	return false;
-						//}
 						return true;
 					}
 					priori_enclosure = next_priori_enclosure;
@@ -2472,9 +2347,12 @@ namespace tnurbs
 				int_point[0] = singluar_point;
 
 				Eigen::Vector<T, 4> singular_intersect_param;
+				std::array<T, 4> ks;
+				std::array<T, 2> left_EG, right_EG;
+				T k1, k2, k3, k4;
 				if (intersect_singular_point_iteration(m_product_box, end_chat.m_inter_points[1].m_uv, singular_intersect_param) == ENUM_NURBS::NURBS_SUCCESS)
 				{
-					eval_preiamge_and_space_ders<1>(singular_intersect_param, current_param_ders, current_space_ders, 3);
+					eval_preiamge_and_space_ders<1>(singular_intersect_param, current_param_ders, current_space_ders, ks, left_EG, right_EG, 3);
 					if (current_space_ders.size() == 1)
 					{
 						end_chat.m_is_transversal = false;
@@ -2497,7 +2375,7 @@ namespace tnurbs
 				int_point[1].m_uv = next_params[index];
 				m_left_ders(0, 0)->point_on_surface(next_params[index][0], next_params[index][1], int_point[1].m_point);
 
-				eval_preiamge_and_space_ders<1>(end_chat.m_inter_points[1].m_uv, current_param_ders, current_space_ders, 0);
+				eval_preiamge_and_space_ders<1>(end_chat.m_inter_points[1].m_uv, current_param_ders, current_space_ders, ks, left_EG, right_EG, 0);
 				T tangent_dot = current_param_ders[0].dot(param_ders[index / 2]);
 				if (index % 2 == 1)
 				{
@@ -2534,6 +2412,66 @@ namespace tnurbs
 			return ENUM_NURBS::NURBS_SUCCESS;
 		};
 
+
+		T estimate_arc_length(const std::array<T, 4>& ks, const std::array<T, 2>& left_EG, const std::array<T, 2>& right_EG, const T curvature, const Eigen::Vector4<T>& param_tangent)
+		{
+			T arc_length = 2.0 * m_angle_eps;
+			if (curvature < TDEFAULT_ERROR<T>::value)
+			{
+				arc_length = TINFINITE<T>::value;
+			}
+			else
+			{
+				arc_length /= curvature;
+			}
+			Eigen::Vector4<T> param_vector_len = param_tangent * arc_length;
+			
+			T x1 = std::abs(param_vector_len[0]);
+			T x2 = std::abs(param_vector_len[1]);
+			T x3 = std::abs(param_vector_len[2]);
+			T x4 = std::abs(param_vector_len[3]);
+			T scale = 1.0;
+			T scale_angle = 1.0;
+			if (std::abs(ks[0]) < TDEFAULT_ERROR<T>::value || x1 < TDEFAULT_ERROR<T>::value)
+			{
+				// arc_length = TINFINITE<T>::value;
+			}
+			else
+			{
+				scale = std::min(scale, std::abs(scale_angle * m_angle_eps / (ks[0] * std::sqrt(left_EG[0]))) / x1);
+			}
+			
+			if (std::abs(ks[1]) < TDEFAULT_ERROR<T>::value || x2 < TDEFAULT_ERROR<T>::value)
+			{
+				// arc_length = TINFINITE<T>::value;
+			}
+			else
+			{
+				scale = std::min(scale, std::abs(scale_angle * m_angle_eps / (ks[1] * std::sqrt(left_EG[1]))) / x2);
+			}
+
+			if (std::abs(ks[2]) < TDEFAULT_ERROR<T>::value || x3 < TDEFAULT_ERROR<T>::value)
+			{
+				// arc_length = TINFINITE<T>::value;
+			}
+			else
+			{
+				scale = std::min(scale, std::abs(scale_angle * m_angle_eps / (ks[2] * std::sqrt(right_EG[0]))) / x3);
+			}
+			
+			if (std::abs(ks[3]) < TDEFAULT_ERROR<T>::value || x4 < TDEFAULT_ERROR<T>::value)
+			{
+				// arc_length = TINFINITE<T>::value;
+			}
+			else
+			{
+				scale = std::min(scale, std::abs(scale_angle * m_angle_eps / (ks[3] * std::sqrt(right_EG[1]))) / x4);
+			}
+
+			arc_length *= scale;
+			return arc_length;
+		}
+
 		ENUM_NURBS trace_point(surfs_int_points_chat<T, dim>& current_intpoints, bool& is_stop, /* bool& is_arrived_singular, */ T box_len = TDEFAULT_ERROR<T>::value * 0.01)
 		{
 			//bool direction;
@@ -2548,20 +2486,15 @@ namespace tnurbs
 
 			std::vector<Eigen::Matrix<T, 4, 2>> param_ders;
 			std::vector<Eigen::Matrix<T, dim, 2>> space_ders;
-			eval_preiamge_and_space_ders<2>(param, param_ders, space_ders, transversal == true ? 0 : 3);
-
+			std::array<T, 4> ks;
+			std::array<T, 2> left_EG, right_EG;
+			eval_preiamge_and_space_ders<2>(param, param_ders, space_ders, ks, left_EG, right_EG, transversal == true ? 0 : 3);
 			// TODO : 处理branch
+			
 			T curvature = space_ders[0].col(1).norm();
-			T arc_length = 1.0 * m_angle_eps;
-			if (curvature < TDEFAULT_ERROR<T>::value)
-			{
-				arc_length = TINFINITE<T>::value;
-			}
-			else
-			{
-				arc_length /= curvature;
-			}
-
+			Eigen::Vector4<T> param_tangent = param_ders[0].col(0);
+			T arc_length = estimate_arc_length(ks, left_EG, right_EG, curvature, param_tangent);
+			
 			// Eigen::Vector4<T> param_tangent = param_ders[0].col(0);
 			// TODO : 处理step太大超过参数域
 			T bigger_step_size = current_intpoints.m_is_positive_direction == false ? -arc_length : arc_length;
@@ -2580,7 +2513,6 @@ namespace tnurbs
 			// std::cout << "loopCount_begin: " << looop_count << std::endl;
 			// while (false == eval_priori_enclosure(initial_box, bigger_step_size, small_step, priori_enclosure, angle_diff, type, may_arrived_singular, transversal))
 			// TODO: 处理
-			Eigen::Vector4<T> param_tangent = param_ders[0].col(0);
 			T is_negetive = bigger_step_size > 0 ? 1 : -1;
 			Eigen::Vector4<T> next_minial_point = param + is_negetive * 1e-4 * param_tangent;
 			if (m_product_box.is_contain_point(next_minial_point, 1e-10) == false)
@@ -2596,31 +2528,8 @@ namespace tnurbs
 
 				}
 
-				// T bigger_step_max = std::abs(bigger_step_size / 1.5);
-				// T bigger_step_min = std::abs(bigger_step_size / 4.1);
-				// T small_step_abs = std::abs(small_step);
-				// if (small_step_abs < bigger_step_min)
-				// {
-				// 	bigger_step_size /= 4.0;
-				// }
-				// else if (small_step_abs > bigger_step_max)
-				// {
-				// 	bigger_step_size /= 2.0;
-				// }
-				// else
-				// {
-				// 	bigger_step_size = small_step;
-				// }
-				// if (std::abs(bigger_step_size) > 4.0 * std::abs(small_step) && std::abs(bigger_step_size) > 2.0 * std::abs(small_step))
-				// {
-				// 	bigger_step_size = small_step;
-				// }
-				// else
-				// {
-				// 	bigger_step_size /= 4;
-				// }
-
-				bigger_step_size /= 2.0;
+				// bigger_step_size /= 2.0;
+				bigger_step_size = small_step;
 				small_step = bigger_step_size;
 			}
 			
@@ -2934,8 +2843,11 @@ namespace tnurbs
 			sub_int_boxes.clear();
 			is_tangent.clear();
 			
-			std::vector<std::pair<left_surface_type, right_surface_type>> int_surface_pairs;
-			
+			// std::vector<std::pair<left_surface_type, right_surface_type>> int_surface_pairs;
+		
+			std::vector<left_surface_type> left_surface_int;
+			std::vector<right_surface_type> right_surface_int;
+
 			Box<T, dim> left_sub_boxes, right_sub_boxes;
 			Box<T, dim> left_sub_normal_boxes, right_sub_normal_boxes;
 			Box<T, dim> u_left_sub_tangent_boxes, u_right_sub_tangent_boxes;
@@ -2947,9 +2859,15 @@ namespace tnurbs
 			m_right_ders(0, 0)->get_uv_box(st_box);
 			Eigen::Vector2<T> uv_param = uv_box.get_middle_point();
 			Eigen::Vector2<T> st_param = st_box.get_middle_point();
-			m_left_ders(0, 0)->split_at_param(uv_param, left_sub_surfaces);
-			m_right_ders(0, 0)->split_at_param(st_param, right_sub_surfaces);
+
+			left_surface_type left_surface_temp(*m_left_ders(0, 0));
+			right_surface_type right_surface_temp(*m_right_ders(0, 0));
+
+			// m_left_ders(0, 0)->split_at_param(uv_param, left_sub_surfaces);
+			// m_right_ders(0, 0)->split_at_param(st_param, right_sub_surfaces);
 			
+			left_surface_temp.split_at_param(uv_param, left_sub_surfaces);
+			right_surface_temp.split_at_param(st_param, right_sub_surfaces);
 			Box<T, dim> intersect_box;
 			for (int i = 0; i < 4; ++i)
 			{
@@ -2959,21 +2877,35 @@ namespace tnurbs
 					right_sub_surfaces[j].get_box(right_sub_boxes);
 					if (left_sub_boxes.intersect(right_sub_boxes, intersect_box))
 					{
-						int_surface_pairs.push_back(std::make_pair(left_sub_surfaces[i], right_sub_surfaces[j]));
+						left_surface_int.push_back(left_sub_surfaces[i]);
+						right_surface_int.push_back(right_sub_surfaces[j]);
+						// int_surface_pairs.push_back(std::make_pair(left_sub_surfaces[i], right_sub_surfaces[j]));
 					}
 				}
 			}
-			while (int_surface_pairs.empty() == false)
+			// while (int_surface_pairs.empty() == false)
+			while (left_surface_int.empty() == false)
 			{
-				std::pair<left_surface_type, right_surface_type> surface_pair = int_surface_pairs.back();
-				int_surface_pairs.pop_back();
+				// std::pair<left_surface_type, right_surface_type> surface_pair = int_surface_pairs.back();
+				// int_surface_pairs.pop_back();
 				
-				surface_pair.first.get_uv_box(uv_box);
-				surface_pair.second.get_uv_box(st_box);
+				left_surface_type& left_surf = left_surface_int.back();
+				right_surface_type& right_surf = right_surface_int.back();
+
+				left_surf.get_uv_box(uv_box);
+				right_surf.get_uv_box(st_box);
+
+				// surface_pair.first.get_uv_box(uv_box);
+				// surface_pair.second.get_uv_box(st_box);
 				Eigen::Vector2<T> uv_middle = uv_box.get_middle_point();
 				Eigen::Vector2<T> st_middle = st_box.get_middle_point();
-				surface_pair.first.split_at_param(uv_middle, left_sub_surfaces);
-				surface_pair.second.split_at_param(st_middle, right_sub_surfaces);
+				// surface_pair.first.split_at_param(uv_middle, left_sub_surfaces);
+				// surface_pair.second.split_at_param(st_middle, right_sub_surfaces);
+				left_surf.split_at_param(uv_middle, left_sub_surfaces);
+				right_surf.split_at_param(st_middle, right_sub_surfaces);
+
+				left_surface_int.pop_back();
+				right_surface_int.pop_back();
 
 				for (int i = 0; i < 4; ++i)
 				{
@@ -3020,7 +2952,9 @@ namespace tnurbs
 								}
 								else
 								{
-									int_surface_pairs.push_back(std::make_pair(left_sub_surfaces[i], right_sub_surfaces[j]));
+									left_surface_int.push_back(left_sub_surfaces[i]);
+									right_surface_int.push_back(right_sub_surfaces[j]);
+									// int_surface_pairs.push_back(std::make_pair(left_sub_surfaces[i], right_sub_surfaces[j]));
 									
 								}
 								continue;
@@ -3056,7 +2990,9 @@ namespace tnurbs
 								}
 								else
 								{
-									int_surface_pairs.push_back(std::make_pair(left_sub_surfaces[i], right_sub_surfaces[j]));
+									left_surface_int.push_back(left_sub_surfaces[i]);
+									right_surface_int.push_back(right_sub_surfaces[j]);
+									// int_surface_pairs.push_back(std::make_pair(left_sub_surfaces[i], right_sub_surfaces[j]));
 								}
 							}
 						}
@@ -3097,7 +3033,9 @@ namespace tnurbs
 
 							std::vector<Eigen::Matrix<T, 4, 1>> param_ders_temp;
 							std::vector<Eigen::Matrix<T, dim, 1>> space_ders_temp;
-							ENUM_NURBS error_code = eval_preiamge_and_space_ders<1>(singular_intersect_param, param_ders_temp, space_ders_temp, 3);
+							std::array<T, 4> ks;
+							std::array<T, 2> left_EG, right_EG;
+							ENUM_NURBS error_code = eval_preiamge_and_space_ders<1>(singular_intersect_param, param_ders_temp, space_ders_temp, ks, left_EG, right_EG, 3);
 							if (error_code == ENUM_NURBS::NURBS_ISOLATED_TANGENTIAL_POINT)
 							{
 								surf_surf_intersect_point<T, dim> isolate_point;
@@ -3194,31 +3132,31 @@ namespace tnurbs
 
 			using namespace std::chrono;
 			auto start = steady_clock::now();
-			std::clock_t s1 = std::clock();
+			// std::clock_t s1 = std::clock();
 			std::unordered_set<help<T, 4>, hash_help<T, 4>> remove_mult;
 			surf_surf_boundary_int(*m_left_ders(0, 0), *m_right_ders(0, 0), remove_mult);
-			std::clock_t e1 = std::clock();
-			std::cout << "step1: " << (e1 - s1) << std::endl;
-			std::clock_t s11 = std::clock();
+			// std::clock_t e1 = std::clock();
+			// std::cout << "step1: " << (e1 - s1) << std::endl;
+			// std::clock_t s11 = std::clock();
 			make_int_chat_by_param(remove_mult, m_boundary_chats);
-			std::clock_t e11 = std::clock();
-			std::cout << "step11: " << (e11 - s11) << std::endl;
+			// std::clock_t e11 = std::clock();
+			// std::cout << "step11: " << (e11 - s11) << std::endl;
 			std::vector<std::pair<Box<T, 2>, Box<T, 2>>> sub_int_boxes;
 			std::vector<char> is_tangent;
-			std::clock_t s2 = std::clock();
+			// std::clock_t s2 = std::clock();
 			get_initial_box(sub_int_boxes, is_tangent);
-			std::clock_t e2 = std::clock();
-			std::cout << "step2: " << (e2 - s2) << std::endl;
-			std::clock_t s4 = std::clock();
+			// std::clock_t e2 = std::clock();
+			// std::cout << "step2: " << (e2 - s2) << std::endl;
+			// std::clock_t s4 = std::clock();
 			find_inner_intersect_points(sub_int_boxes, is_tangent);
-			std::clock_t e4 = std::clock();
-			std::cout << "step4: " << (e4 - s4) << std::endl;
-			std::clock_t s3 = std::clock();
-			std::cout << "loop1:" << looop_count << std::endl;
+			// std::clock_t e4 = std::clock();
+			// std::cout << "step4: " << (e4 - s4) << std::endl;
+			// auto s3 = steady_clock::now();
+			// std::cout << "loop1:" << looop_count << std::endl;
 			trace_int_chat();
-			std::clock_t e3 = std::clock();
-			std::cout << "loop2:" << looop_count << std::endl;
-			std::cout << "step3: " << (e3 - s3) << std::endl;
+			// auto e3 = steady_clock::now();
+			// std::cout << "loop2:" << looop_count << std::endl;
+			// std::cout << "step3: " << duration_cast<microseconds>(e3 - s3).count() << std::endl;
 			auto end = steady_clock::now();
 			auto last_time = duration_cast<microseconds>(end - start);
 
