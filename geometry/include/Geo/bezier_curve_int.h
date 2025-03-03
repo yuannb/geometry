@@ -342,6 +342,7 @@ namespace tnurbs
             Box<T, variaty_count> init_box(min, max);
             std::deque<Box<T, variaty_count>> boxes{ init_box };
 
+            Eigen::Matrix<T, equation_count, Eigen::Dynamic> control_points(equation_count, m_coeff.cols());// = m_coeff;
             //int loop_count = 0;
             while (boxes.empty() == false)
             {
@@ -357,10 +358,17 @@ namespace tnurbs
                     continue;
                 }
                 //将bezier细分
-                Eigen::Matrix<T, equation_count, Eigen::Dynamic> control_points = m_coeff;
+                control_points = m_coeff;
                 for (int index = 0; index < variaty_count; ++index)
                 {
                     int bezier_control_points_count = m_index.m_bounds[index] + 1;
+                    // Eigen::VectorX<T> knots(2 * bezier_control_points_count);
+					// knots.block(0, 0, bezier_control_points_count, 1).setConstant(0.0);
+					// knots.block(bezier_control_points_count, 0, bezier_control_points_count, 1).setConstant(1.0);
+                    
+                    // nurbs_curve<T, equation_count, false, -1, -1> nurbs(knots, bezier_control_points_count - 1);
+                    // auto& bezier_control_points = nurbs.get_control_points_ref();
+                    // bezier_control_points.resize(equation_count, bezier_control_points_count);
                     Eigen::Matrix<T, equation_count, Eigen::Dynamic> bezier_control_points(equation_count, bezier_control_points_count);
                     Box<T, 1> sub_box(Eigen::Vector<T, 1>(current_box.Min[index]), Eigen::Vector<T, 1>(current_box.Max[index]));
                     if (sub_box.Max[0] - sub_box.Min[0] < KNOTS_EPS<T>::value)
@@ -387,13 +395,38 @@ namespace tnurbs
                         {
                             bezier_control_points.col(i) = control_points.col(first_index + i * step);
                         }
+
+                        // Eigen::VectorX<T> knots_vector(2 * bezier_control_points_count);
+                        // knots_vector.block(0, 0, bezier_control_points_count, 1).setConstant(0);
+                        // knots_vector.block(bezier_control_points_count - 1, 0, bezier_control_points_count, 1).setConstant(1);
+						// int u_begin_index;
+						// int u_begin_mul = konts_multiple<T>(sub_box.Min[0], knots_vector, bezier_control_points_count - 1, u_begin_index);
+						// int u_begin_insert_num = std::max(0, bezier_control_points_count - 1 - u_begin_mul);
+						// int u_end_index;
+						// int u_end_mul = konts_multiple<T>(sub_box.Max[0], knots_vector, bezier_control_points_count - 1, u_end_index);
+						// int u_end_insert_num = std::max(bezier_control_points_count - 1 - u_end_mul, 0);
+						// Eigen::VectorX<T> insert_knots(u_begin_insert_num + u_end_insert_num);
+						// insert_knots.block(0, 0, u_begin_insert_num, 1).setConstant(sub_box.Min[0]);
+						// insert_knots.block(u_begin_insert_num, 0, u_end_insert_num, 1).setConstant(sub_box.Max[0]);
+
+						// Eigen::VectorX<T> new_knots_vector;
+						// Eigen::Matrix<T, equation_count, Eigen::Dynamic> new_control_points;
+						// int knots_size = 2 * bezier_control_points_count;
+						// refine_knots_vector_curve<T, equation_count>(knots_size, bezier_control_points_count, knots_vector, bezier_control_points, insert_knots, new_knots_vector, new_control_points);
+                        // 
+						// int u_start = std::max(u_begin_index - 1, 0);
+						// int u_new_knots_count = 2 * (bezier_control_points_count - 1) + 2 + u_end_index - u_begin_index - u_begin_mul;
+						// bezier_control_points = new_control_points.block(0, u_start, equation_count, u_new_knots_count -  bezier_control_points_count);
+                        // nurbs.set_bezier_contorl_ref(bezier_control_points);
                         nurbs_curve<T, equation_count, false, -1, -1> nurbs(bezier_control_points);
                         nurbs.sub_divide(sub_box);
-                        bezier_control_points = nurbs.get_control_points();
+                        // bezier_control_points = nurbs.get_control_points_ref();
+                        const auto& new_control_points = nurbs.get_control_points_ref();
                         // std::cout << bezier_control_points << std::endl;
                         for (int i = 0; i < bezier_control_points_count; ++i)
                         {
-                            control_points.col(first_index + i * step) = bezier_control_points.col(i);
+                            // control_points.col(first_index + i * step) = bezier_control_points.col(i);
+                            control_points.col(first_index + i * step) = new_control_points.col(i);
                         }
 
                     } while (m_index.add_one(index));
@@ -468,9 +501,9 @@ namespace tnurbs
             reuslt.Max.setConstant(1.0);
 
             m_index.reset();
+            Eigen::Matrix<T, variaty_count + 1, Eigen::Dynamic> current(variaty_count + 1, points_count);
             for (int f_index = 0; f_index < equation_count; ++f_index)
             {
-                Eigen::Matrix<T, variaty_count + 1, Eigen::Dynamic> current(variaty_count + 1, points_count);
                 for (int i = 0; i < points_count; ++i)
                 {
                     for (int j = 0; j < variaty_count; ++j)
@@ -496,7 +529,8 @@ namespace tnurbs
                         Eigen::Vector2<T> p { current(index, i) ,current(variaty_count, i) };
                         project_point.push_back(p);
                     }
-                    std::vector<Eigen::Vector2<T>> convex_hell = graham_scan(project_point);
+                    std::vector<Eigen::Vector2<T>> convex_hell;
+                    graham_scan(project_point, convex_hell);
                     std::array<T, 2> interval; 
                     if (convex_hell_int_xaxis(convex_hell, interval) == true)
                     {
@@ -1484,7 +1518,7 @@ namespace tnurbs
 			int left_degree = left.get_degree();
 			auto right_control_points = right.get_control_points();
 			int u_right_degree = right_control_points[0].cols() - 1;
-			int v_right_degree = right_control_points.rows() - 1;
+			int v_right_degree = right_control_points.size() - 1;
 			std::array<int, 3> degrees{ left_degree, u_right_degree, v_right_degree };
 			auto left_control_points = left.get_control_points();
 

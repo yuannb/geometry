@@ -29,10 +29,10 @@ namespace tnurbs
 
     //计算nurbs surface的切向向锥
     template<typename T, int dim>
-    ENUM_NURBS eval_nurbs_tangnet_cone(const Eigen::VectorX<Eigen::Matrix<T, dim, Eigen::Dynamic>> &control_points,
+    ENUM_NURBS eval_nurbs_tangnet_cone(const std::vector<Eigen::Matrix<T, dim, Eigen::Dynamic>> &control_points,
         std::vector<cone<T, dim>> &tangent_cones)
     {
-        int v_points_count = control_points.rows();
+        int v_points_count = control_points.size();
         tangent_cones.reserve(v_points_count);
         for (int v_index = 0; v_index < v_points_count; ++v_index)
         {

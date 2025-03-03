@@ -7,6 +7,422 @@
 #include <chrono>
 namespace tnurbs
 {
+
+	//对于大量计算点的位置，包围盒等。统一申请一些内存，减少内存重复申请和析构的耗时
+
+	template<typename surface_type>
+	class surf_compute
+	{
+		using T = typename surface_type::Type;
+		static constexpr int dim = surface_type::dimension;
+		static constexpr bool is_rational = surface_type::is_ratio;
+		static constexpr int point_size = surface_type::point_size;
+	public:
+		surface_type* m_surface;
+		Eigen::VectorX<T> auxiliary_u_knots_vector;
+		int valid_auxiliary_u_knots_count;
+		Eigen::VectorX<T> auxiliary_v_knots_vector;
+		int valid_auxiliary_v_knots_count;
+		std::vector<Eigen::Matrix<T, point_size, Eigen::Dynamic>> auxiliary_points;
+		int m_u_degree;
+		int m_v_degree;
+
+		Eigen::VectorX<T> m_u_knots_vector;
+		Eigen::VectorX<T> m_v_knots_vector;
+
+
+
+		surf_compute(surface_type* surf)
+		{
+			m_surface = surf;
+			const auto& control_points = m_surface->get_control_points_ref();
+			int v_count = control_points.size();
+			int u_count = control_points[0].cols();
+			m_u_degree = m_surface->get_u_degree();
+			m_v_degree = m_surface->get_v_degree();
+			auxiliary_points.resize(v_count + 2 * m_v_degree);
+
+            m_v_knots_vector = surf->get_v_knots();
+            m_u_knots_vector = surf->get_u_knots();
+
+			valid_auxiliary_u_knots_count = m_u_knots_vector.rows();
+			valid_auxiliary_v_knots_count = m_v_knots_vector.rows();
+			auxiliary_u_knots_vector.resize(valid_auxiliary_u_knots_count + 2 * m_u_degree);
+			auxiliary_v_knots_vector.resize(valid_auxiliary_v_knots_count + 2 * m_v_degree);
+			for (int index = 0; index < v_count + 2 * m_v_degree; ++index)
+			{
+				auxiliary_points[index].resize(point_size, u_count + 2 * m_u_degree);
+			}
+
+		}
+
+		~surf_compute() {};
+
+		template<typename T, bool flag = ENUM_LIMITDIRECTION::RIGHT>
+		ENUM_NURBS find_span(T u, int degree, Eigen::Vector<T, Eigen::Dynamic> const& knots_vector, int low, int high, int& index)
+		{
+			static_assert(flag == ENUM_LIMITDIRECTION::RIGHT || flag == ENUM_LIMITDIRECTION::LEFT, "find_span : flag have to equal RIGHT or LEFT");
+			int points_count = high - low + degree;
+			if (u > knots_vector[high] || u < knots_vector[low])
+				return ENUM_NURBS::NURBS_PARAM_IS_OUT_OF_DOMAIN;
+			int mid = (low + high) / 2;
+			if constexpr (flag == ENUM_LIMITDIRECTION::RIGHT)
+			{
+				if (u == knots_vector[points_count])
+				{
+					index = points_count - 1 + low;
+					return ENUM_NURBS::NURBS_SUCCESS;
+				}
+				while (u < knots_vector[mid] || u >= knots_vector[mid + 1])
+				{
+					if (u < knots_vector[mid])
+						high = mid;
+					else
+						low = mid;
+					mid = (low + high) / 2;
+				}
+			}
+			else
+			{
+				if (u == knots_vector[low])
+				{
+					index = degree + low;
+					return ENUM_NURBS::NURBS_SUCCESS;
+				}
+
+				while (u <= knots_vector[mid] || u > knots_vector[mid + 1])
+				{
+					if (u <= knots_vector[mid])
+						high = mid;
+					else
+						low = mid;
+					mid = (low + high) / 2;
+				}
+			}
+
+			index = mid;
+			return ENUM_NURBS::NURBS_SUCCESS;
+		}
+		ENUM_NURBS refine_knots_vector(const Eigen::VectorX<T>& insert_knots, ENUM_DIRECTION direction)
+		{
+			if (insert_knots.size() == 0)
+				return ENUM_NURBS::NURBS_SUCCESS;
+
+			if (direction == ENUM_DIRECTION::U_DIRECTION)
+			{
+				int cols = valid_auxiliary_u_knots_count - m_u_degree - 1;
+				int rows = valid_auxiliary_v_knots_count - m_v_degree - 1;
+
+				int start_index = -1, end_index = -1;
+				if (find_span<T>(insert_knots[0], m_u_degree, auxiliary_u_knots_vector, 0, valid_auxiliary_u_knots_count - m_u_degree - 1, start_index) != ENUM_NURBS::NURBS_SUCCESS)
+					return ENUM_NURBS::NURBS_ERROR;
+				int insert_knots_size = insert_knots.size();
+				if (find_span<T>(insert_knots[insert_knots_size - 1], m_u_degree, auxiliary_u_knots_vector, 0, valid_auxiliary_u_knots_count - m_u_degree - 1, end_index) != ENUM_NURBS::NURBS_SUCCESS)
+					return ENUM_NURBS::NURBS_ERROR;
+				end_index += 1;
+
+
+				auxiliary_u_knots_vector.block(end_index + m_u_degree + insert_knots_size, 0, cols - end_index + 1, 1) = auxiliary_u_knots_vector.block(end_index + m_u_degree, 0, cols - end_index + 1, 1).eval();
+
+				int i = end_index + m_u_degree - 1, k = end_index + insert_knots_size + m_u_degree - 1;
+				for (int j = insert_knots_size - 1; j >= 0; --j)
+				{
+					while (insert_knots[j] <= auxiliary_u_knots_vector[i] && i > start_index)
+					{
+						auxiliary_u_knots_vector[k] = auxiliary_u_knots_vector[i];
+						--k; --i;
+					}
+					auxiliary_u_knots_vector[k] = insert_knots[j];
+					--k;
+				}
+
+				for (int row_index = 0; row_index < rows; ++row_index)
+				{
+					for (int index = cols - end_index; index >= 0; --index)
+					{
+						auxiliary_points[row_index].col(index + end_index + insert_knots_size - 1) = auxiliary_points[row_index].col(index + end_index - 1);
+						// new_control_points.block(0, index + end_index + insert_knots_size - 1, point_size, 1) = m_control_points[row_index].col(index + end_index - 1);
+					}
+
+					i = end_index + m_u_degree - 1;
+					k = end_index + insert_knots_size + m_u_degree - 1;
+					for (int j = insert_knots_size - 1; j >= 0; --j)
+					{
+						while (insert_knots[j] <= m_u_knots_vector[i] && i > start_index)
+						{
+							auxiliary_points[row_index].col(k - m_u_degree - 1) = auxiliary_points[row_index].col(i - m_u_degree - 1);
+							// new_control_points.block(0, k - m_u_degree - 1, point_size, 1) = m_control_points[row_index].col(i - m_u_degree - 1);
+							--k; --i;
+						}
+						// new_control_points.block(0, k - m_u_degree - 1, point_size, 1) = new_control_points.block(0, k - m_u_degree, point_size, 1);
+						auxiliary_points[row_index].col(k - m_u_degree - 1) = auxiliary_points[row_index].col(k - m_u_degree);
+						for (int l = 1; l <= m_u_degree; ++l)
+						{
+							int ind = k - m_u_degree + l;
+							T alpha = auxiliary_u_knots_vector[k + l] - insert_knots[j];
+							if (alpha == 0.0)
+								// new_control_points[row_index].col(ind - 1) = new_control_points[row_index].col(ind);
+								auxiliary_points[row_index].col(ind - 1) = auxiliary_points[row_index].col(ind);
+								// temp_control_points<T, point_size>::new_control_points.block(0, ind - 1, point_size, 1) = temp_control_points<T, point_size>::new_control_points.block(0, ind, point_size, 1);
+							else
+							{
+								alpha /= (auxiliary_u_knots_vector[k + l] - m_u_knots_vector[i - m_u_degree + l]);
+								// new_control_points.block(0, ind - 1, point_size, 1) *= alpha;
+								// new_control_points.block(0, ind - 1, point_size, 1) += (1.0 - alpha) * new_control_points.block(0, ind, point_size, 1);
+								auxiliary_points[row_index].col(ind - 1) *= alpha;
+								auxiliary_points[row_index].col(ind - 1) += (1.0 - alpha) * auxiliary_points[row_index].col(ind);
+							}
+						}
+						--k;
+					}
+				}
+				valid_auxiliary_u_knots_count += insert_knots.rows();
+			}
+			else
+			{
+				int cols = valid_auxiliary_u_knots_count - m_u_degree - 1;
+				int rows = valid_auxiliary_v_knots_count - m_v_degree - 1;
+
+				int start_index = -1, end_index = -1;
+				if (find_span<T>(insert_knots[0], m_v_degree, auxiliary_v_knots_vector, 0, valid_auxiliary_v_knots_count - m_v_degree - 1, start_index) != ENUM_NURBS::NURBS_SUCCESS)
+					return ENUM_NURBS::NURBS_ERROR;
+				int insert_knots_size = insert_knots.size();
+				if (find_span<T>(insert_knots[insert_knots_size - 1], m_v_degree, auxiliary_v_knots_vector, 0, valid_auxiliary_v_knots_count - m_v_degree - 1, end_index) != ENUM_NURBS::NURBS_SUCCESS)
+					return ENUM_NURBS::NURBS_ERROR;
+				end_index += 1;
+
+				for (int index = rows - end_index; index >= 0; --index)
+				{
+					auxiliary_points[index + end_index + insert_knots_size - 1].block(0, 0, point_size, cols)= auxiliary_points[index + end_index - 1].block(0, 0, point_size, cols);
+				}
+
+				auxiliary_v_knots_vector.block(end_index + m_v_degree + insert_knots_size, 0, rows - end_index + 1, 1) = auxiliary_v_knots_vector.block(end_index + m_v_degree, 0, rows - end_index + 1, 1).eval();
+
+				int i = end_index + m_v_degree - 1, k = end_index + insert_knots_size + m_v_degree - 1;
+				for (int j = insert_knots_size - 1; j >= 0; --j)
+				{
+					while (insert_knots[j] <= m_v_knots_vector[i] && i > start_index)
+					{
+						auxiliary_v_knots_vector[k] = m_v_knots_vector[i];
+						--k; --i;
+					}
+					auxiliary_v_knots_vector[k] = insert_knots[j];
+					--k;
+				}
+
+				i = end_index + m_v_degree - 1;
+				k = end_index + insert_knots_size + m_v_degree - 1;
+				for (int j = insert_knots_size - 1; j >= 0; --j)
+				{
+					while (insert_knots[j] <= m_v_knots_vector[i] && i > start_index)
+					{
+						auxiliary_points[k - m_v_degree - 1].block(0, 0, point_size, cols) = auxiliary_points[i - m_v_degree - 1].block(0, 0, point_size, cols);
+						--k; --i;
+					}
+					// auxiliary_v_knots_vector[k - m_v_degree - 1] = auxiliary_v_knots_vector[k - m_v_degree];
+					auxiliary_points[k - m_v_degree - 1].block(0, 0, point_size, cols) = auxiliary_points[k - m_v_degree].block(0, 0, point_size, cols);
+					for (int l = 1; l <= m_v_degree; ++l)
+					{
+						int ind = k - m_v_degree + l;
+						T alpha = auxiliary_v_knots_vector[k + l] - insert_knots[j];
+						// if (std::abs(alpha) < KNOTS_VECTOR_EPS)
+						if (alpha == 0.0)
+							auxiliary_points[ind - 1].block(0, 0, point_size, cols) = auxiliary_points[ind].block(0, 0, point_size, cols);
+							// auxiliary_v_knots_vector[ind - 1] = auxiliary_v_knots_vector[ind];
+						else
+						{
+							alpha /= (auxiliary_v_knots_vector[k + l] - auxiliary_v_knots_vector[i - m_v_degree + l]);
+							auxiliary_points[ind - 1].block(0, 0, point_size, cols) *= alpha;
+							auxiliary_points[ind - 1].block(0, 0, point_size, cols) += (1.0 - alpha) * auxiliary_points[ind].block(0, 0, point_size, cols);
+						}
+					}
+					--k;
+				}
+				valid_auxiliary_v_knots_count += insert_knots.rows();
+			}
+
+			return ENUM_NURBS::NURBS_SUCCESS;
+
+		}
+		
+		void get_2_ders_sub_box(Box<T, 2>& uv_box, Box<T, dim>& u_tangent_box, Box<T, dim>& v_tangent_box)
+        {
+            static_assert(is_rational == false, "is_ratio != false");
+			
+			const auto& control_points = m_surface->get_control_points_ref();
+			int v_count = control_points.size();
+			int u_count = control_points[0].cols();
+
+			for (int index = 0; index < v_count; ++index)
+			{
+				auxiliary_points[index].block(0, 0, point_size, u_count) = control_points[index];
+			}
+			auxiliary_u_knots_vector.block(0, 0, m_u_knots_vector.rows(), 1) = m_u_knots_vector;
+			auxiliary_v_knots_vector.block(0, 0, m_v_knots_vector.rows(), 1) = m_v_knots_vector;
+			valid_auxiliary_u_knots_count = m_u_knots_vector.rows();
+			valid_auxiliary_v_knots_count = m_v_knots_vector.rows();
+
+            int u_begin_index;
+            int u_begin_mul = konts_multiple<T>(uv_box.Min[0], m_u_knots_vector, m_u_degree, u_begin_index);
+            int u_begin_insert_num = std::max(0, m_u_degree - u_begin_mul);
+            int u_end_index;
+            int u_end_mul = konts_multiple<T>(uv_box.Max[0], m_u_knots_vector, m_u_degree, u_end_index);
+            int u_end_insert_num = std::max(m_u_degree - u_end_mul, 0);
+            Eigen::VectorX<T> insert_knots(u_begin_insert_num + u_end_insert_num);
+            insert_knots.block(0, 0, u_begin_insert_num, 1).setConstant(uv_box.Min[0]);
+            insert_knots.block(u_begin_insert_num, 0, u_end_insert_num, 1).setConstant(uv_box.Max[0]);
+            refine_knots_vector(insert_knots, ENUM_DIRECTION::U_DIRECTION);
+
+			// for (int index = 0; index < auxiliary_points.size(); ++index)
+			// {
+			// 	std::cout << auxiliary_points[index] << std::endl;
+			// 	std::cout << "1111111111" << std::endl;
+			// }
+			// std::cout << "222222222222" << std::endl;
+
+
+            int v_begin_index;
+            int v_begin_mul = konts_multiple<T>(uv_box.Min[1], m_v_knots_vector, m_v_degree, v_begin_index);
+            int v_begin_insert_num = std::max(m_v_degree - v_begin_mul, 0);
+            int v_end_index;
+            int v_end_mul = konts_multiple<T>(uv_box.Max[1], m_v_knots_vector, m_v_degree, v_end_index);
+            int v_end_insert_num = std::max(m_v_degree - v_end_mul, 0);
+            insert_knots.resize(v_begin_insert_num + v_end_insert_num);
+            insert_knots.block(0, 0, v_begin_insert_num, 1).setConstant(uv_box.Min[1]);
+            insert_knots.block(v_begin_insert_num, 0, v_end_insert_num, 1).setConstant(uv_box.Max[1]);
+            refine_knots_vector(insert_knots, ENUM_DIRECTION::V_DIRECTION);
+
+			// for (int index = 0; index < auxiliary_points.size(); ++index)
+			// {
+			// 	std::cout << auxiliary_points[index] << std::endl;
+			// 	std::cout << "3333333333" << std::endl;
+			// }
+			// std::cout << "4444444444444" << std::endl;
+
+            int u_new_knots_count = 2 * m_u_degree + 2 + u_end_index - u_begin_index - u_begin_mul;
+            int v_new_knots_count = 2 * m_v_degree + 2 + v_end_index - v_begin_index - v_begin_mul;
+            // std::vector<Eigen::Matrix<T, point_size, Eigen::Dynamic>> new_control_points(v_new_knots_count - m_v_degree - 1);
+            Eigen::VectorX<T> u_new_knots(u_new_knots_count);
+            u_new_knots[0] = uv_box.Min[0];
+            u_new_knots[u_new_knots_count - 1] = uv_box.Max[0];
+            u_new_knots.block(1, 0, u_new_knots_count - 2, 1) = auxiliary_u_knots_vector.block(std::max(u_begin_index, 1), 0, u_new_knots_count - 2, 1);
+
+            Eigen::VectorX<T> v_new_knots(v_new_knots_count);
+            v_new_knots[0] = uv_box.Min[1];// m_v_knots_vector[v_begin_index];
+            v_new_knots[v_new_knots_count - 1] = uv_box.Max[1];//  m_v_knots_vector[v_end_index];
+            v_new_knots.block(1, 0, v_new_knots_count - 2, 1) = auxiliary_v_knots_vector.block(std::max(v_begin_index, 1), 0, v_new_knots_count - 2, 1);
+
+            int v_start = std::max(v_begin_index - 1, 0);
+            int u_start = std::max(u_begin_index - 1, 0);
+
+
+
+            std::size_t row_points_count = v_new_knots_count - m_v_degree - 1;
+            Eigen::Index col_points_count = u_new_knots_count - m_u_degree - 1;
+
+            Eigen::Vector<T, dim> point = (m_u_degree / (u_new_knots[1 + m_u_degree] - u_new_knots[1])) * Eigen::Vector<T, dim>((auxiliary_points[v_start].col(u_start + 1) - auxiliary_points[v_start].col(u_start)));
+            u_tangent_box.Min = u_tangent_box.Max = point;
+            for (Eigen::Index v_index = 0; v_index < row_points_count; ++v_index)
+            {
+                for (Eigen::Index u_index = 0; u_index < col_points_count - 1; ++u_index)
+                {
+					point = (m_u_degree / (u_new_knots[u_index + 1 + m_u_degree] - u_new_knots[u_index + 1])) * Eigen::Vector<T, dim>((auxiliary_points[v_index + v_start].col(u_start + 1 + u_index) - auxiliary_points[v_index + v_start].col(u_index + u_start)));
+                    u_tangent_box.enlarge(point);
+                }
+            }
+
+            point = (m_v_degree / (v_new_knots[1 + m_v_degree] - v_new_knots[1])) * Eigen::Vector<T, dim>((auxiliary_points[v_start + 1].col(u_start) - auxiliary_points[v_start].col(u_start)));
+            v_tangent_box.Min = v_tangent_box.Max = point;
+            for (Eigen::Index u_index = 0; u_index < col_points_count; ++u_index)
+            {
+                for (Eigen::Index v_index = 0; v_index < row_points_count - 1; ++v_index)
+                {
+					point = (m_v_degree / (v_new_knots[v_index + 1 + m_v_degree] - v_new_knots[v_index + 1])) * Eigen::Vector<T, dim>((auxiliary_points[v_index + 1 + v_start].col(u_index + u_start) - auxiliary_points[v_index + v_start].col(u_index + u_start)));
+                    v_tangent_box.enlarge(point);
+                }
+            }
+
+            return;
+        }
+
+
+	};
+
+
+
+
+
+
+
+	template<typename surface_type>
+	struct surfs_patch
+	{
+		using T = typename surface_type::Type;
+		static constexpr int dim = surface_type::dimension;
+		static_assert(dim == 3, "dim != 3");
+
+		surface_type* m_surf;
+		Box<T, dim> m_u_tangent_box;
+		Box<T, dim> m_v_tangent_box;
+		Box<T, dim> m_normal_box;
+
+		Box<T, 2> m_uv_box;
+		Box<T, dim> m_box;
+		std::vector<surfs_patch*> m_children;
+		std::vector<surfs_patch*> m_int_patches;
+		bool m_box_is_valid{ false };
+		~surfs_patch()
+		{
+			if (m_surf != nullptr)
+			{
+				delete m_surf;
+			}
+		}
+	};
+
+	template<typename left_surf_type, typename right_surf_type>
+	struct int_surfs_pair
+	{
+		using T = typename left_surf_type::Type;
+		static constexpr int dim = left_surf_type::dimension;
+		static_assert(dim == 3, "dim != 3");
+		static_assert(std::is_same_v<T, typename right_surf_type::Type>, "std::is_same_v<T, typename right_surf_type::Type>");
+		static_assert(dim == right_surf_type::dimension, "dim != right_surf_type::dimension");
+
+		surfs_patch<left_surf_type>* m_left_surfs_patch;
+		surfs_patch<right_surf_type>* m_right_surfs_patch;
+
+		~int_surfs_pair()
+		{
+			std::vector<surfs_patch<left_surf_type>*> current_patch{ m_left_surfs_patch };
+			std::vector<surfs_patch<left_surf_type>*> next_childrens;
+			while (current_patch.size() > 0)
+			{
+				for (int index = 0; index < current_patch.size(); ++index)
+				{
+					next_childrens.insert(next_childrens.end(), current_patch[index]->m_children.begin(), current_patch[index]->m_children.end());
+					delete current_patch[index];
+				}
+				std::swap(current_patch, next_childrens);
+				next_childrens.clear();
+			}
+			std::vector<surfs_patch<right_surf_type>*> right_current_patch{ m_right_surfs_patch };
+			std::vector<surfs_patch<right_surf_type>*> right_next_childrens;
+			while (right_current_patch.size() > 0)
+			{
+				for (int index = 0; index < right_current_patch.size(); ++index)
+				{
+					right_next_childrens.insert(right_next_childrens.end(), right_current_patch[index]->m_children.begin(), right_current_patch[index]->m_children.end());
+					delete right_current_patch[index];
+				}
+				std::swap(right_current_patch, right_next_childrens);
+				right_next_childrens.clear();
+			}
+		}
+	};
+
+
+
 	//计算第一基本型和第二基本型
 	template<typename T, int dim>
 	ENUM_NURBS eval_first_and_second_fundenmental(const Eigen::Matrix<Eigen::Vector<T, dim>, 3, 3> ders, const Eigen::Vector<T, dim>& normal,
@@ -223,6 +639,17 @@ namespace tnurbs
 
 		Eigen::Matrix2<Box<T, 2>> m_current_left_param_box;
 		Eigen::Matrix2<Box<T, 2>> m_current_right_param_box;
+		std::array<Box<T, 1>, 2> alpha_d;
+		std::array<Box<T, 1>, 2> beta_d;
+
+		Box<T, dim> intersect_box;
+
+		surf_compute<left_surface_type>* m_left_surf_compute;
+		surf_compute<right_surface_type>* m_right_surf_compute;
+
+
+		using left_surface_type_sptr = std::shared_ptr<left_surface_type>;
+		using right_surface_type_sptr = std::shared_ptr<right_surface_type>;
 
 
 	public:
@@ -273,9 +700,17 @@ namespace tnurbs
 		}
 
 	public:
-		nurbs_surfaces_intersect() = default;
+		nurbs_surfaces_intersect() {};
 		~nurbs_surfaces_intersect()
 		{
+			if (m_left_surf_compute != nullptr)
+			{
+				delete m_left_surf_compute;
+			}
+			if (m_right_surf_compute != nullptr)
+			{
+				delete m_right_surf_compute;
+			}
 			for (Eigen::Index col = 0; col < 3; ++col)
 			{
 				for (Eigen::Index row = 0; row < 3; ++row)
@@ -349,6 +784,11 @@ namespace tnurbs
 
 			m_angle_eps = angle_eps;
 			m_product_box = left_surface->get_interval().product_box(right_surface->get_interval());
+
+			m_left_surf_compute = new surf_compute<left_surface_type>(left_surface);
+			m_right_surf_compute = new surf_compute<right_surface_type>(right_surface);
+
+
 			return ENUM_NURBS::NURBS_SUCCESS;
 		}
 
@@ -493,8 +933,8 @@ namespace tnurbs
 			}
 			space_ders = c;
 
-			std::vector<Box<T, 1>> alpha_d(2);
-			std::vector<Box<T, 1>> beta_d(2);
+			// std::vector<Box<T, 1>> alpha_d(2);
+			// std::vector<Box<T, 1>> beta_d(2);
 			if (false == interval_algorithm::divide(interval_algorithm::dot(left_normal_box, interval_algorithm::cross(unit_c, left_v_tangent_box)), left_normal_len2, alpha_d[0]))
 				return ENUM_NURBS::NURBS_ERROR;
 
@@ -841,22 +1281,8 @@ namespace tnurbs
 			if constexpr (left_surface_type::is_ratio == false)
 			{
 				looop_count += 1;
-				// std::array<Box<T, dim>, 3> boxes = get_box(left_param_box, true);
-				// left_u_tangent_box = boxes[0];
-				// left_v_tangent_box = boxes[1];
-				// left_normal_box = boxes[2];
-				// left_surface_type u_tangent_surf, v_tangent_surf, sub_surf;
-				const left_surface_type&  sub_surf = m_left_ders(0, 0)->sub_divide2(left_param_box);
-				// m_left_ders(0, 0)->sub_divide(left_param_box, sub_surf);
-				sub_surf.tangent_u_surface_box(left_u_tangent_box);
-				sub_surf.tangent_v_surface_box(left_v_tangent_box);
-				// sub_surf.tangent_u_surface(u_tangent_surf);
-				// sub_surf.tangent_v_surface(v_tangent_surf);
-
-				// u_tangent_surf.get_box(left_u_tangent_box);
-				// v_tangent_surf.get_box(left_v_tangent_box);
-				// m_left_ders(1, 0)->get_box(left_param_box, left_u_tangent_box);
-				// m_left_ders(0, 1)->get_box(left_param_box, left_v_tangent_box);
+				m_left_surf_compute->get_2_ders_sub_box(left_param_box, left_u_tangent_box, left_v_tangent_box);
+				// m_left_ders(0, 0)->get_2_ders_sub_box(left_param_box, left_u_tangent_box, left_v_tangent_box);
 				left_normal_box = interval_algorithm::cross(left_u_tangent_box, left_v_tangent_box);
 				//使用精确的normal_surface和使用两个box叉乘得到的结果竟然基本一样？？？？？？？
 				// m_left_normal_surface->get_box(left_param_box, left_normal_box);
@@ -877,23 +1303,9 @@ namespace tnurbs
 			if constexpr (right_surface_type::is_ratio == false)
 			{
 				looop_count += 1;
-				// std::array<Box<T, dim>, 3> boxes = get_box(right_param_box, false);
-				// right_u_tangent_box = boxes[0];
-				// right_v_tangent_box = boxes[1];
-				// right_normal_box = boxes[2];
-				
-				// right_surface_type u_tangent_surf, v_tangent_surf, sub_surf;
-				const right_surface_type& sub_surf = m_right_ders(0, 0)->sub_divide2(right_param_box);
-				// m_right_ders(0, 0)->sub_divide(right_param_box, sub_surf);
-				sub_surf.tangent_u_surface_box(right_u_tangent_box);
-				sub_surf.tangent_v_surface_box(right_v_tangent_box);
-				// sub_surf.tangent_u_surface(u_tangent_surf);
-				// sub_surf.tangent_v_surface(v_tangent_surf);
+				// m_right_ders(0, 0)->get_2_ders_sub_box(right_param_box, right_u_tangent_box, right_v_tangent_box);
+				m_right_surf_compute->get_2_ders_sub_box(right_param_box, right_u_tangent_box, right_v_tangent_box);
 
-				// u_tangent_surf.get_box(right_u_tangent_box);
-				// v_tangent_surf.get_box(right_v_tangent_box);
-				// m_right_ders(1, 0)->get_box(right_param_box, right_u_tangent_box);
-				// m_right_ders(0, 1)->get_box(right_param_box, right_v_tangent_box);
 				right_normal_box = interval_algorithm::cross(right_u_tangent_box, right_v_tangent_box);
 				//使用精确的normal_surface和使用两个box叉乘得到的结果竟然基本一样？？？？？？？
 				// m_right_normal_surface->get_box(right_param_box, right_normal_box);
@@ -948,8 +1360,8 @@ namespace tnurbs
 			space_ders[0] = c;
 			//param_ders.resize(1);
 
-			std::vector<Box<T, 1>> alpha_d(2);
-			std::vector<Box<T, 1>> beta_d(2);
+			// std::vector<Box<T, 1>> alpha_d(2);
+			// std::vector<Box<T, 1>> beta_d(2);
 			if (false == interval_algorithm::divide(interval_algorithm::dot(left_normal_box, interval_algorithm::cross(unit_c, left_v_tangent_box)), left_normal_len2, alpha_d[0]))
 				return ENUM_NURBS::NURBS_ERROR;
 
@@ -2838,7 +3250,195 @@ namespace tnurbs
 		}
 
 
+		template<typename surface_type>
+		ENUM_NURBS get_2_box(const surface_type* surf, Box<T, dim>& box, Box<T, 2>& uv_box) const
+		{
+			surf->get_uv_box(uv_box);
+			surf->get_box(box);
+			return ENUM_NURBS::NURBS_SUCCESS;
+		}
+
+		template<typename surface_type>
+		ENUM_NURBS get_3_box(const surface_type* surf, Box<T, dim>& u_box, Box<T, dim>& v_box, Box<T, dim>& normal_box) const
+		{
+			if constexpr (surface_type::is_ratio == false)
+			{
+				surf->tangent_v_surface_box(v_box);
+				surf->tangent_u_surface_box(u_box);
+				normal_box = interval_algorithm::cross(u_box, v_box);
+			}
+			else
+			{
+				assert(false);
+			}
+			return ENUM_NURBS::NURBS_SUCCESS;
+		}
+
+		int surfs_patch_is_int(surfs_patch<left_surface_type>* surf1, surfs_patch<right_surface_type>* surf2)
+		{
+			// volatile bool f = surf1->m_box.intersect(surf2->m_box, intersect_box);
+			if (surf1->m_box.intersect(surf2->m_box, intersect_box) == true)
+			{
+				if (surf1->m_box_is_valid == false)
+				{
+					get_3_box<left_surface_type>(surf1->m_surf, surf1->m_u_tangent_box, surf1->m_v_tangent_box, surf1->m_normal_box);
+					surf1->m_box_is_valid = true;
+				}
+				if (surf2->m_box_is_valid == false)
+				{
+					get_3_box<right_surface_type>(surf2->m_surf, surf2->m_u_tangent_box, surf2->m_v_tangent_box, surf2->m_normal_box);
+					surf2->m_box_is_valid = true;
+				}
+				Box<T, 4> param_ders;
+
+				Box<T, 3> space_ders;
+				bool may_arrived_singular = false;
+				Box<T, 4> param_ders_box;
+				ENUM_NURBS code = eval_preiamge_and_space_ders(surf1->m_u_tangent_box, surf1->m_v_tangent_box, surf2->m_u_tangent_box, surf2->m_v_tangent_box, 
+								surf1->m_normal_box, surf2->m_normal_box, space_ders, param_ders, may_arrived_singular);
+				if (code != ENUM_NURBS::NURBS_SUCCESS)
+				{
+					return 2;
+				}
+				Box<T, 2> uv_tangent_box(param_ders.Min.template block<2, 1>(0, 0), param_ders.Max.template block<2, 1>(0, 0));
+
+				// cotian(-1. 0)
+				// if (uv_tangent_box.Min[1] <= PRECISION<T>::value && uv_tangent_box.Max[1] >= -PRECISION<T>::value && uv_tangent_box.Min[0] <= PRECISION<T>::value)
+				// {
+				// 	return 1;
+				// }
+				// cotian(0. 1)
+				if (uv_tangent_box.Min[0] <= PRECISION<T>::value && uv_tangent_box.Max[0] >= -PRECISION<T>::value && uv_tangent_box.Min[1] >= PRECISION<T>::value)
+				{
+					return 1;
+				}
+				return 0;
+			}
+			return 0;
+		}
+
+
 		ENUM_NURBS get_initial_box(std::vector<std::pair<Box<T, 2>, Box<T, 2>>>& sub_int_boxes, std::vector<char>& is_tangent)
+		{
+			sub_int_boxes.clear();
+			is_tangent.clear();
+			
+			std::vector<left_surface_type> left_surface_int;
+			std::vector<right_surface_type> right_surface_int;
+
+			Box<T, dim> left_sub_boxes, right_sub_boxes;
+			Box<T, dim> left_sub_normal_boxes, right_sub_normal_boxes;
+			Box<T, dim> u_left_sub_tangent_boxes, u_right_sub_tangent_boxes;
+			Box<T, dim> v_left_sub_tangent_boxes, v_right_sub_tangent_boxes;
+			std::vector<left_surface_type*> left_sub_surfaces;
+			std::vector<right_surface_type*> right_sub_surfaces;
+			Box<T, 2> uv_box, st_box;
+
+			left_surface_type* left_surface_temp = new left_surface_type(*m_left_ders(0, 0));
+			right_surface_type* right_surface_temp = new right_surface_type(*m_right_ders(0, 0));
+
+			surfs_patch<left_surface_type>* left_surf_patch_root = new surfs_patch<left_surface_type>();
+			surfs_patch<right_surface_type>* right_surf_patch_root = new surfs_patch<right_surface_type>();
+			left_surf_patch_root->m_surf = left_surface_temp;
+			right_surf_patch_root->m_surf = right_surface_temp;
+			get_2_box<left_surface_type>(left_surface_temp, left_surf_patch_root->m_box, left_surf_patch_root->m_uv_box);
+			get_2_box<right_surface_type>(right_surface_temp, right_surf_patch_root->m_box, right_surf_patch_root->m_uv_box);
+			
+			int_surfs_pair<left_surface_type, right_surface_type>* int_pair = new int_surfs_pair<left_surface_type, right_surface_type>();
+			int_pair->m_left_surfs_patch = left_surf_patch_root;
+			int_pair->m_right_surfs_patch = right_surf_patch_root;
+
+			Eigen::Vector2<T> uv_param;
+			Eigen::Vector2<T> st_param;
+			Box<T, dim> intersect_box;
+
+			std::vector<surfs_patch<left_surface_type>*> current_int_patches;
+			if (surfs_patch_is_int(left_surf_patch_root, right_surf_patch_root) != 0)
+			{
+				left_surf_patch_root->m_int_patches.push_back(right_surf_patch_root);
+				current_int_patches.push_back(left_surf_patch_root);
+			}
+			std::vector<surfs_patch<left_surface_type>*> next_int_patches;
+			int deep = 0;
+			int max_deep = 8;
+			while (current_int_patches.size() != 0 || deep < max_deep)
+			{
+				++deep;
+				for (surfs_patch<left_surface_type>* left_int_surf : current_int_patches)
+				{
+					uv_param = left_int_surf->m_uv_box.get_middle_point();
+					left_int_surf->m_surf->split_at_param(uv_param, left_sub_surfaces);
+					left_int_surf->m_children = std::vector<surfs_patch<left_surface_type>*>{ new surfs_patch<left_surface_type>{}, new surfs_patch<left_surface_type>{}, new surfs_patch<left_surface_type>{}, new surfs_patch<left_surface_type>{} };
+					for (int index = 0; index < 4; ++index)
+					{
+						left_int_surf->m_children[index]->m_surf = left_sub_surfaces[index];
+						get_2_box<left_surface_type>(left_int_surf->m_children[index]->m_surf, left_int_surf->m_children[index]->m_box, left_int_surf->m_children[index]->m_uv_box);
+					}
+
+					std::vector<surfs_patch<right_surface_type>*>& right_int_surfs = left_int_surf->m_int_patches;
+					for (surfs_patch<right_surface_type>* right_int_surf : right_int_surfs)
+					{
+						if (right_int_surf->m_children.size() == 0)
+						{
+							st_param = right_int_surf->m_uv_box.get_middle_point();
+							right_int_surf->m_surf->split_at_param(st_param, right_sub_surfaces);
+							right_int_surf->m_children = std::vector<surfs_patch<right_surface_type>*>{ new surfs_patch<right_surface_type>(), new surfs_patch<right_surface_type>(), new surfs_patch<right_surface_type>(), new surfs_patch<right_surface_type>() };
+							for (int index = 0; index < 4; ++index)
+							{
+								right_int_surf->m_children[index]->m_surf = right_sub_surfaces[index];
+								get_2_box<right_surface_type>(right_int_surf->m_children[index]->m_surf, right_int_surf->m_children[index]->m_box, right_int_surf->m_children[index]->m_uv_box);
+							}
+						}
+						for (surfs_patch<left_surface_type>* left_int_surf_children : left_int_surf->m_children)
+						{
+							for (surfs_patch<right_surface_type>* right_int_surf_children : right_int_surf->m_children)
+							{
+								int int_type = surfs_patch_is_int(left_int_surf_children, right_int_surf_children);
+								if (deep == max_deep)
+								{
+									if (int_type == 1)
+									{
+										sub_int_boxes.push_back(std::make_pair(left_int_surf_children->m_uv_box, right_int_surf_children->m_uv_box));
+										is_tangent.push_back('0');
+									}
+									else if (int_type == 2)
+									{
+										sub_int_boxes.push_back(std::make_pair(left_int_surf_children->m_uv_box, right_int_surf_children->m_uv_box));
+										is_tangent.push_back('1');
+									}
+								}
+								else
+								{
+									if (int_type != 0)
+									{
+										left_int_surf_children->m_int_patches.push_back(right_int_surf_children);
+									}
+								}
+							}
+						}
+					}
+					if (deep < max_deep)
+					{
+						for (surfs_patch<left_surface_type>* left_int_surf_children : left_int_surf->m_children)
+						{
+							if (left_int_surf_children->m_int_patches.size() > 0)
+							{
+								next_int_patches.push_back(left_int_surf_children);
+							}
+						}
+					}
+				}
+				std::swap(current_int_patches, next_int_patches);
+				next_int_patches.clear();
+			}
+			
+			delete int_pair;
+			return ENUM_NURBS::NURBS_SUCCESS;
+
+		};
+		
+
+		ENUM_NURBS get_initial_box2(std::vector<std::pair<Box<T, 2>, Box<T, 2>>>& sub_int_boxes, std::vector<char>& is_tangent)
 		{
 			sub_int_boxes.clear();
 			is_tangent.clear();
@@ -2847,6 +3447,8 @@ namespace tnurbs
 		
 			std::vector<left_surface_type> left_surface_int;
 			std::vector<right_surface_type> right_surface_int;
+			// std::vector<left_surface_type_sptr> left_surface_int;
+			// std::vector<right_surface_type_sptr> right_surface_int;
 
 			Box<T, dim> left_sub_boxes, right_sub_boxes;
 			Box<T, dim> left_sub_normal_boxes, right_sub_normal_boxes;
@@ -2854,6 +3456,8 @@ namespace tnurbs
 			Box<T, dim> v_left_sub_tangent_boxes, v_right_sub_tangent_boxes;
 			std::array<left_surface_type, 4> left_sub_surfaces;
 			std::array<right_surface_type, 4> right_sub_surfaces;
+			// std::array<left_surface_type_sptr, 4> left_sub_surfaces{ nullptr, nullptr, nullptr, nullptr };
+			// std::array<right_surface_type_sptr, 4> right_sub_surfaces{ nullptr, nullptr, nullptr, nullptr };
 			Box<T, 2> uv_box, st_box;
 		    m_left_ders(0, 0)->get_uv_box(uv_box);
 			m_right_ders(0, 0)->get_uv_box(st_box);
@@ -2866,14 +3470,23 @@ namespace tnurbs
 			// m_left_ders(0, 0)->split_at_param(uv_param, left_sub_surfaces);
 			// m_right_ders(0, 0)->split_at_param(st_param, right_sub_surfaces);
 			
+			// std::map<left_surface_type_sptr, std::array<left_surface_type_sptr, 4>> left_pairs;
+			// std::map<right_surface_type_sptr, std::array<right_surface_type_sptr, 4>> right_pairs;
+
+			// left_surface_temp.split_at_param(uv_param, left_sub_surfaces2);
 			left_surface_temp.split_at_param(uv_param, left_sub_surfaces);
+			// left_pairs[left_surface_temp] = left_sub_surfaces;
+			
 			right_surface_temp.split_at_param(st_param, right_sub_surfaces);
+			// right_pairs[right_surface_temp] = right_sub_surfaces;
 			Box<T, dim> intersect_box;
 			for (int i = 0; i < 4; ++i)
 			{
+				// left_sub_surfaces[i]->get_box(left_sub_boxes);
 				left_sub_surfaces[i].get_box(left_sub_boxes);
 				for (int j = 0; j < 4; ++j)
 				{
+					// right_sub_surfaces[j]->get_box(right_sub_boxes);
 					right_sub_surfaces[j].get_box(right_sub_boxes);
 					if (left_sub_boxes.intersect(right_sub_boxes, intersect_box))
 					{
@@ -2891,7 +3504,11 @@ namespace tnurbs
 				
 				left_surface_type& left_surf = left_surface_int.back();
 				right_surface_type& right_surf = right_surface_int.back();
+				// left_surface_type_sptr left_surf = left_surface_int.back();
+				// right_surface_type_sptr right_surf = right_surface_int.back();
 
+				// left_surf->get_uv_box(uv_box);
+				// right_surf->get_uv_box(st_box);
 				left_surf.get_uv_box(uv_box);
 				right_surf.get_uv_box(st_box);
 
@@ -2901,18 +3518,44 @@ namespace tnurbs
 				Eigen::Vector2<T> st_middle = st_box.get_middle_point();
 				// surface_pair.first.split_at_param(uv_middle, left_sub_surfaces);
 				// surface_pair.second.split_at_param(st_middle, right_sub_surfaces);
+				// left_surf->split_at_param(uv_middle, left_sub_surfaces);
+				// right_surf->split_at_param(st_middle, right_sub_surfaces);
 				left_surf.split_at_param(uv_middle, left_sub_surfaces);
 				right_surf.split_at_param(st_middle, right_sub_surfaces);
+				// if (left_surf->is_valid == false)
+				// {
+				// 	left_sub_surfaces = left_pairs[left_surf];
+				// }
+				// else
+				// {
+				// 	left_surf->split_at_param(uv_middle, left_sub_surfaces);
+				// 	// left_pairs[left_surf] = left_sub_surfaces;
+				// }
+				// 
+				// if (right_surf->is_valid == false)
+				// {
+				// 	right_sub_surfaces = right_pairs[right_surf];
+				// }
+				// else
+				// {
+				// 	right_surf->split_at_param(st_middle, right_sub_surfaces);
+				// 	// right_pairs[right_surf] = right_sub_surfaces;
+				// }
 
 				left_surface_int.pop_back();
 				right_surface_int.pop_back();
 
+				T temp = 1.0 / 2.0 + 1e-4;
 				for (int i = 0; i < 4; ++i)
 				{
 					left_sub_surfaces[i].get_box(left_sub_boxes);
 					left_sub_surfaces[i].get_uv_box(uv_box);
+					// left_sub_surfaces[i]->get_box(left_sub_boxes);
+					// left_sub_surfaces[i]->get_uv_box(uv_box);
 					for (int j = 0; j < 4; ++j)
 					{
+						// right_sub_surfaces[j]->get_uv_box(st_box);
+						// right_sub_surfaces[j]->get_box(right_sub_boxes);
 						right_sub_surfaces[j].get_uv_box(st_box);
 						right_sub_surfaces[j].get_box(right_sub_boxes);
 						if (left_sub_boxes.intersect(right_sub_boxes, intersect_box) == true)
@@ -2923,13 +3566,15 @@ namespace tnurbs
 							bool may_arrived_singular = false;
 							Box<T, 4> param_ders_box;
 
-							eval_normal_and_ders_box<left_surface_type>(left_sub_surfaces[i], u_left_sub_tangent_boxes, u_right_sub_tangent_boxes, left_sub_normal_boxes);
-							eval_normal_and_ders_box<right_surface_type>(right_sub_surfaces[j], v_left_sub_tangent_boxes, v_right_sub_tangent_boxes, right_sub_normal_boxes);
+							// eval_normal_and_ders_box<left_surface_type>(*left_sub_surfaces[i], u_left_sub_tangent_boxes, u_right_sub_tangent_boxes, left_sub_normal_boxes);
+							// eval_normal_and_ders_box<right_surface_type>(*right_sub_surfaces[j], v_left_sub_tangent_boxes, v_right_sub_tangent_boxes, right_sub_normal_boxes);
+							eval_normal_and_ders_box<left_surface_type>(left_sub_surfaces[i], u_left_sub_tangent_boxes, v_left_sub_tangent_boxes, left_sub_normal_boxes);
+							eval_normal_and_ders_box<right_surface_type>(right_sub_surfaces[j], u_right_sub_tangent_boxes, v_right_sub_tangent_boxes, right_sub_normal_boxes);
 							ENUM_NURBS code = eval_preiamge_and_space_ders(u_left_sub_tangent_boxes, v_left_sub_tangent_boxes, u_right_sub_tangent_boxes, v_right_sub_tangent_boxes, left_sub_normal_boxes, right_sub_normal_boxes, space_ders, param_ders, may_arrived_singular);
 							if (code != ENUM_NURBS::NURBS_SUCCESS)
 							{
 								// 目前对相切的时候不做处理; TODO: 找一下优化方法？
-								if ((uv_box.Min - uv_box.Max).norm() < 1.0 / 256.0)
+								if (std::abs(uv_box.Min[0] - uv_box.Max[0]) < temp)
 								{
 									bool add_int_box = true;
 									Box<T, 2> intersect_box1, intersect_box2;
@@ -2966,7 +3611,7 @@ namespace tnurbs
 							// cotian(-1. 0)
 							if (uv_tangent_box.Min[1] <= PRECISION<T>::value && uv_tangent_box.Max[1] >= -PRECISION<T>::value && uv_tangent_box.Min[0] <= PRECISION<T>::value)
 							{
-								if ((uv_box.Min - uv_box.Max).norm() < 1.0 / 256.0)
+								if (std::abs(uv_box.Min[0] - uv_box.Max[0]) < temp)
 								{
 									bool add_int_box = true;
 
@@ -3130,11 +3775,15 @@ namespace tnurbs
 		ENUM_NURBS surafces_intersection2()
 		{
 
-			using namespace std::chrono;
-			auto start = steady_clock::now();
+			 using namespace std::chrono;
+			// auto start = steady_clock::now();
 			// std::clock_t s1 = std::clock();
 			std::unordered_set<help<T, 4>, hash_help<T, 4>> remove_mult;
+			// auto s2 = steady_clock::now();
 			surf_surf_boundary_int(*m_left_ders(0, 0), *m_right_ders(0, 0), remove_mult);
+			// auto e2 = steady_clock::now();
+			// auto time2 = duration_cast<microseconds>(e2 - s2);
+			// std::cout << time2.count() << "um" << std::endl;
 			// std::clock_t e1 = std::clock();
 			// std::cout << "step1: " << (e1 - s1) << std::endl;
 			// std::clock_t s11 = std::clock();
@@ -3143,24 +3792,28 @@ namespace tnurbs
 			// std::cout << "step11: " << (e11 - s11) << std::endl;
 			std::vector<std::pair<Box<T, 2>, Box<T, 2>>> sub_int_boxes;
 			std::vector<char> is_tangent;
-			// std::clock_t s2 = std::clock();
+			// auto s3 = steady_clock::now();
 			get_initial_box(sub_int_boxes, is_tangent);
-			// std::clock_t e2 = std::clock();
-			// std::cout << "step2: " << (e2 - s2) << std::endl;
+			// auto e3 = steady_clock::now();
+			// auto time3 = duration_cast<microseconds>(e3 - s3);
+			// std::cout << time3.count() << "um" << std::endl;
+			// std::vector<std::pair<Box<T, 2>, Box<T, 2>>> sub_int_boxes2;
+			// std::vector<char> is_tangent2;
+			// get_initial_box2(sub_int_boxes2, is_tangent2);
 			// std::clock_t s4 = std::clock();
 			find_inner_intersect_points(sub_int_boxes, is_tangent);
 			// std::clock_t e4 = std::clock();
 			// std::cout << "step4: " << (e4 - s4) << std::endl;
-			// auto s3 = steady_clock::now();
 			// std::cout << "loop1:" << looop_count << std::endl;
+			// auto s5 = steady_clock::now();
 			trace_int_chat();
-			// auto e3 = steady_clock::now();
-			// std::cout << "loop2:" << looop_count << std::endl;
-			// std::cout << "step3: " << duration_cast<microseconds>(e3 - s3).count() << std::endl;
-			auto end = steady_clock::now();
-			auto last_time = duration_cast<microseconds>(end - start);
+			// auto e5 = steady_clock::now();
+			// // std::cout << "loop2:" << looop_count << std::endl;
+			// std::cout << duration_cast<microseconds>(e5 - s5).count() << std::endl;
+			// auto end = steady_clock::now();
+			// auto last_time = duration_cast<microseconds>(end - start);
 
-			std::cout << last_time.count() << "um" << std::endl;
+			// std::cout << last_time.count() << "um" << std::endl;
 			return ENUM_NURBS::NURBS_SUCCESS;
 		}
 	};

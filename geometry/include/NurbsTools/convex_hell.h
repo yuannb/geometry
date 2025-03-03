@@ -23,18 +23,23 @@ namespace tnurbs
     }
 
     template<typename T = double>
-    std::vector<Eigen::Vector2<T>> graham_scan(std::vector<Eigen::Vector2<T>> &points)
+    void graham_scan(std::vector<Eigen::Vector2<T>> &points, std::vector<Eigen::Vector2<T>>& convex_hell)
     {
+        convex_hell.clear();
         size_t points_count = points.size();
         if (points_count <= 2)
-            return { };
+            return;
         size_t index = find_min_ycoord(points);
         std::swap(points[index], points[0]);
         Eigen::Vector2<T> start_point = points[0];
-        std::sort(points.begin() + 1, points.end(), [&start_point](const Eigen::Vector2<T>& first, const Eigen::Vector2<T>& second) -> bool
+        Eigen::Vector2<T> v1;
+		Eigen::Vector2<T> v2;
+        std::sort(points.begin() + 1, points.end(), [&start_point, &v1, &v2](const Eigen::Vector2<T>& first, const Eigen::Vector2<T>& second) -> bool
         {
-            Eigen::Vector2<T> v1 = first - start_point;
-            Eigen::Vector2<T> v2 = second - start_point;
+            // Eigen::Vector2<T> v1 = first - start_point;
+            // Eigen::Vector2<T> v2 = second - start_point;
+            v1 = first - start_point;
+            v2 = second - start_point;
             T d = v1[0] * v2[1] - v1[1] * v2[0];
             if (d < -PRECISION<T>::value)
                 return false;
@@ -53,8 +58,8 @@ namespace tnurbs
         //remove repeat elem
         std::vector<Eigen::Vector2<T>> new_points;
         new_points.reserve(points_count);
-        new_points.push_back(points[0]);
-        new_points.push_back(points[1]);
+        new_points.push_back(std::move(points[0]));
+        new_points.push_back(std::move(points[1]));
         for (auto it = points.begin() + 2; it != points.end(); ++it)
         {
             Eigen::Vector2<T> dir1 = new_points.back() - new_points[0];
@@ -63,21 +68,27 @@ namespace tnurbs
 
             if (std::abs(d) < PRECISION<T>::value)
             {
-                new_points.back() = *it;
+                new_points.back() = std::move(*it);
             }
             else
-                new_points.push_back(*it);
+                new_points.push_back(std::move(*it));
         }
 
         size_t new_points_count = new_points.size();
-        if (new_points_count == 1)
-            return std::vector<Eigen::Vector2<T>>{ new_points[0] };
-        if (new_points_count == 2)
-            return std::vector<Eigen::Vector2<T>> { new_points[0], new_points[1] };
-        if (new_points_count == 3)
-            return std::vector<Eigen::Vector2<T>> { new_points[0], new_points[1], new_points[2] };
+        convex_hell.reserve(new_points_count);
+        if (new_points_count >= 1)
+			convex_hell.push_back(std::move(new_points[0]));
+        if (new_points_count >= 2)
+			convex_hell.push_back(std::move(new_points[1]));
+        if (new_points_count >= 3)
+			convex_hell.push_back(std::move(new_points[2]));
 
-        std::vector<Eigen::Vector2<T>> convex_hell{ new_points[0], new_points[1], new_points[2] };
+        if (new_points_count <= 3)
+        {
+            return;
+        }
+
+        // std::vector<Eigen::Vector2<T>> convex_hell{ new_points[0], new_points[1], new_points[2] };
         for (auto it = new_points.begin() + 3; it != new_points.end(); ++it)
         {
             size_t convex_hell_count = convex_hell.size();
@@ -96,7 +107,8 @@ namespace tnurbs
             }
             convex_hell.push_back(*it);
         }
-        return convex_hell;
+        // return convex_hell;
+        return;
     }
 }
 

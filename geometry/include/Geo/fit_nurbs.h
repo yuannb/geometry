@@ -552,7 +552,7 @@ namespace tnurbs
         }
 
         Eigen::VectorX<Eigen::Matrix<T, dim, Eigen::Dynamic>> R(u_params_size);
-        Eigen::VectorX<Eigen::Matrix<T, dim, Eigen::Dynamic>> new_control_points(v_params_size);
+        std::vector<Eigen::Matrix<T, dim, Eigen::Dynamic>> new_control_points(v_params_size);
         for (int index = 0; index < u_params_size; ++index)
         {
             R[index].resize(dim, v_params_size);
@@ -1127,7 +1127,7 @@ namespace tnurbs
             Duv(index, 0) = Duv(index, u_points_count - 1);
         }
 
-        Eigen::VectorX<Eigen::Matrix<T, dim, Eigen::Dynamic>> control_points(2 * v_points_count);
+        std::vector<Eigen::Matrix<T, dim, Eigen::Dynamic>> control_points(2 * v_points_count);
         control_points[0].resize(dim, 2 * u_points_count);
         control_points[2 * v_points_count - 1].resize(dim, 2 * u_points_count);
         control_points[0].col(0) = points[0].col(0);
@@ -1711,7 +1711,7 @@ namespace tnurbs
         if (solver.info() != Eigen::Success)
             return ENUM_NURBS::NURBS_ERROR;
 
-        Eigen::VectorX<Eigen::Matrix<T, dim, Eigen::Dynamic>> control_points(v_control_points_count);
+        std::vector<Eigen::Matrix<T, dim, Eigen::Dynamic>> control_points(v_control_points_count);
         for (int index = 0; index < v_control_points_count; ++index)
             control_points[index].resize(dim, u_control_points_count);
         

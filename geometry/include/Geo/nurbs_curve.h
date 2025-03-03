@@ -8,6 +8,11 @@
 //TODO:将knots_vector的类型将Eigen::vector换成std::vector
 namespace tnurbs
 {
+    template<typename T, int x, int y, int z, int w, int dim, bool is_ratio>
+    class nurbs_surface;
+    
+    template<typename T, int dim, bool is_ratio>
+    class nurbs_surface<T, dim, -1, -1, -1, -1, is_ratio>;
     // using namespace tnurbs;
     /// @brief nurbs curve class
     /// @tparam T : double float int ...
@@ -929,6 +934,7 @@ namespace tnurbs
     template<typename T, int dim, bool is_rational>
     class nurbs_curve<T, dim, is_rational, -1, -1> : public curve<T, dim>
     {
+        friend class nurbs_surface<T, dim, -1, -1, -1, -1, is_rational>;
     public:
         using Type = T;
         static constexpr bool is_ratio = is_rational;
@@ -941,12 +947,16 @@ namespace tnurbs
 
     public:
         nurbs_curve() = default;
-        nurbs_curve(const Eigen::Vector<T, Eigen::Dynamic> &knots_vector,
-                    const Eigen::Matrix<T, rows, Eigen::Dynamic> &control_points) : m_knots_vector(knots_vector),
-                    m_control_points(control_points) 
-                    { 
-                        m_degree = m_knots_vector.size() - m_control_points.cols() - 1; 
-                    }
+        nurbs_curve(const Eigen::Vector<T, Eigen::Dynamic>& knots_vector,
+            const Eigen::Matrix<T, rows, Eigen::Dynamic>& control_points) : m_knots_vector(knots_vector),
+            m_control_points(control_points)
+        {
+            m_degree = m_knots_vector.size() - m_control_points.cols() - 1;
+        }
+        nurbs_curve(const Eigen::Vector<T, Eigen::Dynamic>& knots_vector, int degree) : m_knots_vector(knots_vector),
+            m_degree(degree)
+        {
+        };
         nurbs_curve(const nurbs_curve<T, dim, is_rational, -1, -1> &nurbs_curve_to_copy)
         {
             m_knots_vector = nurbs_curve_to_copy.get_knots_vector();
@@ -955,14 +965,34 @@ namespace tnurbs
         }
 
         //bezier curve
-        nurbs_curve(const Eigen::Matrix<T, rows, Eigen::Dynamic> &control_points) : m_control_points(control_points) 
-                    { 
-                        m_degree = m_control_points.cols() - 1;
-                        m_knots_vector.resize(m_degree * 2 + 2);
-                        m_knots_vector.block(0, 0, m_degree + 1, 1).setConstant(0.0);
-                        m_knots_vector.block(m_degree + 1, 0, m_degree + 1, 1).setConstant(1.0);
-                    }
+        nurbs_curve(const Eigen::Matrix<T, rows, Eigen::Dynamic>& control_points) : m_control_points(control_points)
+        {
+            m_degree = m_control_points.cols() - 1;
+            m_knots_vector.resize(m_degree * 2 + 2);
+            m_knots_vector.block(0, 0, m_degree + 1, 1).setConstant(0.0);
+            m_knots_vector.block(m_degree + 1, 0, m_degree + 1, 1).setConstant(1.0);
+        }
 
+        Eigen::Matrix<T, rows, Eigen::Dynamic>& get_control_points_ref()
+        {
+            return m_control_points;
+        }
+        
+        const Eigen::Matrix<T, rows, Eigen::Dynamic>& get_control_points_ref() const
+        {
+            return m_control_points;
+        }
+
+
+        void set_bezier_contorl_ref(Eigen::Matrix<T, rows, Eigen::Dynamic>& control_points)
+        {
+            m_degree = control_points.cols() - 1;
+            m_knots_vector.resize(m_degree * 2 + 2);
+            m_knots_vector.block(0, 0, m_degree + 1, 1).setConstant(0.0);
+            m_knots_vector.block(m_degree + 1, 0, m_degree + 1, 1).setConstant(1.0);
+            m_control_points = std::move(control_points);
+            return;
+        }
 
         // //生成值全为1的一阶的nurbs曲线
         // static nurbs_curve<T, dim, false, -1, -1> *make_identity_nurbs(T low, T high) const
@@ -1198,6 +1228,11 @@ namespace tnurbs
         {
             return m_control_points;
         }
+        
+        // const Eigen::Matrix<T, rows, Eigen::Dynamic>& get_control_points_ref() const
+        // {
+        //     return m_control_points;
+        // }
 
         Eigen::Matrix<T, dim, Eigen::Dynamic> get_nonhomo_control_points() const
         {

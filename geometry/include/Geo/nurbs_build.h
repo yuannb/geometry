@@ -67,7 +67,7 @@ namespace tnurbs{
             }
             int profile_control_points_count = profile_control_points.cols();
             int trajectory_control_points_count = trajectory_control_points.cols();
-            Eigen::VectorX<Eigen::Matrix<T, 4, Eigen::Dynamic>> control_points(trajectory_control_points_count);
+            std::vector<Eigen::Matrix<T, 4, Eigen::Dynamic>> control_points(trajectory_control_points_count);
             for (int v_index = 0; v_index < trajectory_control_points_count; ++v_index)
             {
                 control_points[v_index].resize(4, profile_control_points_count);
@@ -163,7 +163,7 @@ namespace tnurbs{
         int u_points_count = merge_knots_vector.size() - max_degree - 1;
         int v_points_count = v_params.size();
         constexpr int points_size = is_rational ? dim + 1 : dim;
-        Eigen::VectorX<Eigen::Matrix<T, points_size, Eigen::Dynamic>> control_points(v_points_count);
+        std::vector<Eigen::Matrix<T, points_size, Eigen::Dynamic>> control_points(v_points_count);
         for (int index = 0; index < v_points_count; ++index)
         {
             control_points[index].resize(points_size, u_points_count);
@@ -305,7 +305,7 @@ namespace tnurbs{
 
         //将section_curves_elevate的每一条曲线的每一列控制点插值
         constexpr int points_size = is_rational ? dim + 1 : dim;
-        Eigen::VectorX<Eigen::Matrix<T, points_size, Eigen::Dynamic>> control_points(v_points_count);
+        std::vector<Eigen::Matrix<T, points_size, Eigen::Dynamic>> control_points(v_points_count);
         for (int index = 0; index < v_points_count; ++index)
         {
             control_points[index].resize(points_size, u_points_count);
@@ -473,7 +473,7 @@ namespace tnurbs{
         }
 
         //将section_curves_elevate的每一条曲线的每一列控制点插值
-        Eigen::VectorX<Eigen::Matrix<T, dim, Eigen::Dynamic>> control_points(v_points_count * 2);
+        std::vector<Eigen::Matrix<T, dim, Eigen::Dynamic>> control_points(v_points_count * 2);
         for (int index = 0; index < v_points_count * 2; ++index)
         {
             control_points[index].resize(dim, u_points_count);
@@ -724,7 +724,7 @@ namespace tnurbs{
 
         }
 
-        Eigen::VectorX<Eigen::Matrix4X<T>> new_control_points;
+        std::vector<Eigen::Matrix4X<T>> new_control_points;
         new_control_points.resize(nsect);
         for (int index = 0; index < nsect; ++index)
         {
@@ -821,7 +821,7 @@ namespace tnurbs{
 
         }
 
-        Eigen::VectorX<Eigen::Matrix4X<T>> new_control_points;
+        std::vector<Eigen::Matrix4X<T>> new_control_points;
         new_control_points.resize(K + 1);
         Eigen::VectorX<T> surface_v_knots;
         for (int index = 0; index <= K; ++index)
@@ -987,10 +987,10 @@ namespace tnurbs{
         interpolate_surface.refine_knots_vector(refine_knots, ENUM_DIRECTION::V_DIRECTION);
 
 
-        Eigen::VectorX<Eigen::Matrix<T, dim, Eigen::Dynamic>> new_control_points = interpolate_surface.get_control_points();
-        Eigen::VectorX<Eigen::Matrix<T, dim, Eigen::Dynamic>> points1 = Cl_surface.get_control_points();
-        Eigen::VectorX<Eigen::Matrix<T, dim, Eigen::Dynamic>> points2 = CK_surface.get_control_points();
-        int v_count = new_control_points.rows();
+        std::vector<Eigen::Matrix<T, dim, Eigen::Dynamic>> new_control_points = interpolate_surface.get_control_points();
+        std::vector<Eigen::Matrix<T, dim, Eigen::Dynamic>> points1 = Cl_surface.get_control_points();
+        std::vector<Eigen::Matrix<T, dim, Eigen::Dynamic>> points2 = CK_surface.get_control_points();
+        int v_count = new_control_points.size();
         for (int v_index = 0; v_index < v_count; ++v_index)
         {
             new_control_points[v_index] = points1[v_index] + points2[v_index] - new_control_points[v_index];
