@@ -1225,7 +1225,7 @@ namespace tnurbs
         int left_degree = left.get_degree();
         auto right_control_points = right.get_control_points();
         int u_right_degree = right_control_points[0].cols() - 1;
-        int v_right_degree = right_control_points.rows() - 1;
+        int v_right_degree = right_control_points.size() - 1;
         std::array<int, 3> degrees{ left_degree, u_right_degree, v_right_degree };
         auto left_control_points = left.get_control_points();
          

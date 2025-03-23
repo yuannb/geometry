@@ -16,3 +16,5 @@ nurbs surfaces intersect
 <img src="intersectExampleImage/example4.png" width = 150 height = 100>
 <img src="intersectExampleImage/example5.png" width = 150 height = 100>
 <img src="intersectExampleImage/example6.png" width = 150 height = 100>
+<img src="intersectExampleImage/example7.png" width = 150 height = 100>
+<img src="intersectExampleImage/example8.png" width = 150 height = 100>

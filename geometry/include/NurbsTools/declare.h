@@ -490,13 +490,30 @@ namespace tnurbs
             {
                 for (int index = 0; index < dim; ++index)
                 {
-                    T x1 = Min[index] * right.Min[index];
-                    T x2 = Min[index] * right.Max[index];
-                    T x3 = Max[index] * right.Min[index];
-                    T x4 = Max[index] * right.Max[index];
-                    auto min_max_element = std::minmax({ x1, x2, x3, x4 });
-                    result.Min[index] = min_max_element.first;
-                    result.Max[index] = min_max_element.second;
+                    if (Min[index] > 0 && right.Min[index] > 0)
+                    {
+						T x1 = Min[index] * right.Min[index];
+						T x4 = Max[index] * right.Max[index];
+						result.Min[index] = x1;
+						result.Max[index] = x4;
+                    }
+                    else if (Max[index] < 0 && right.Max[index] < 0)
+                    {
+						T x1 = Min[index] * right.Min[index];
+						T x4 = Max[index] * right.Max[index];
+						result.Min[index] = x4;
+						result.Max[index] = x1;
+                    }
+                    else
+                    {
+						T x1 = Min[index] * right.Min[index];
+						T x2 = Min[index] * right.Max[index];
+						T x3 = Max[index] * right.Min[index];
+						T x4 = Max[index] * right.Max[index];
+						auto min_max_element = std::minmax({ x1, x2, x3, x4 });
+						result.Min[index] = min_max_element.first;
+						result.Max[index] = min_max_element.second;
+                    }
                     // result.Min[index] = std::min({ x1, x2, x3, x4 });
                     // result.Max[index] = std::max({ x1, x2, x3, x4 });
                 }

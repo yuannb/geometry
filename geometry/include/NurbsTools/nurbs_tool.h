@@ -562,14 +562,6 @@ namespace tnurbs
 
 
 
-    static    Eigen::Vector<double, 10> left;
-    static   Eigen::Vector<double, 10> right;
-    static   Eigen::Vector<double, 10> iterArray;
-    static   Eigen::Array<double, 10, 1> first_coeff;
-    static   Eigen::Array<double, 10, 1> second_coeff;
-    static   Eigen::Matrix<double, 10, 10> ndu;
-
-    static std::array<Eigen::Array<double, 10, 1>, 2> arrays;
     /// @brief  计算所有在u处不为0的阶数为degree的基函数的值
     /// @tparam T double float int...
     /// @tparam degree
@@ -683,24 +675,22 @@ namespace tnurbs
     {
         // 可以将下面left和right的计算改成多线程, 不过节点向量应该不大, 该不该影响应该不大
         //将u-u_j(j = i - p + 1, ... , i, 理论上应该算到u-u_(i - p), 但是其对应的基函数为0, 因此可以设置为0)
-        // Eigen::Vector<T, Eigen::Dynamic> left(degree);
+        Eigen::Vector<T, Eigen::Dynamic> left(degree);
         // left[0] = 0.0;
         //将u_j-u(j = i + 1, ... , i + p, 理论上应该算到u_(i + p + 1)-u, 但是其对应的基函数为0, 因此可以设置为0)
-        // Eigen::Vector<T, Eigen::Dynamic> right(degree);
+        Eigen::Vector<T, Eigen::Dynamic> right(degree);
         // right[degree] = 0.0;
         for (int index = 0; index < degree; ++index)
         {
             left[index] = u - knots_vector[i - degree + 1 + index];
             right[index] = knots_vector[i + 1 + index] - u;
         }
-        // Eigen::Vector<T, Eigen::Dynamic> iterArray(degree + 2);
+        Eigen::Vector<T, Eigen::Dynamic> iterArray(degree + 2);
         // iterArray.resize(degree + 2);
         iterArray.setConstant(0.0);
         iterArray[degree] = 1.0;
-        // auto& first_coeff = iter_arrays<T>::first_coeff;
-        // auto& second_coeff = iter_arrays<T>::second_coeff;
-        // Eigen::ArrayX<T> first_coeff(degree + 1, 1);
-        // Eigen::Array<T, Eigen::Dynamic, 1> second_coeff(degree + 1, 1);
+        Eigen::ArrayX<T> first_coeff(degree + 1, 1);
+        Eigen::Array<T, Eigen::Dynamic, 1> second_coeff(degree + 1, 1);
         // Eigen::Array<T, Eigen::Dynamic, 1> first_coeff_numerator;
         // Eigen::Array<T, Eigen::Dynamic, 1> second_coeff_numerator;
         // Eigen::Array<T, Eigen::Dynamic, 1> coeff_denominator;
@@ -1459,31 +1449,29 @@ namespace tnurbs
         result.setConstant(0.0);
         // 可以将下面left和right的计算改成多线程, 不过节点向量应该不大, 该不该影响应该不大
         //将u-u_j(j = i - p + 1, ... , i, 理论上应该算到u-u_(i - p), 但是其对应的基函数为0, 因此可以设置为0)
-        // Eigen::Vector<T, Eigen::Dynamic> left(degree);
+        Eigen::Vector<T, Eigen::Dynamic> left(degree);
         // left[0] = 0.0;
         //将u_j-u(j = i + 1, ... , i + p, 理论上应该算到u_(i + p + 1)-u, 但是其对应的基函数为0, 因此可以设置为0)
-        // Eigen::Vector<T, Eigen::Dynamic> right(degree);
+        Eigen::Vector<T, Eigen::Dynamic> right(degree);
 
-        // Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> ndu(degree + 1, degree + 1);
+        Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> ndu(degree + 1, degree + 1);
         ndu.setConstant(0.0);
         for (int index = 0; index < degree; ++index)
         {
             left[index] = u - knots_vector[i - degree + 1 + index];
             right[index] = knots_vector[i + 1 + index] - u;
         }
-        // Eigen::Vector<T, Eigen::Dynamic> iterArray(degree + 2);
+        Eigen::Vector<T, Eigen::Dynamic> iterArray(degree + 2);
         iterArray.setConstant(0.0);
         iterArray[degree] = 1.0;
         ndu(0, 0) = 1.0;
 
-        // Eigen::Array<T, Eigen::Dynamic, 1> first_coeff(degree + 1, 1);
-        // Eigen::Array<T, Eigen::Dynamic, 1> second_coeff(degree + 1, 1);
+        Eigen::Array<T, Eigen::Dynamic, 1> first_coeff(degree + 1, 1);
+        Eigen::Array<T, Eigen::Dynamic, 1> second_coeff(degree + 1, 1);
         for (int iter_step = 1; iter_step <= degree; ++iter_step)
         {
             //u - u_j 列
-            // Eigen::Array<T, Eigen::Dynamic, 1> first_coeff(iter_step + 1, 1);
             first_coeff[0] = 0.0;
-            // Eigen::Array<T, Eigen::Dynamic, 1> second_coeff(iter_step + 1, 1);
             second_coeff[iter_step] = 0.0;
 
             const auto& first_coeff_numerator = left.block(degree - iter_step, 0, iter_step, 1).array();
@@ -1509,13 +1497,9 @@ namespace tnurbs
         // result.col(0) = ndu.col(degree);
         result.col(0) = ndu.block(0, degree, degree + 1, 1);// .col(degree);
 
-		// Eigen::Vector<Eigen::Vector<T, Eigen::Dynamic>, 2> arrays;
-		// std::array<Eigen::Array<T, Eigen::Dynamic, 1>, 2> arrays;
-        // arrays[0].resize(degree + 1);
-        // arrays[1].resize(degree + 1);
-        // T coefft = static_cast<T>(std::tgamma<int>(degree + 1));
-        //Eigen::VectorX<T> temp_r;
-        //Eigen::VectorX<T> temp_l;
+		std::array<Eigen::Array<T, Eigen::Dynamic, 1>, 2> arrays;
+        arrays[0].resize(degree + 1);
+        arrays[1].resize(degree + 1);
         std::vector<T> gammas(degree + 1);
         gammas[0] = 1;
         for (int index = 1; index <= degree; ++index)
@@ -1607,25 +1591,25 @@ namespace tnurbs
         result.setConstant(0.0);
         // 可以将下面left和right的计算改成多线程, 不过节点向量应该不大, 该不该影响应该不大
         //将u-u_j(j = i - p + 1, ... , i, 理论上应该算到u-u_(i - p), 但是其对应的基函数为0, 因此可以设置为0)
-        // Eigen::Vector<T, Eigen::Dynamic> left(degree);
+        Eigen::Vector<T, Eigen::Dynamic> left(degree);
         // left[0] = 0.0;
         //将u_j-u(j = i + 1, ... , i + p, 理论上应该算到u_(i + p + 1)-u, 但是其对应的基函数为0, 因此可以设置为0)
-        // Eigen::Vector<T, Eigen::Dynamic> right(degree);
+        Eigen::Vector<T, Eigen::Dynamic> right(degree);
 
-        // Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> ndu(degree + 1, degree + 1);
+        Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> ndu(degree + 1, degree + 1);
         ndu.setConstant(0.0);
         for (int index = 0; index < degree; ++index)
         {
             left[index] = u - knots_vector[i - degree + 1 + index];
             right[index] = knots_vector[i + 1 + index] - u;
         }
-        // Eigen::Vector<T, Eigen::Dynamic> iterArray(degree + 2);
+        Eigen::Vector<T, Eigen::Dynamic> iterArray(degree + 2);
         iterArray.setConstant(0.0);
         iterArray[degree] = 1.0;
         ndu(0, 0) = 1.0;
 
-		// Eigen::Array<T, Eigen::Dynamic, 1> first_coeff(degree + 1, 1);
-		// Eigen::Array<T, Eigen::Dynamic, 1> second_coeff(degree + 1, 1);
+		Eigen::Array<T, Eigen::Dynamic, 1> first_coeff(degree + 1, 1);
+		Eigen::Array<T, Eigen::Dynamic, 1> second_coeff(degree + 1, 1);
         for (int iter_step = 1; iter_step <= degree; ++iter_step)
         {
             //u - u_j 列
@@ -1658,9 +1642,9 @@ namespace tnurbs
         result.col(0) = ndu.block(0, degree, degree + 1, 1);
         // result.col(0) = ndu.col(degree);
 		
-        // Eigen::Vector<Eigen::Vector<T, Eigen::Dynamic>, 2> arrays;
-		// arrays[0].resize(degree + 1);
-		// arrays[1].resize(degree + 1);
+        Eigen::Vector<Eigen::Vector<T, Eigen::Dynamic>, 2> arrays;
+		arrays[0].resize(degree + 1);
+		arrays[1].resize(degree + 1);
         // T coeff = static_cast<T>(std::tgamma<int>(degree + 1));
         std::vector<T> gammas(degree + 1);
         gammas[0] = 1;
