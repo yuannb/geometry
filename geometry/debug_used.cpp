@@ -137,6 +137,7 @@ namespace tnurbs
     {
         std::cout << mat << std::endl;
     }
+    
 
     void printEigenMatrix(const Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic> &mat)
     {
@@ -232,70 +233,6 @@ namespace tnurbs
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
-
-    ENUM_NURBS save_obj(const nurbs_surface<double, 2, -1, -1, -1, -1, false> &surf, const char *path)
-    {
-        Eigen::VectorX<double> u_knots_vector = surf.get_u_knots();
-        Eigen::VectorX<double> v_knots_vector = surf.get_v_knots();;
-        int u_knots_size = u_knots_vector.size();
-        int v_knots_size = v_knots_vector.size();
-        double u_high = u_knots_vector[u_knots_size - 1];
-        double u_low = u_knots_vector[0];
-        double v_high = v_knots_vector[v_knots_size - 1];
-        double v_low = v_knots_vector[0];
-        double u_step = (u_high - u_low) / 100.0;
-        double v_step = (v_high - v_low) / 100.0;
-        std::vector<Eigen::Vector<double, 2>> points;
-        for (int u_index = 0; u_index < 100; ++u_index)
-        {
-            for (int v_index = 0; v_index < 100; ++v_index)
-            {
-                Eigen::Vector<double, 2> point;
-                surf.point_on_surface(u_index * u_step + u_low, v_index * v_step + v_low, point);
-                points.push_back(point);
-            }
-        }
-        std::ofstream outfile2(path);
-        for (auto point : points)
-        {
-            outfile2 << "v " << point[0] << " " <<
-            point[1] << " " << point[2] << std::endl;
-        }
-        outfile2.close();
-        return ENUM_NURBS::NURBS_SUCCESS;
-    }
-
-    ENUM_NURBS save_obj(const nurbs_surface<double, 2, -1, -1, -1, -1, true> &surf, const char *path)
-    {
-        Eigen::VectorX<double> u_knots_vector = surf.get_u_knots();
-        Eigen::VectorX<double> v_knots_vector = surf.get_v_knots();;
-        int u_knots_size = u_knots_vector.size();
-        int v_knots_size = v_knots_vector.size();
-        double u_high = u_knots_vector[u_knots_size - 1];
-        double u_low = u_knots_vector[0];
-        double v_high = v_knots_vector[v_knots_size - 1];
-        double v_low = v_knots_vector[0];
-        double u_step = (u_high - u_low) / 100.0;
-        double v_step = (v_high - v_low) / 100.0;
-        std::vector<Eigen::Vector<double, 2>> points;
-        for (int u_index = 0; u_index < 100; ++u_index)
-        {
-            for (int v_index = 0; v_index < 100; ++v_index)
-            {
-                Eigen::Vector<double, 2> point;
-                surf.point_on_surface(u_index * u_step + u_low, v_index * v_step + v_low, point);
-                points.push_back(point);
-            }
-        }
-        std::ofstream outfile2(path);
-        for (auto point : points)
-        {
-            outfile2 << "v " << point[0] << " " <<
-            point[1] << " " << point[2] << std::endl;
-        }
-        outfile2.close();
-        return ENUM_NURBS::NURBS_SUCCESS;
-    }
 
     ENUM_NURBS save_obj(const nurbs_surface<double, 3, -1, -1, -1, -1, false> &surf, const char *path)
     {
@@ -478,7 +415,54 @@ namespace tnurbs
         outfile2.close();
         return ENUM_NURBS::NURBS_SUCCESS;
     }
+    ENUM_NURBS save_chat_points(const surf_surf_int<double, 3>& points_chat, const std::string& path)
+    {
+        nlohmann::json chat_json;
+        const std::vector<surfs_int_points_chat<double, 3>>& curves_data = points_chat.m_int_chats;
+        chat_json["Name"] = "surface_int_point_chats";
+        chat_json["CurveCount"] = curves_data.size();
+        int index = 0;
+        for (const auto& chat : curves_data)
+        {
+            chat_json["Curve" + std::to_string(index)] = {};
+            nlohmann::json& curve_data = chat_json["Curve" + std::to_string(index)];
+            curve_data["PointsCount"] = chat.m_inter_points.size();
+			curve_data["Point3d"] = {};
+			curve_data["Param"] = {};
+            curve_data["Transversal"] = chat.m_is_transversal;
+            for (const auto& int_point : chat.m_inter_points)
+            {
+				curve_data["Point3d"].push_back(int_point.m_point[0]);
+				curve_data["Point3d"].push_back(int_point.m_point[1]);
+				curve_data["Point3d"].push_back(int_point.m_point[2]);
 
+				curve_data["Param"].push_back(int_point.m_uv[0]);
+				curve_data["Param"].push_back(int_point.m_uv[1]);
+				curve_data["Param"].push_back(int_point.m_uv[2]);
+				curve_data["Param"].push_back(int_point.m_uv[3]);
+            }
+            index += 1;
+        }
+        const std::vector<surf_surf_intersect_point<double, 3>>& isolate_data = points_chat.m_isolate_points;
+        chat_json["IsolateParam"] = {};
+        chat_json["IsolatePoint"] = {};
+        chat_json["IsolatePointCount"] = isolate_data.size();
+        for (const auto& isolate : isolate_data)
+        {
+            chat_json["IsolatePoint"].push_back(isolate.m_point[0]);
+            chat_json["IsolatePoint"].push_back(isolate.m_point[1]);
+            chat_json["IsolatePoint"].push_back(isolate.m_point[2]);
+            
+            chat_json["IsolateParam"].push_back(isolate.m_uv[0]);
+            chat_json["IsolateParam"].push_back(isolate.m_uv[1]);
+            chat_json["IsolateParam"].push_back(isolate.m_uv[2]);
+            chat_json["IsolateParam"].push_back(isolate.m_uv[3]);
+        }
+        std::ofstream outfile2(path);
+        outfile2 << chat_json;
+        outfile2.close();
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
     ENUM_NURBS read_chat_points(std::vector<surfs_int_points_chat<double, 3>>& points_chat, const char* path)
     {
         nlohmann::json chat_json;
