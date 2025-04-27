@@ -26,6 +26,8 @@ add_subdirectory(${PROJECT_SOURCE_DIR}/src/Topo)
 add_subdirectory(${PROJECT_SOURCE_DIR}/src/Geo)
 add_subdirectory(${PROJECT_SOURCE_DIR}/src/tools)
 add_subdirectory(${PROJECT_INIT_PATH}/3rd/googletest ${PROJECT_BINARY_DIR}/googleTest)
+add_subdirectory(${PROJECT_INIT_PATH}/3rd/OpenMesh ${PROJECT_BINARY_DIR}/OpenMesh)
+find_package(OpenMesh)
 
 enable_testing()
 
@@ -41,9 +43,11 @@ list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/include/tools")
 list(APPEND EXTRA_INCLUDES "${PROJECT_SOURCE_DIR}/include/NurbsTools")
 list(APPEND EXTRA_INCLUDES "${PROJECT_INIT_PATH}/3rd/libhv/cpputil")
 list(APPEND EXTRA_INCLUDES "${PROJECT_INIT_PATH}/3rd/googletest/googletest/include")
+list(APPEND EXTRA_INCLUDES "${PROJECT_INIT_PATH}/3rd/OpenMesh/src")
 
 add_executable(GWB nurbs_test.cpp debug_used.cpp)
-
+add_executable(ICURVET intersection_curve_test.cpp debug_used.cpp)
+add_executable(KDTreeTest kdtree_test.cpp debug_used.cpp)
 # big obj
 if(CMAKE_COMPILER_IS_GNUCXX)
   # 检查GNU编译是否支持 -Wa,-mbig-obj 
@@ -55,13 +59,30 @@ target_compile_options(GWB
 	PRIVATE 
 	$<$<CXX_COMPILER_ID:MSVC>:/bigobj> 
 	$<$<AND:$<CXX_COMPILER_ID:GNU>,$<BOOL:${GNU_BIG_OBJ_FLAG_ENABLE}>>:-Wa,-mbig-obj>)
+target_compile_options(ICURVET 
+	PRIVATE 
+	$<$<CXX_COMPILER_ID:MSVC>:/bigobj> 
+	$<$<AND:$<CXX_COMPILER_ID:GNU>,$<BOOL:${GNU_BIG_OBJ_FLAG_ENABLE}>>:-Wa,-mbig-obj>)
+target_compile_options(KDTreeTest 
+	PRIVATE 
+	$<$<CXX_COMPILER_ID:MSVC>:/bigobj> 
+	$<$<AND:$<CXX_COMPILER_ID:GNU>,$<BOOL:${GNU_BIG_OBJ_FLAG_ENABLE}>>:-Wa,-mbig-obj>)
 
 add_executable(GWB1 test2.cpp)
+add_executable (OpenMeshTest build_cube_test.cpp)
+target_link_libraries(OpenMeshTest PRIVATE OpenMeshCore OpenMeshTools)
 
 target_link_libraries(GWB PUBLIC ${EXTRA_LIBS})
+target_link_libraries(KDTreeTest PUBLIC ${EXTRA_LIBS})
 target_link_libraries(GWB1 PUBLIC ${EXTRA_LIBS})
+target_link_libraries(ICURVET PUBLIC ${EXTRA_LIBS})
 
-target_include_directories(GWB PUBLIC  ${EXTRA_INCLUDES})
+target_include_directories(ICURVET PUBLIC  ${EXTRA_INCLUDES})
+target_include_directories(KDTreeTest PUBLIC  ${EXTRA_INCLUDES})
 target_include_directories(GWB1 PUBLIC ${EXTRA_INCLUDES})
+target_include_directories(OpenMeshTest PUBLIC ${EXTRA_INCLUDES})
+target_include_directories(ICURVET PUBLIC  ${EXTRA_INCLUDES})
 
 add_test(NAME nurbs_test COMMAND GWB)
+add_test(NAME ICurve_test COMMAND ICURVET)
+add_test(NAME kdtree_test COMMAND KDTreeTest)

@@ -1,3 +1,4 @@
+#pragma once
 #include "declare.h"
 #include "nurbs_tool.h"
 #include <array>

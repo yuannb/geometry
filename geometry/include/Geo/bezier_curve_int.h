@@ -9,7 +9,12 @@
 #include <Eigen/Eigenvalues>
 #include "convex_hell.h"
 
+// #define DCSI
 
+#ifdef DCSI
+#include <chrono>
+using namespace std::chrono;
+#endif // DSSI
 namespace tnurbs
 {
 
@@ -160,24 +165,37 @@ namespace tnurbs
     class smspe
     {
     private:
+        using curve_type = nurbs_curve<T, equation_count, false, -1, -1>;
         Eigen::Matrix<T, equation_count, Eigen::Dynamic> m_coeff;
         mutable Index<variaty_count> m_index;
         std::vector<int> m_skip;
+        curve_compute<curve_type> m_curve_compute;
+
+
+		std::vector<Eigen::Vector2<T>> project_point;
+		std::vector<int> indices;
+		std::vector<Eigen::Vector2<T>> convex_hell;
+
     public:
         smspe() = default;
         ~smspe() { }
 
-        bool init(const Eigen::Matrix<T, equation_count, Eigen::Dynamic> &coeff, const std::array<int, variaty_count> &degrees)
+        bool init(const Eigen::Matrix<T, equation_count, Eigen::Dynamic>& coeff, const std::array<int, variaty_count>& degrees)
         {
+            int max_degree = 0;
             int coeff_count = 1;
             for (int degree : degrees)
+            {
                 coeff_count *= (degree + 1);
+                max_degree = std::max(max_degree, degree);
+            }
             if (coeff_count != coeff.cols())
                 return false;
-            
+
             m_index.reset();
             m_index.m_bounds = degrees;
             m_coeff = coeff;
+            m_curve_compute.init(max_degree + 1, 2 * max_degree + 2, max_degree);
             return true;
         }
 
@@ -362,19 +380,13 @@ namespace tnurbs
                 for (int index = 0; index < variaty_count; ++index)
                 {
                     int bezier_control_points_count = m_index.m_bounds[index] + 1;
-                    // Eigen::VectorX<T> knots(2 * bezier_control_points_count);
-					// knots.block(0, 0, bezier_control_points_count, 1).setConstant(0.0);
-					// knots.block(bezier_control_points_count, 0, bezier_control_points_count, 1).setConstant(1.0);
-                    
-                    // nurbs_curve<T, equation_count, false, -1, -1> nurbs(knots, bezier_control_points_count - 1);
-                    // auto& bezier_control_points = nurbs.get_control_points_ref();
-                    // bezier_control_points.resize(equation_count, bezier_control_points_count);
                     Eigen::Matrix<T, equation_count, Eigen::Dynamic> bezier_control_points(equation_count, bezier_control_points_count);
                     Box<T, 1> sub_box(Eigen::Vector<T, 1>(current_box.Min[index]), Eigen::Vector<T, 1>(current_box.Max[index]));
                     if (sub_box.Max[0] - sub_box.Min[0] < KNOTS_EPS<T>::value)
                     {
-                        sub_box.Max[0] = std::min(1.0, sub_box.Min[0] + KNOTS_EPS<T>::value * 5);
-                        sub_box.Min[0] = std::max(0.0, sub_box.Min[0] - KNOTS_EPS<T>::value * 5);
+                        // sub_box.Max[0] = std::min(1.0, sub_box.Min[0] + KNOTS_EPS<T>::value * 5);
+                        // sub_box.Min[0] = std::max(0.0, sub_box.Min[0] - KNOTS_EPS<T>::value * 5);
+                        int x = 0;
                     }
                     do
                     {
@@ -396,36 +408,23 @@ namespace tnurbs
                             bezier_control_points.col(i) = control_points.col(first_index + i * step);
                         }
 
-                        // Eigen::VectorX<T> knots_vector(2 * bezier_control_points_count);
-                        // knots_vector.block(0, 0, bezier_control_points_count, 1).setConstant(0);
-                        // knots_vector.block(bezier_control_points_count - 1, 0, bezier_control_points_count, 1).setConstant(1);
-						// int u_begin_index;
-						// int u_begin_mul = konts_multiple<T>(sub_box.Min[0], knots_vector, bezier_control_points_count - 1, u_begin_index);
-						// int u_begin_insert_num = std::max(0, bezier_control_points_count - 1 - u_begin_mul);
-						// int u_end_index;
-						// int u_end_mul = konts_multiple<T>(sub_box.Max[0], knots_vector, bezier_control_points_count - 1, u_end_index);
-						// int u_end_insert_num = std::max(bezier_control_points_count - 1 - u_end_mul, 0);
-						// Eigen::VectorX<T> insert_knots(u_begin_insert_num + u_end_insert_num);
-						// insert_knots.block(0, 0, u_begin_insert_num, 1).setConstant(sub_box.Min[0]);
-						// insert_knots.block(u_begin_insert_num, 0, u_end_insert_num, 1).setConstant(sub_box.Max[0]);
-
-						// Eigen::VectorX<T> new_knots_vector;
-						// Eigen::Matrix<T, equation_count, Eigen::Dynamic> new_control_points;
-						// int knots_size = 2 * bezier_control_points_count;
-						// refine_knots_vector_curve<T, equation_count>(knots_size, bezier_control_points_count, knots_vector, bezier_control_points, insert_knots, new_knots_vector, new_control_points);
-                        // 
-						// int u_start = std::max(u_begin_index - 1, 0);
-						// int u_new_knots_count = 2 * (bezier_control_points_count - 1) + 2 + u_end_index - u_begin_index - u_begin_mul;
-						// bezier_control_points = new_control_points.block(0, u_start, equation_count, u_new_knots_count -  bezier_control_points_count);
-                        // nurbs.set_bezier_contorl_ref(bezier_control_points);
-                        nurbs_curve<T, equation_count, false, -1, -1> nurbs(bezier_control_points);
-                        nurbs.sub_divide(sub_box);
-                        // bezier_control_points = nurbs.get_control_points_ref();
-                        const auto& new_control_points = nurbs.get_control_points_ref();
-                        // std::cout << bezier_control_points << std::endl;
+                        // nurbs_curve<T, equation_count, false, -1, -1> nurbs(bezier_control_points);
+                        // nurbs.sub_divide(sub_box);
+						
+                        m_curve_compute.insert_bezier_knots(bezier_control_points, sub_box.Min[0], sub_box.Max[0]);
+						// std::cout << "ipp: " << time1.count() << "um" << std::endl;
+                        const auto& new_control_points = m_curve_compute.auxiliary_points;
+                        // const auto& new_control_points = nurbs.get_control_points_ref();
                         for (int i = 0; i < bezier_control_points_count; ++i)
                         {
-                            // control_points.col(first_index + i * step) = bezier_control_points.col(i);
+                            // Eigen::Vector<T, equation_count> diff = new_control_points2.col(i) - new_control_points.col(i); std::cout << "norm: " << diff.norm() << std::endl;
+                            // if (diff.norm() > 1e-12)
+                            // {
+                            //    std::cout << new_control_points2 << std::endl;
+                            //    std::cout << "11111" << std::endl;
+                            //    std::cout << new_control_points << std::endl;
+                            //     std::cout << "EEEEEEEEE" << std::endl;
+                            // }
                             control_points.col(first_index + i * step) = new_control_points.col(i);
                         }
 
@@ -433,6 +432,7 @@ namespace tnurbs
                     m_index.reset();
                 }
 
+			    // std::cout << "insert_bezier_knots: " << times.count() << "um" << std::endl;
                 Box<T, variaty_count> project_box;
                 if (interval_projected_polyhedron(control_points, project_box) == false)
                 {
@@ -494,12 +494,22 @@ namespace tnurbs
             return true;
         }
       
-        bool interval_projected_polyhedron(const Eigen::Matrix<T, equation_count, Eigen::Dynamic> &control_points, Box<T, variaty_count> &reuslt) const
+        bool interval_projected_polyhedron(const Eigen::Matrix<T, equation_count, Eigen::Dynamic> &control_points, Box<T, variaty_count> &reuslt)
         {
+            bool temp = true;
+
+
             int points_count = control_points.cols();
             reuslt.Min.setConstant(0.0);
             reuslt.Max.setConstant(1.0);
 
+			// std::vector<Eigen::Vector2<T>> project_point;
+			project_point.reserve(points_count);
+			// std::vector<int> indices;
+			indices.reserve(points_count);
+            // std::vector<Eigen::Vector2<T>> convex_hell;
+            convex_hell.reserve(points_count);
+            
             m_index.reset();
             Eigen::Matrix<T, variaty_count + 1, Eigen::Dynamic> current(variaty_count + 1, points_count);
             for (int f_index = 0; f_index < equation_count; ++f_index)
@@ -522,33 +532,86 @@ namespace tnurbs
                         continue;
                     }
                     //project(index, 2) to plane
-                    std::vector<Eigen::Vector2<T>> project_point;
-                    project_point.reserve(points_count);
+					int current_point_count = 0;
                     for (int i = 0; i < points_count; ++i)
                     {
                         Eigen::Vector2<T> p { current(index, i) ,current(variaty_count, i) };
+                        // if (i > 0)
+                        // {
+                        //     if ((p - project_point.back()).norm() < 1e-8)
+                        //     {
+                        //         continue;
+                        //     }
+                        // }
                         project_point.push_back(p);
+                        indices.push_back(current_point_count);
+                        current_point_count += 1;
                     }
-                    std::vector<Eigen::Vector2<T>> convex_hell;
-                    graham_scan(project_point, convex_hell);
+                    // std::vector<Eigen::Vector2<T>> convex_hell2;
+                    // graham_scan(project_point, convex_hell2);
+                    graham_scan(project_point, indices, convex_hell);
+
+
+                    // std::array<T, 2> interval2; 
+                    // std::array<T, 2> interval3; 
+                    // bool f1 = convex_hell_int_xaxis(convex_hell2, interval2);
+                    // bool f2 = convex_hell_int_xaxis2(convex_hell, interval3);
+                    // if (f1 != f2)
+                    // {
+                    //     std::cout << "error" << std::endl;
+					// 	project_point.clear();
+					// 	indices.clear();
+					// 	convex_hell.clear();
+                    // }
+                    // if (f1 == true && f2 == true)
+                    // {
+					// 	if (interval3[0] > interval2[0] + 1e-8 || interval3[1] < interval2[1] - 1e-8)
+					// 	{
+					// 		std::cout << "error" << std::endl;
+					// 		project_point.clear();
+					// 		indices.clear();
+					// 		convex_hell.clear();
+					// 	}
+                    // }
+
+                    // std::array<T, 2> interval = interval3; 
                     std::array<T, 2> interval; 
-                    if (convex_hell_int_xaxis(convex_hell, interval) == true)
+                    // if (f2 == true)
+                    // bool flag = convex_hell_int_xaxis(convex_hell2, interval);
+                    bool flag = convex_hell_int_xaxis2(convex_hell, interval);
+                    if (flag == true)
                     {
                         reuslt.Min[index] = std::max(reuslt.Min[index], interval[0]);
                         reuslt.Max[index] = std::min(reuslt.Max[index], interval[1]);
                         if (reuslt.Max[index] < reuslt.Min[index])
                         {
-                            return false;
+                            temp = false;
+							project_point.clear();
+							indices.clear();
+							convex_hell.clear();
+                            goto end_loop;
+                            // return false;
                         }
                     }
                     else
                     {
-                        return false;
+                        temp = false;
+						project_point.clear();
+						indices.clear();
+						convex_hell.clear();
+                        goto end_loop;
+                        // return false;
                     }
-                    
+                    project_point.clear(); 
+                    indices.clear();
+                    convex_hell.clear();
+                    int i = 0;
                 }
             }
-            return true;
+end_loop:
+
+            return temp;
+            // return true;
         }
     
         bool split_box_by_ratio(const Box<T, variaty_count> &box, const Box<T, variaty_count> &origin_box, std::vector<Box<T, variaty_count>> &split_boxes) const
@@ -632,6 +695,56 @@ namespace tnurbs
             //intersect_interval[1] = std::min(1.0, intersect_interval[1] + KNOTS_EPS<T>::value);
                 
             return true;
+        }    
+        
+        void line_int_x_axis(const Eigen::Vector2<T>& start_point, const Eigen::Vector2<T>& end_point, Interval<T>& int_param, T tol = KNOTS_EPS<T>::value * 100) const
+        {
+            int is_coinciendce = 0;
+            if (std::abs(start_point[1]) < tol)
+            {
+                int_param.m_interval[0] = std::min(start_point[0], int_param.m_interval[0]);
+                int_param.m_interval[1] = std::max(start_point[0], int_param.m_interval[1]);
+                is_coinciendce += 1;
+            }
+            if (std::abs(end_point[1]) < tol)
+            {
+                int_param.m_interval[0] = std::min(end_point[0], int_param.m_interval[0]);
+                int_param.m_interval[1] = std::max(end_point[0], int_param.m_interval[1]);
+                is_coinciendce += 1;
+            }
+            if (start_point[1] * end_point[1] > 0 || is_coinciendce == 2)
+            {
+                return;
+            }
+
+			T t = start_point[1] / (start_point[1] - end_point[1]);
+			T num = t * (end_point[0] - start_point[0]) + start_point[0];
+			int_param.m_interval[0] = std::min(num - KNOTS_EPS<T>::value, int_param.m_interval[0]);
+			int_param.m_interval[1] = std::max(num + KNOTS_EPS<T>::value, int_param.m_interval[1]);
+			int_param.m_interval[0] = std::max(0.0, int_param.m_interval[0]);
+			int_param.m_interval[1] = std::min(1.0, int_param.m_interval[1]);
+            return;
+        }
+        
+        
+        bool convex_hell_int_xaxis2(const std::vector<Eigen::Vector2<T>> &convex_hell, std::array<T, 2> &intersect_interval) const
+        {
+            Interval<T> result(1000000, -1000000);
+            size_t points_count = convex_hell.size();
+            size_t point_index = 0;
+            while (point_index < points_count)
+            {
+                int next_point_index = (point_index + 1) % points_count;
+                line_int_x_axis(convex_hell[point_index], convex_hell[next_point_index], result);
+				++point_index;
+            }
+            if (result.m_interval[1] >= result.m_interval[0])
+            {
+                intersect_interval[0] = result.m_interval[0];
+                intersect_interval[1] = result.m_interval[1];
+                return true;
+            }
+            return false;
         }    
     };
 
@@ -1354,7 +1467,7 @@ namespace tnurbs
 
                 for (int index = 0; index < dim; ++index)
                 {
-                    temp += (std::to_string(hero.m_int_point.m_int_point[index]) + ",");
+                    temp += (std::to_string(hero.m_int_point.m_int_point[index]).substr(0, 3) + ",");
                 }
                 return std::hash<std::string>()(temp);
             }
@@ -1453,6 +1566,7 @@ namespace tnurbs
 			Eigen::Vector<T, dim + 1> vec;
 			T min_distance = 100000;
 			intersect_param = current_param;
+            int decrease_slow = 0;
 
 			//迭代次数需要修改
 			for (int loop_index = 0; loop_index < 2 * SURFACE_ITERATE_DEEP; ++loop_index)
@@ -1469,6 +1583,14 @@ namespace tnurbs
 				T distance = vec.squaredNorm();
 				if (distance < min_distance)
 				{
+                    if (distance > 0.9 * min_distance)
+                    {
+                        decrease_slow += 1;
+                    }
+                    else
+                    {
+                        decrease_slow = 0;
+                    }
 					min_distance = distance;
 					intersect_param = current_param;
 
@@ -1483,6 +1605,12 @@ namespace tnurbs
 					}
 					if (flag == true)
 						return ENUM_NURBS::NURBS_SUCCESS;
+
+                    if (decrease_slow > 2)
+                    {
+                        return ENUM_NURBS::NURBS_ERROR;
+                    }
+
 				}
 
 				Eigen::Matrix<T, dim + 1, 3> mat;
@@ -1550,11 +1678,18 @@ namespace tnurbs
 				}
 				index.add_one();
 			}
-
+#ifdef DCSI
+            auto s1 = steady_clock::now();
+#endif // DSSI
 			smspe<T, dim, 3> solver;
 			solver.init(coeff, degrees);
 			std::vector<Box<T, 3>> int_boxes;
 			solver.compute_ipp(int_boxes);
+#ifdef DCSI
+            auto e1 = steady_clock::now();
+            auto time1 = duration_cast<microseconds>(e1 - s1);
+            std::cout << "ipp: " << time1.count() << "um" << std::endl;
+#endif // DSSI
             std::vector<curve_surface_int_point<T, dim>> int_points;
 			Box<T, 3> domian;
             std::array<T, 2> curve_ends_knots;
@@ -1568,6 +1703,9 @@ namespace tnurbs
             domian.Min[2] = surface_v_ends_knots[0];
             domian.Max[2] = surface_v_ends_knots[1];
             Eigen::Vector<T, 3> result_param;
+#ifdef DCSI
+            auto s2 = steady_clock::now();
+#endif // DSSI
 			for (Box<T, 3>&int_box : int_boxes)
 			{
 				bool flag = false;
@@ -1590,15 +1728,29 @@ namespace tnurbs
 					}
 				}
                 bool is_tangent = false;
-				if (ENUM_NURBS::NURBS_SUCCESS == intersect_point_singular_iteration(domian, initial_param, param))
-				{
-					if (int_box.is_contain_point(param, TDEFAULT_ERROR<T>::value))
+
+				Eigen::Vector<Eigen::Vector<T, dim>, 2> left_point_ders;
+				Eigen::Matrix<Eigen::Vector<T, dim>, 2, 2> right_point_ders;
+                m_curve->template derivative_on_curve<1>(initial_param[0], left_point_ders);
+                m_surface->template derivative_on_surface<1>(initial_param[1], initial_param[2], right_point_ders);
+                left_point_ders[1].normalize();
+                right_point_ders(1, 0).normalize();
+                right_point_ders(0, 1).normalize();
+                Eigen::Vector<T, dim> normal = right_point_ders(1, 0).cross(right_point_ders(0, 1));
+                if (std::abs(normal.dot(left_point_ders[1])) < 1e-3)
+                {
+					if (ENUM_NURBS::NURBS_SUCCESS == intersect_point_singular_iteration(domian, initial_param, param))
 					{
-						flag = true;
-                        is_tangent = true;
-						result_param = param;
+						if (int_box.is_contain_point(param, TDEFAULT_ERROR<T>::value))
+						{
+							flag = true;
+							is_tangent = true;
+							result_param = param;
+						}
 					}
-				}
+                }
+ 
+                
 				if (flag == true)
 				{
                     int_points.push_back(curve_surface_int_point<T, dim>{});
@@ -1609,6 +1761,11 @@ namespace tnurbs
 				}
 			}
 
+#ifdef DCSI
+            auto e2 = steady_clock::now();
+            auto time2 = duration_cast<microseconds>(e2 - s2);
+            std::cout << "iteration: " << time2.count() << "um" << std::endl;
+#endif // DSSI
 			//TODO: 去重
 			// std::unordered_set<help<T, 3>, hash_help<T, 3>> remove_mult;
 			// for (const Eigen::Vector<T, 3>&param : iter_int_params)

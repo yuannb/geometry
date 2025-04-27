@@ -1424,9 +1424,13 @@ TEST(BEZIER_INT, test4)
     _set_error_mode(_OUT_TO_MSGBOX);
 
     nurbs_surfaces_intersect<nunbs_surface3d, nunbs_surface3d> ts;
+    save_obj2(*test_surface, "test_surface.obj");
+    save_obj2(*test_surface2, "test_surface2.obj");
     ts.init(test_surface2, test_surface);
     ts.surafces_intersection2();
+    // save_obj(ts.loop_points, "loop_points.obj");
     surf_surf_int<double, 3> intersection = ts.m_result;
+    save_chat_points_file(intersection, "icurve.obj");
     //save_chat_points(intersection, "BEZIER_INTtest4.json");
     size_t curve_count = intersection.m_int_chats.size();
     size_t isolate_point_count = intersection.m_isolate_points.size();
@@ -2155,111 +2159,115 @@ TEST(BEZIER_INT, test11)
     std::vector<Eigen::Vector<double, 3>> int_point = bezier_curve_int_bezier_surface<double, 3, true>(*test_curve, *test_surface2);
 }
 
-// TEST(BEZIER_INT, test12)
-// {
-//     Eigen::VectorX<double> u_knots_vector2(8);
-//     u_knots_vector2 << 0, 0, 0, 0, 1, 1, 1, 1;
-//     Eigen::VectorX<double> v_knots_vector2(8);
-//     v_knots_vector2 << 0, 0, 0, 0, 1, 1, 1, 1;
-// 
-//     Eigen::VectorX<double> u_knots_vector(6);
-//     u_knots_vector << 0, 0, 0, 1, 1, 1;
-//     Eigen::VectorX<double> v_knots_vector(6);
-//     v_knots_vector << 0, 0, 0, 1, 1, 1;
-// 
-// 
-//     Eigen::Matrix<double, 4, Eigen::Dynamic> points1(4, 3);
-//     points1 << -10, 0, 10,
-//         -30, -30, -30,
-//         3, -3, 3,
-//         1.32, 1.231, 1.321;
-// 
-//     Eigen::Matrix<double, 4, Eigen::Dynamic> points2(4, 3);
-//     points2 << -10, 0, 10,
-//         -10, -10, -10,
-//         3, -3, 3,
-//         1.32, 1.312, 1.3213;
-// 
-//     Eigen::Matrix<double, 4, Eigen::Dynamic> points3(4, 3);
-//     points3 << -10, 0, 10,
-//         10, 10, 10,
-//         3, -3, 3,
-//         0.9423, 1.3213, 0.9423;
-// 
-//     Eigen::Matrix<double, 4, Eigen::Dynamic> points4(4, 3);
-//     points4 << -10, 0, 10,
-//         30, 30, 15,
-//         3, -3, 3,
-//         0.9423, 1.32134, 1.4234;
-// 
-//     std::vector<Eigen::Matrix<double, 4, Eigen::Dynamic>> control_points(4);
-//     control_points[0] = points1;
-//     control_points[1] = points2;
-//     control_points[2] = points3;
-//     control_points[3] = points4;
-//     nurbs_surface<double, 3, -1, -1, -1, -1, true>* test_surface = new nurbs_surface<double, 3, -1, -1, -1, -1, true>(u_knots_vector, v_knots_vector2, control_points);
-// 
-//     Eigen::Matrix<double, 4, Eigen::Dynamic> points11(4, 4);
-//     points11 << 20, 10, -10, -20,
-//         -10, -10, -10, -10,
-//         3, 3, 3, 3,
-//         0.7423, 1.3213, 0.9423, 1.32;
-// 
-//     Eigen::Matrix<double, 4, Eigen::Dynamic> points12(4, 4);
-//     points12 << 20, 10, -10, -20,
-//         -10, -10, -10, -10,
-//         -1, -1, -1, -1,
-//         0.8423, 1.32134, 2.4234, 1.32;
-// 
-//     Eigen::Matrix<double, 4, Eigen::Dynamic> points13(4, 4);
-//     points13 << 20, 10, -10, -20,
-//         10, 10, 10, 10,
-//         -1, -1, -1, -1,
-//         2.32, 1.231, 3.321, 1.32;
-// 
-//     Eigen::Matrix<double, 4, Eigen::Dynamic> points14(4, 4);
-//     points14 << 20, 10, -10, -20,
-//         10, 10, 10, 10,
-//         3, 3, 3, 3,
-//         1.32, 2.312, 1.3213, 1.32;
-// 
-//     std::vector<Eigen::Matrix<double, 4, Eigen::Dynamic>> control_points2(4);
-//     control_points2[0] = points11;
-//     control_points2[1] = points12;
-//     control_points2[2] = points13;
-//     control_points2[3] = points14;
-//     nurbs_surface<double, 3, -1, -1, -1, -1, true>* test_surface2 = new nurbs_surface<double, 3, -1, -1, -1, -1, true>(u_knots_vector2, v_knots_vector2, control_points2);
-//     _set_error_mode(_OUT_TO_MSGBOX);
-//     nurbs_surfaces_intersect<nurbs_surface3d, nurbs_surface3d> ts;
-//     ts.init(test_surface, test_surface2);
-//     ts.surafces_intersection2();
-//     surf_surf_int<double, 3> intersection = ts.m_result;
-//     // save_chat_points(intersection, "BEZIER_INTtest12.json");
-//     size_t curve_count = intersection.m_int_chats.size();
-//     size_t isolate_point_count = intersection.m_isolate_points.size();
-//     surf_surf_int<double, 3> test_data;
-//     const std::string path("D:\\geometry\\intersectData\\BEZIER_INTtest12.json");
-//     read_chat_points(test_data, path);
-//     EXPECT_EQ(curve_count, test_data.m_int_chats.size());
-//     EXPECT_EQ(isolate_point_count, test_data.m_isolate_points.size());
-// 
-//     for (size_t index = 0; index < curve_count; ++index)
-//     {
-//         surfs_int_points_chat<double, 3>& int_chat = test_data.m_int_chats[index];
-//         size_t curve_index;
-//         bool flag = ts.is_point_in_intcurve(int_chat.m_inter_points[1].m_uv, int_chat.m_is_transversal, curve_index);
-//         EXPECT_TRUE(flag);
-//         size_t points_count = int_chat.m_inter_points.size();
-//         EXPECT_TRUE(points_count < 1.2 * intersection.m_int_chats[curve_index].m_inter_points.size());
-//         for (size_t i = 2; i < points_count; ++i)
-//         {
-//             size_t current_index;
-//             flag = ts.is_point_in_intcurve(int_chat.m_inter_points[i].m_uv, int_chat.m_is_transversal, current_index);
-//             EXPECT_TRUE(flag);
-//             EXPECT_EQ(current_index, curve_index);
-//         }
-//     }
-// }
+TEST(BEZIER_INT, test12)
+{
+    Eigen::VectorX<double> u_knots_vector2(8);
+    u_knots_vector2 << 0, 0, 0, 0, 1, 1, 1, 1;
+    Eigen::VectorX<double> v_knots_vector2(8);
+    v_knots_vector2 << 0, 0, 0, 0, 1, 1, 1, 1;
+
+    Eigen::VectorX<double> u_knots_vector(6);
+    u_knots_vector << 0, 0, 0, 1, 1, 1;
+    Eigen::VectorX<double> v_knots_vector(6);
+    v_knots_vector << 0, 0, 0, 1, 1, 1;
+
+
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points1(4, 3);
+    points1 << -10, 0, 10,
+        -30, -30, -30,
+        3, -3, 3,
+        1.32, 1.231, 1.321;
+
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points2(4, 3);
+    points2 << -10, 0, 10,
+        -10, -10, -10,
+        3, -3, 3,
+        1.32, 1.312, 1.3213;
+
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points3(4, 3);
+    points3 << -10, 0, 10,
+        10, 10, 10,
+        3, -3, 3,
+        0.9423, 1.3213, 0.9423;
+
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points4(4, 3);
+    points4 << -10, 0, 10,
+        30, 30, 15,
+        3, -3, 3,
+        0.9423, 1.32134, 1.4234;
+
+    std::vector<Eigen::Matrix<double, 4, Eigen::Dynamic>> control_points(4);
+    control_points[0] = points1;
+    control_points[1] = points2;
+    control_points[2] = points3;
+    control_points[3] = points4;
+    nurbs_surface<double, 3, -1, -1, -1, -1, true>* test_surface = new nurbs_surface<double, 3, -1, -1, -1, -1, true>(u_knots_vector, v_knots_vector2, control_points);
+
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points11(4, 4);
+    points11 << 20, 10, -10, -20,
+        -10, -10, -10, -10,
+        3, 3, 3, 3,
+        0.7423, 1.3213, 0.9423, 1.32;
+
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points12(4, 4);
+    points12 << 20, 10, -10, -20,
+        -10, -10, -10, -10,
+        -1, -1, -1, -1,
+        0.8423, 1.32134, 2.4234, 1.32;
+
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points13(4, 4);
+    points13 << 20, 10, -10, -20,
+        10, 10, 10, 10,
+        -1, -1, -1, -1,
+        2.32, 1.231, 3.321, 1.32;
+
+    Eigen::Matrix<double, 4, Eigen::Dynamic> points14(4, 4);
+    points14 << 20, 10, -10, -20,
+        10, 10, 10, 10,
+        3, 3, 3, 3,
+        1.32, 2.312, 1.3213, 1.32;
+
+    std::vector<Eigen::Matrix<double, 4, Eigen::Dynamic>> control_points2(4);
+    control_points2[0] = points11;
+    control_points2[1] = points12;
+    control_points2[2] = points13;
+    control_points2[3] = points14;
+    nurbs_surface<double, 3, -1, -1, -1, -1, true>* test_surface2 = new nurbs_surface<double, 3, -1, -1, -1, -1, true>(u_knots_vector2, v_knots_vector2, control_points2);
+    _set_error_mode(_OUT_TO_MSGBOX);
+    // save_obj2(*test_surface, "test_surface.obj");
+    // save_obj2(*test_surface2, "test_surface2.obj");
+    nurbs_surfaces_intersect<nurbs_surface3d, nurbs_surface3d> ts;
+    ts.init(test_surface, test_surface2);
+    ts.surafces_intersection2();
+    // save_obj(ts.loop_points, "loop_points.obj");
+    surf_surf_int<double, 3> intersection = ts.m_result;
+    // save_chat_points_file(intersection, "icurve.obj");
+    // save_chat_points(intersection, "BEZIER_INTtest12.json");
+    size_t curve_count = intersection.m_int_chats.size();
+    size_t isolate_point_count = intersection.m_isolate_points.size();
+    surf_surf_int<double, 3> test_data;
+    const std::string path("D:\\geometry\\intersectData\\BEZIER_INTtest12.json");
+    read_chat_points(test_data, path);
+    EXPECT_EQ(curve_count, test_data.m_int_chats.size());
+    EXPECT_EQ(isolate_point_count, test_data.m_isolate_points.size());
+
+    for (size_t index = 0; index < curve_count; ++index)
+    {
+        surfs_int_points_chat<double, 3>& int_chat = test_data.m_int_chats[index];
+        size_t curve_index;
+        bool flag = ts.is_point_in_intcurve(int_chat.m_inter_points[1].m_uv, int_chat.m_is_transversal, curve_index);
+        EXPECT_TRUE(flag);
+        size_t points_count = int_chat.m_inter_points.size();
+        EXPECT_TRUE(points_count < 1.2 * intersection.m_int_chats[curve_index].m_inter_points.size());
+        for (size_t i = 2; i < points_count; ++i)
+        {
+            size_t current_index;
+            flag = ts.is_point_in_intcurve(int_chat.m_inter_points[i].m_uv, int_chat.m_is_transversal, current_index);
+            EXPECT_TRUE(flag);
+            EXPECT_EQ(current_index, curve_index);
+        }
+    }
+}
 
 TEST(BEZIER_INT, test13)
 {
@@ -2384,8 +2392,8 @@ TEST(BEZIER_INT, test16)
     int i = 0;
     _set_error_mode(_OUT_TO_MSGBOX);
     nurbs_surfaces_intersect<nunbs_surface3d, nunbs_surface3d> ts;
-    save_obj2(*test_surface, "test_surface.obj");
-    save_obj2(*test_surface2, "test_surface2.obj");
+    // save_obj2(*test_surface, "test_surface.obj");
+    // save_obj2(*test_surface2, "test_surface2.obj");
     ts.init(test_surface, test_surface2);
     ts.surafces_intersection2();
     surf_surf_int<double, 3> intersection = ts.m_result;
@@ -2653,6 +2661,6 @@ int main(int argc, char **argv)
 {
     testing::InitGoogleTest(&argc, argv);
     
-    ::testing::FLAGS_gtest_filter = "BEZIER_INT.test16";
+    // ::testing::FLAGS_gtest_filter = "BEZIER_INT.test*";
     return RUN_ALL_TESTS();
 }

@@ -22,8 +22,17 @@ namespace tnurbs
         UNKOWN = -1,
         //无理nurbs曲线
         NUNBS_CURVE = 0,
+
         //有理nurbs曲线
-        NURBS_CURVE = 1
+        NURBS_CURVE = 1,
+        
+        //无理nurbs曲面
+        NUNBS_SURF = 1,
+        //有理nurbs曲线
+        NURBS_SURF = 1,
+
+        // 交线
+        NURBS_INT_CURVE = 2
     };
 
 

@@ -6,6 +6,7 @@
 #include "surface.h"
 #include <assert.h>
 #include <memory>
+#include "interval_alogrithm.h"
 namespace tnurbs
 {
     //TODO: U向控制点或者V向控制点个数不固定, 另一个方向固定
@@ -768,17 +769,7 @@ namespace tnurbs
             m_v_degree = m_v_knots_vector.size() - m_control_points.size() - 1;
             m_u_degree = m_u_knots_vector.size() - m_control_points[0].cols() - 1;
             
-            this->m_interval.Min = Eigen::Vector2<T>(u_knots_vector[0], v_knots_vector[0]);
-            this->m_interval.Max = Eigen::Vector2<T>(u_knots_vector[u_knots_vector.size() - 1], v_knots_vector[v_knots_vector.size() - 1]);
-            // set_interval(u_knots_vector[0], u_knots_vector[u_knots_vector.size() - 1], v_knots_vector[0], v_knots_vector[v_knots_vector.size() - 1]);
         }
-
-        // bool set_interval2(const Box<T, 2> &bx) const 
-        // {  
-        //     // m_interval = bx;
-        //     this->m_interval = bx;
-        //     return true;
-        // }
 
         nurbs_surface(const Eigen::VectorX<T> &u_knots_vector, const Eigen::VectorX<T> &v_knots_vector,
         const Eigen::MatrixX<Eigen::Vector<T, point_size>> &control_points) :
@@ -797,9 +788,6 @@ namespace tnurbs
             }
             m_v_degree = m_v_knots_vector.size() - m_control_points.size() - 1;
             m_u_degree = m_u_knots_vector.size() - m_control_points[0].cols() - 1;
-            this->m_interval.Min = Eigen::Vector2<T>(u_knots_vector[0], v_knots_vector[0]);
-            this->m_interval.Max = Eigen::Vector2<T>(u_knots_vector[u_knots_vector.size() - 1], v_knots_vector[v_knots_vector.size() - 1]);
-            // set_interval(u_knots_vector[0], u_knots_vector[u_knots_vector.size() - 1], v_knots_vector[0], v_knots_vector[v_knots_vector.size() - 1]);
         }
 
         ENUM_NURBS get_uv_knots_end(std::array<T, 2> &u_knots_end, std::array<T, 2> &v_knots_end) const
@@ -827,10 +815,6 @@ namespace tnurbs
             m_control_points = surf.get_control_points();
             m_u_knots_vector = surf.get_u_knots();
             m_v_knots_vector = surf.get_v_knots();
-            // this->m_interval.Min = Eigen::Vector2<T>(surf.u_knots_vector[0], surf.v_knots_vector[0]);
-            // this->m_interval.Max = Eigen::Vector2<T>(surf.u_knots_vector[surf.u_knots_vector.size() - 1], surf.v_knots_vector[surf.v_knots_vector.size() - 1]);
-            // set_interval(surf.get_interval());
-            this->m_interval = surf.get_interval();
         }
 
         int get_u_degree() const 
@@ -998,8 +982,26 @@ namespace tnurbs
         /// @return ENUM_NURBS错误码
         
         
+        Box<T, 2> get_domain() const override
+        {
+            Box<T, 2> domain;
+            domain.Min[0] = m_u_knots_vector[m_u_degree];
+            domain.Max[0] = m_u_knots_vector[m_u_knots_vector.rows() - m_u_degree - 1];
+            domain.Min[1] = m_v_knots_vector[m_v_degree];
+            domain.Max[1] = m_v_knots_vector[m_v_knots_vector.rows() - m_v_degree - 1];
+            return domain;
+        }
+
+        bool is_period(std::array<bool, 2>& periods) const override
+        {
+
+            // 暂时全是false
+            periods[0] = false;
+            periods[1] = false;
+            return true;
+        }
         
-        ENUM_NURBS point_on_surface(T u, T v, Eigen::Vector<T, dim> &point) const
+        ENUM_NURBS point_on_surface(T u, T v, Eigen::Vector<T, dim> &point) const override
         {
             int uspan = -1, vspan = -1;
             find_span<T>(u, m_u_degree, m_u_knots_vector, uspan);
@@ -1140,7 +1142,7 @@ namespace tnurbs
         /// @param result out_put_param result(i, j)表示S(u, v)处的u向i次偏导数, 
         /// remark : v向j次偏导数;当(i + j) > m_v_degree + m_u_degree || i > m_u_degree ||j > m_v_degree 时, 原则上来说是非法的, 此处赋值为零向量
         /// @return ENUM_NURBS错误码
-        ENUM_NURBS derivative_on_surface(int n, T u, T v, Eigen::MatrixX<Eigen::Vector<T, dim>> &result) const
+        ENUM_NURBS derivative_on_surface(int n, T u, T v, Eigen::MatrixX<Eigen::Vector<T, dim>> &result) const override
         {
             Eigen::MatrixX<Eigen::Vector<T, point_size>> ration_result(n + 1, n + 1);
             int du = std::min(n, m_u_degree);
@@ -2351,59 +2353,102 @@ namespace tnurbs
         // 这里是简单的对nurbs的控制点按照无理的方式做一下运算
         ENUM_NURBS tangent_u_surface_box(Box<T, dim>& box) const
         {
-            static_assert(is_ratio == false, "is_ratio != false");
+            // static_assert(is_ratio == false, "is_ratio != false");
             std::size_t row_points_count = m_control_points.size();
             Eigen::Index col_points_count = m_control_points[0].cols();
 
-            Eigen::Vector<T, dim> point = (m_u_degree / (m_u_knots_vector[1 + m_u_degree] - m_u_knots_vector[1])) * Eigen::Vector<T, dim>((m_control_points[0].col(1) - m_control_points[0].col(0)));
-            box.Min = box.Max = point;
-            for (Eigen::Index v_index = 0; v_index < row_points_count; ++v_index)
+            if constexpr (is_ratio == false)
             {
-                for (Eigen::Index u_index = 0; u_index < col_points_count - 1; ++u_index)
-                {
-					point = (m_u_degree / (m_u_knots_vector[u_index + 1 + m_u_degree] - m_u_knots_vector[u_index + 1])) * Eigen::Vector<T, dim>((m_control_points[v_index].col(u_index + 1) - m_control_points[v_index].col(u_index)));
-                    box.enlarge(point);
-                }
+				Eigen::Vector<T, dim> point = (m_u_degree / (m_u_knots_vector[1 + m_u_degree] - m_u_knots_vector[1])) * Eigen::Vector<T, dim>((m_control_points[0].col(1) - m_control_points[0].col(0)));
+				box.Min = box.Max = point;
+				for (Eigen::Index v_index = 0; v_index < row_points_count; ++v_index)
+				{
+					for (Eigen::Index u_index = 0; u_index < col_points_count - 1; ++u_index)
+					{
+						point = (m_u_degree / (m_u_knots_vector[u_index + 1 + m_u_degree] - m_u_knots_vector[u_index + 1])) * Eigen::Vector<T, dim>((m_control_points[v_index].col(u_index + 1) - m_control_points[v_index].col(u_index)));
+						box.enlarge(point);
+					}
+				}
+            }
+            else
+            {
+                Box<T, point_size> ratio_box;
+                Box<T, dim> box2;
+                Box<T, 1> w_box;
+                T coeff = m_u_degree / (m_u_knots_vector[1 + m_u_degree] - m_u_knots_vector[1]);
+				Eigen::Vector<T, point_size> point =  coeff * Eigen::Vector<T, point_size>((m_control_points[0].col(1) - m_control_points[0].col(0)));
+				Eigen::Vector<T, dim> point2 =  Eigen::Vector<T, dim>(m_control_points[0].template block<dim, 1>(0, 0) / m_control_points[0](dim, 0));
+				ratio_box.Min = ratio_box.Max = point;
+                box2.Min = box2.Max = point2;
+                w_box.Min = w_box.Max = m_control_points[0].template block<1, 1>(dim, 0);
+				for (Eigen::Index v_index = 0; v_index < row_points_count; ++v_index)
+				{
+					for (Eigen::Index u_index = 0; u_index < col_points_count - 1; ++u_index)
+					{
+						coeff = m_u_degree / (m_u_knots_vector[u_index + 1 + m_u_degree] - m_u_knots_vector[u_index + 1]);
+						point =  coeff * Eigen::Vector<T, point_size>((m_control_points[v_index].col(u_index + 1) - m_control_points[v_index].col(u_index)));
+						point2 =  Eigen::Vector<T, dim>(m_control_points[v_index].template block<dim, 1>(0, u_index + 1) / m_control_points[v_index](dim, u_index + 1));
+						ratio_box.enlarge(point);
+                        box2.enlarge(point2);
+                        w_box.enlarge(Eigen::Vector<T, 1>(m_control_points[v_index](dim, u_index)));
+					}
+					w_box.enlarge(Eigen::Vector<T, 1>(m_control_points[v_index](dim, col_points_count - 1)));
+				}
+                Box<T, dim> Ap(ratio_box.Min.template block<dim, 1>(0, 0), ratio_box.Max.template block<dim, 1>(0, 0));
+                Box<T, 1> wp(ratio_box.Min.template block<1, 1>(dim, 0), ratio_box.Max.template block<1, 1>(dim, 0));
+                // interval_algorithm::divide(Ap - box2 * wp, w_box, box);
+                return interval_algorithm::divide(Ap - box2 * wp, w_box, box);
             }
             return ENUM_NURBS::NURBS_SUCCESS;
         }
 
         ENUM_NURBS tangent_v_surface_box(Box<T, dim>& box) const
         {
-            static_assert(is_ratio == false, "is_ratio != false");
+            // static_assert(is_ratio == false, "is_ratio != false");
             std::size_t row_points_count = m_control_points.size();
             Eigen::Index col_points_count = m_control_points[0].cols();
-            // Eigen::Matrix<T, point_size, Eigen::Dynamic> rows_max(point_size, col_points_count);
 
-            // Eigen::Matrix<T, point_size, Eigen::Dynamic> rows_min(point_size, col_points_count);
-
-            // Eigen::Matrix<T, point_size, Eigen::Dynamic> row_control_points(point_size, row_points_count);
-
-            // for (Eigen::Index u_index = 0; u_index < col_points_count; ++u_index)
-            // {
-            //     for (Eigen::Index v_index = 0; v_index < row_points_count - 1; ++v_index)
-            //     {
-            //         row_control_points.col(v_index) = m_control_points[v_index + 1].col(u_index) - m_control_points[v_index].col(u_index);
-            //         row_control_points.col(v_index) *= m_v_degree / (m_v_knots_vector[v_index + 1 + m_v_degree] - m_v_knots_vector[v_index + 1]);
-			// 		// point = (m_v_degree / (m_v_knots_vector[v_index + 1 + m_v_degree] - m_v_knots_vector[v_index + 1])) * Eigen::Vector<T, dim>((m_control_points[v_index + 1].col(u_index) - m_control_points[v_index].col(u_index)));
-            //         // box.enlarge(point);
-            //     }
-
-			// 	rows_max.col(u_index) = row_control_points.rowwise().maxCoeff();
-			// 	rows_min.col(u_index) = row_control_points.rowwise().minCoeff();
-            // }
-            // box.Max = rows_max.rowwise().maxCoeff();
-            // box.Min = rows_min.rowwise().minCoeff();
-
-            Eigen::Vector<T, dim> point = (m_v_degree / (m_v_knots_vector[1 + m_v_degree] - m_v_knots_vector[1])) * Eigen::Vector<T, dim>((m_control_points[1].col(0) - m_control_points[0].col(0)));
-            box.Min = box.Max = point;
-            for (Eigen::Index u_index = 0; u_index < col_points_count; ++u_index)
+            if constexpr (is_ratio == false)
             {
-                for (Eigen::Index v_index = 0; v_index < row_points_count - 1; ++v_index)
-                {
-					point = (m_v_degree / (m_v_knots_vector[v_index + 1 + m_v_degree] - m_v_knots_vector[v_index + 1])) * Eigen::Vector<T, dim>((m_control_points[v_index + 1].col(u_index) - m_control_points[v_index].col(u_index)));
-                    box.enlarge(point);
-                }
+				Eigen::Vector<T, dim> point = (m_v_degree / (m_v_knots_vector[1 + m_v_degree] - m_v_knots_vector[1])) * Eigen::Vector<T, dim>((m_control_points[1].col(0) - m_control_points[0].col(0)));
+				box.Min = box.Max = point;
+				for (Eigen::Index u_index = 0; u_index < col_points_count; ++u_index)
+				{
+					for (Eigen::Index v_index = 0; v_index < row_points_count - 1; ++v_index)
+					{
+						point = (m_v_degree / (m_v_knots_vector[v_index + 1 + m_v_degree] - m_v_knots_vector[v_index + 1])) * Eigen::Vector<T, dim>((m_control_points[v_index + 1].col(u_index) - m_control_points[v_index].col(u_index)));
+						box.enlarge(point);
+					}
+				}
+            }
+            else
+            {
+                Box<T, point_size> ratio_box;
+                Box<T, dim> box2;
+                Box<T, 1> w_box;
+                T coeff = m_v_degree / (m_v_knots_vector[1 + m_v_degree] - m_v_knots_vector[1]);
+				Eigen::Vector<T, point_size> point =  coeff * Eigen::Vector<T, point_size>((m_control_points[1].col(0) - m_control_points[0].col(0)));
+				Eigen::Vector<T, dim> point2 =  Eigen::Vector<T, dim>(m_control_points[0].template block<dim, 1>(0, 0) / m_control_points[0](dim, 0));
+				ratio_box.Min = ratio_box.Max = point;
+                box2.Min = box2.Max = point2;
+                w_box.Min = w_box.Max = m_control_points[0].template block<1, 1>(dim, 0);
+				for (Eigen::Index u_index = 0; u_index < col_points_count; ++u_index)
+				{
+					for (Eigen::Index v_index = 0; v_index < row_points_count - 1; ++v_index)
+					{
+						coeff = m_v_degree / (m_v_knots_vector[v_index + 1 + m_v_degree] - m_v_knots_vector[v_index + 1]);
+						point =  coeff * Eigen::Vector<T, point_size>((m_control_points[v_index + 1].col(u_index) - m_control_points[v_index].col(u_index)));
+						point2 =  Eigen::Vector<T, dim>((m_control_points[v_index + 1].template block<dim, 1>(0, u_index) / m_control_points[v_index + 1](dim, u_index)));
+						ratio_box.enlarge(point);
+                        box2.enlarge(point2);
+                        w_box.enlarge(Eigen::Vector<T, 1>(m_control_points[v_index](dim, u_index)));
+					}
+					w_box.enlarge(Eigen::Vector<T, 1>(m_control_points[row_points_count - 1](dim, u_index)));
+				}
+                Box<T, dim> Ap(ratio_box.Min.template block<dim, 1>(0, 0), ratio_box.Max.template block<dim, 1>(0, 0));
+                Box<T, 1> wp(ratio_box.Min.template block<1, 1>(dim, 0), ratio_box.Max.template block<1, 1>(dim, 0));
+                return interval_algorithm::divide(Ap - box2 * wp, w_box, box);
+                // box = (Ap -  box2 * wp) / w_box;
             }
             return ENUM_NURBS::NURBS_SUCCESS;
         }
@@ -4449,13 +4494,15 @@ namespace tnurbs
         }
     };
 
-    template<typename T, int dim, int rows, int cols, int u_degree, int v_degree, bool is_rational>
-    struct geo_traits<nurbs_surface<T, dim, rows, cols, u_degree, v_degree, is_rational> >
+    template<typename _Scalar, int _dim, int _rows, int _cols, int _u_degree, int _v_degree, bool _is_rational>
+    struct geo_traits<nurbs_surface<_Scalar, _dim, _rows, _cols, _u_degree, _v_degree, _is_rational> >
     {
-        static constexpr int point_size = is_rational ? dim + 1 : dim;
-        using type = nurbs_surface<T, dim, rows, cols, u_degree, v_degree, is_rational>;
-        using point_number_type = T;
+        static constexpr int dim = _dim;
+        static constexpr int is_rational = _is_rational;
+        static constexpr int point_size = _is_rational ? _dim + 1 : _dim;
+        using type = nurbs_surface<_Scalar, _dim, _rows, _cols, _u_degree, _v_degree, _is_rational>;
+        using Scalar = _Scalar;
         // using dimension = dim;
-        using point_type = typename  Eigen::Vector<T, dim> ;
+        using point_type = typename  Eigen::Vector<_Scalar, dim> ;
     };
 }

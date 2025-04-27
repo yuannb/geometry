@@ -1005,7 +1005,7 @@ namespace tnurbs
         //     return id_nurbs;
         // }
 
-        constexpr virtual ENGEOMETRYTYPE  get_type() const override
+        virtual ENGEOMETRYTYPE  get_type() const override
         {
             if constexpr (is_rational == true)
             {
@@ -2754,13 +2754,506 @@ namespace tnurbs
 
     };
 
-    template<typename T, int dim, bool is_rational, int points_count, int degree>
-    struct geo_traits<nurbs_curve<T, dim, is_rational, points_count, degree> >
+    template<typename _T, int _dim, bool _is_rational, int _points_count, int _degree>
+    struct geo_traits<nurbs_curve<_T, _dim, _is_rational, _points_count, _degree> >
     {
-        static constexpr int point_size = is_rational ? dim + 1 : dim;
-        using type = nurbs_curve<T, dim, is_rational, points_count, degree>;
-        using point_number_type = T;
-        using point_type = typename  Eigen::Vector<T, dim> ;
+        static constexpr int point_size = _is_rational ? _dim + 1 : _dim;
+
+        // curve_type
+        using curve_type = nurbs_curve<_T, _dim, _is_rational, _points_count, _degree>;
+
+        //point coordinate type
+        using Scalar = _T;
+
+        //point type
+        using PT = typename  Eigen::Vector<_T, _dim>;
+
+        //control point type
+        using CPT = typename  Eigen::Vector<_T, point_size>;
+
+        static constexpr int dim = _dim;
+        static constexpr bool is_rational = _is_rational;
+        static constexpr int points_count = _points_count;
+        static constexpr int degree = _degree;
+    };
+
+    template<typename curve_type>
+    struct curve_compute
+    {
+        using Scalar = typename geo_traits<curve_type>::Scalar;
+        using PT = typename geo_traits<curve_type>::PT;
+        using CPT = typename geo_traits<curve_type>::CPT;
+        static constexpr int point_size = geo_traits<curve_type>::point_size;
+        static constexpr bool is_rational = std::is_same_v<PT, CPT>;
+        static constexpr int dim = geo_traits<curve_type>::dim;
+        using CPTA = typename Eigen::Matrix<Scalar, point_size, Eigen::Dynamic>;
+        using KnotsType = typename Eigen::VectorX<Scalar>;
+		Eigen::MatrixX<Scalar> ndu;
+		Eigen::MatrixX<Scalar> ndu_trans;
+		Eigen::VectorX<Scalar> left;
+		Eigen::VectorX<Scalar> right;
+		Eigen::VectorX<Scalar> iterArray;
+		Eigen::ArrayX<Scalar> coeff_denominator;;
+		Eigen::Array<Scalar, Eigen::Dynamic, 1> first_coeff;
+		Eigen::Array<Scalar, Eigen::Dynamic, 1> second_coeff;
+		std::vector<Scalar> gammas;
+		std::array<Eigen::Array<Scalar, Eigen::Dynamic, 1>, 2> arrays;
+
+    public:
+        KnotsType auxiliary_knots_vector;
+        int valid_auxiliary_knots_count;
+        CPTA auxiliary_points;
+
+        KnotsType basis_funs_array;
+        CPTA RW;
+
+		Eigen::MatrixX<Scalar> ders_basis_funs_array;
+        
+        curve_compute() = default;
+
+        void init(int max_control_points_count, int max_knots_count, int max_degree)
+        {
+            auxiliary_points.resize(point_size, max_control_points_count + 2 * max_degree);
+            valid_auxiliary_knots_count = 0;
+            auxiliary_knots_vector.resize(max_knots_count);
+            RW.resize(point_size, max_degree + 1);
+            basis_funs_array.resize(max_degree + 1);
+			ders_basis_funs_array.resize(max_degree + 1, 3);
+			ndu.resize(max_degree + 1, max_degree + 1);
+			ndu_trans.resize(max_degree + 1, max_degree + 1);
+			
+            iterArray.resize(max_degree + 2);
+			left.resize(max_degree);
+			right.resize(max_degree);
+			coeff_denominator.resize(max_degree, 1);
+			first_coeff.resize(max_degree + 1, 1);
+			second_coeff.resize(max_degree + 1, 1);
+			gammas.resize(max_degree + 1);
+			gammas[0] = 1;
+			for (int index = 1; index <= max_degree; ++index)
+			{
+				gammas[index] = index * gammas[index - 1];
+			}
+			arrays[0].resize(max_degree + 1, 1);
+			arrays[1].resize(max_degree + 1, 1);
+        }
+        ~curve_compute() {}
+
+        template<bool flag = ENUM_LIMITDIRECTION::RIGHT>
+        ENUM_NURBS find_span(Scalar u, int degree, KnotsType const& knots_vector, int low, int high, int& index)
+        {
+            static_assert(flag == ENUM_LIMITDIRECTION::RIGHT || flag == ENUM_LIMITDIRECTION::LEFT, "find_span : flag have to equal RIGHT or LEFT");
+            int points_count = high - low + degree;
+            if (u > knots_vector[high] || u < knots_vector[low])
+                return ENUM_NURBS::NURBS_PARAM_IS_OUT_OF_DOMAIN;
+            int mid = (low + high) / 2;
+            if constexpr (flag == ENUM_LIMITDIRECTION::RIGHT)
+            {
+                if (u == knots_vector[points_count])
+                {
+                    index = points_count - 1;
+                    return ENUM_NURBS::NURBS_SUCCESS;
+                }
+                while (u < knots_vector[mid] || u >= knots_vector[mid + 1])
+                {
+                    if (u < knots_vector[mid])
+                        high = mid;
+                    else
+                        low = mid;
+                    mid = (low + high) / 2;
+                }
+            }
+            else
+            {
+                if (u == knots_vector[low])
+                {
+                    index = low;
+                    return ENUM_NURBS::NURBS_SUCCESS;
+                }
+
+                while (u <= knots_vector[mid] || u > knots_vector[mid + 1])
+                {
+                    if (u <= knots_vector[mid])
+                        high = mid;
+                    else
+                        low = mid;
+                    mid = (low + high) / 2;
+                }
+            }
+
+            index = mid;
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+
+        ENUM_NURBS insert_knots(curve_type* curve, Scalar low, Scalar high, std::array<int, 2>& rs)
+        {
+            int degree = curve->m_degree;
+            const auto& knots = curve->m_knots_vector;
+            int rows = knots.rows() - degree - 1;
+            const auto& old_control_points = curve->m_contorl_points;
+            int start_span = -1, end_span = -1;
+            if (find_span(low, degree, knots, degree, rows, start_span) != ENUM_NURBS::NURBS_SUCCESS)
+                return ENUM_NURBS::NURBS_ERROR;
+
+            if (find_span(high, degree, knots, degree, rows, end_span) != ENUM_NURBS::NURBS_SUCCESS)
+                return ENUM_NURBS::NURBS_ERROR;
+            for (int index = 0; index < degree + 1; ++index)
+            {
+                auxiliary_knots_vector[index] = low;
+            }
+            for (int index = start_span + 1; index <= end_span + 1 + degree; ++index)
+            {
+                auxiliary_knots_vector[index - start_span - 1 + degree + 1] = knots[index];
+            }
+            // end_span += r1;
+            //插入节点r次
+
+            int repeat_count = degree - rs[0];
+            RW.middleCols(0, degree - repeat_count + 1) = old_control_points.middleCols(start_span - degree, degree - repeat_count + 1);
+            for (int j = 1; j <= rs[0]; ++j)
+            {
+                int L = start_span - degree + j;
+                int count = degree - j - repeat_count;
+                for (int i = 0; i <= count; ++i)
+                {
+                    Scalar alpha = (low - knots[i + L]) / (knots[i + start_span + 1] - knots[i + L]);
+                    RW.col(i) = alpha * RW.col(i + 1) + (1.0 - alpha) * RW.col(i);
+                }
+                auxiliary_points.col(rs[0] - j) = RW.col(degree - j - repeat_count);
+            }
+
+            int new_span = end_span - start_span + rs[0];
+            new_span = std::max(degree, new_span);
+            valid_auxiliary_knots_count = new_span + degree + 2;
+            auxiliary_points.middleCols(rs[0], repeat_count + 1) = old_control_points.middleCols(start_span - repeat_count, repeat_count + 1);
+
+            repeat_count = degree - rs[1];
+            RW.middleCols(0, degree - repeat_count + 1) = auxiliary_points.middleCols(new_span - degree, degree - repeat_count + 1);
+            for (int j = 1; j <= rs[1]; ++j)
+            {
+                int L = new_span - degree + j;
+                int count = degree - j - repeat_count;
+                for (int i = 0; i <= count; ++i)
+                {
+                    Scalar alpha = (high - auxiliary_knots_vector[i + L]) / (auxiliary_knots_vector[i + new_span + 1] - auxiliary_knots_vector[i + L]);
+                    RW.col(i) = alpha * RW.col(i + 1) + (1.0 - alpha) * RW.col(i);
+                }
+                auxiliary_points.col(L) = RW.col(0);
+            }
+            for (int index = 0; index < degree + 1; ++index)
+            {
+                auxiliary_knots_vector[index + end_span - start_span + degree + 1] = high;
+            }
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+        
+        int find_insert_count(Scalar u, int span, int degree, KnotsType& knots)
+        {
+            int result = degree;
+            if (u == knots[span])
+            {
+                int index = span - 1;
+                while (index >= 0)
+                {
+                    if (u == knots[index])
+                    {
+                        --index;
+                        --result;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+            }
+            else if (u == knots[span + 1])
+            {
+                int index = span + 2;
+                while (index < knots.rows())
+                {
+                    if (u == knots[index])
+                    {
+                        ++index;
+                        --result;
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+            }
+            result = std::max(0, result);
+            return result;
+        }
+        
+        ENUM_NURBS insert_bezier_knots(const CPTA& control_points, Scalar low, Scalar high)
+        {
+
+            int degree = control_points.cols() - 1;
+            if (std::abs(low - 1.0) < PRECISION<Scalar>::value)
+            {
+                for (int index = 0; index < degree + 1; ++index)
+                {
+					auxiliary_points.col(index) = control_points.col(degree);
+                }
+				return ENUM_NURBS::NURBS_SUCCESS;
+            }
+
+            if (std::abs(high) < PRECISION<Scalar>::value)
+            {
+                for (int index = 0; index < degree + 1; ++index)
+                {
+                    auxiliary_points.col(index) = control_points.col(0);
+                }
+				return ENUM_NURBS::NURBS_SUCCESS;
+            }
+
+            std::array<int, 2> rs;
+
+            KnotsType knots(2 * degree + 2);
+            knots.head(degree + 1).setConstant(0.0);
+            knots.tail(degree + 1).setConstant(1.0);
+
+            int rows = knots.rows() - degree - 1;
+            int start_span = -1, end_span = -1;
+            if (find_span(low, degree, knots, degree, rows, start_span) != ENUM_NURBS::NURBS_SUCCESS)
+                return ENUM_NURBS::NURBS_ERROR;
+
+            if (find_span(high, degree, knots, degree, rows, end_span) != ENUM_NURBS::NURBS_SUCCESS)
+                return ENUM_NURBS::NURBS_ERROR;
+
+            rs[0] = find_insert_count(low, start_span, degree, knots);
+            rs[1] = find_insert_count(high, end_span, degree, knots);
+
+
+
+            for (int index = 0; index < degree + 1; ++index)
+            {
+                auxiliary_knots_vector[index] = low;
+            }
+            for (int index = start_span + 1; index <= end_span + 1 + degree; ++index)
+            {
+                auxiliary_knots_vector[index - start_span - 1 + degree + 1] = knots[index];
+            }
+            // end_span += r1;
+            //插入节点r次
+
+            int repeat_count = degree - rs[0];
+            RW.middleCols(0, degree - repeat_count + 1) = control_points.middleCols(start_span - degree, degree - repeat_count + 1);
+            for (int j = 1; j <= rs[0]; ++j)
+            {
+                int L = start_span - degree + j;
+                int count = degree - j - repeat_count;
+                for (int i = 0; i <= count; ++i)
+                {
+                    Scalar alpha = (low - knots[i + L]) / (knots[i + start_span + 1] - knots[i + L]);
+                    RW.col(i) = alpha * RW.col(i + 1) + (1.0 - alpha) * RW.col(i);
+                }
+                auxiliary_points.col(rs[0] - j) = RW.col(degree - j - repeat_count);
+            }
+
+            int new_span = end_span - start_span + rs[0];
+            new_span = std::max(degree, new_span);
+            valid_auxiliary_knots_count = new_span + degree + 2;
+            auxiliary_points.middleCols(rs[0], repeat_count + 1) = control_points.middleCols(start_span - repeat_count, repeat_count + 1);
+
+            repeat_count = degree - rs[1];
+            RW.middleCols(0, degree - repeat_count + 1) = auxiliary_points.middleCols(new_span - degree, degree - repeat_count + 1);
+            for (int j = 1; j <= rs[1]; ++j)
+            {
+                int L = new_span - degree + j;
+                int count = degree - j - repeat_count;
+                for (int i = 0; i <= count; ++i)
+                {
+                    Scalar alpha = (high - auxiliary_knots_vector[i + L]) / (auxiliary_knots_vector[i + new_span + 1] - auxiliary_knots_vector[i + L]);
+                    RW.col(i) = alpha * RW.col(i + 1) + (1.0 - alpha) * RW.col(i);
+                }
+                auxiliary_points.col(L) = RW.col(0);
+            }
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+
+        void get_2_ders_sub_box(curve_type* curve, Scalar low, Scalar high, Box<Scalar, dim>& tangent_box)
+        {
+            static_assert(is_rational == false, "is_ratio != false");
+
+            std::array<int, 2> rs;
+
+            int degree = curve->m_degree;
+            const auto& knots = curve->m_knots_vector;
+
+            int u_begin_index;
+            int u_begin_mul = konts_multiple<Scalar>(low, knots, degree, u_begin_index);
+            rs[0] = std::max(0, degree - u_begin_mul);
+            int u_end_index;
+            int u_end_mul = konts_multiple<Scalar>(high, knots, degree, u_end_index);
+            rs[1] = std::max(degree - u_end_mul, 0);
+
+            insert_knots(curve, low, high, rs);
+
+            PT point = (degree / (auxiliary_knots_vector[1 + degree] - auxiliary_knots_vector[1])) * PT((auxiliary_points.col(1) - auxiliary_points.col(0)));
+            tangent_box.Min = tangent_box.Max = point;
+            for (Eigen::Index index = 0; index < valid_auxiliary_knots_count - degree - 2; ++index)
+            {
+                Scalar coeff = degree / (auxiliary_knots_vector[index + 1 + degree] - auxiliary_knots_vector[index + 1]);
+                point = coeff * PT((auxiliary_points.col(1 + index) - auxiliary_points.col(index)));
+                tangent_box.enlarge(point);
+            }
+            return;
+        }
+
+        void get_sub_box(curve_type* curve, Scalar low, Scalar high, Box<Scalar, dim>& box)
+        {
+            static_assert(is_rational == false, "is_ratio != false");
+
+            std::array<int, 2> rs;
+
+            int degree = curve->m_degree;
+            const auto& knots = curve->m_knots_vector;
+
+            int u_begin_index;
+            int u_begin_mul = konts_multiple<Scalar>(low, knots, degree, u_begin_index);
+            rs[0] = std::max(0, degree - u_begin_mul);
+            int u_end_index;
+            int u_end_mul = konts_multiple<Scalar>(high, knots, degree, u_end_index);
+            rs[1] = std::max(degree - u_end_mul, 0);
+
+            insert_knots(curve, low, high, rs);
+
+            PT point = PT(auxiliary_points.col(0));
+            box.Min = box.Max = point;
+            for (Eigen::Index index = 0; index < valid_auxiliary_knots_count - degree - 1; ++index)
+            {
+                point = auxiliary_points.col(index);
+                box.enlarge(point);
+            }
+            return;
+        }
+
+        ENUM_NURBS ders_basis_funs(int i, int n, int degree, Scalar u, const KnotsType & knots_vector, Eigen::MatrixX<Scalar>& ders_basis_funs_array)
+        {
+            int new_n = std::min(n, degree);
+            // result.resize(degree + 1, n + 1);
+            ders_basis_funs_array.setConstant(0.0);
+            // result.setConstant(0.0);
+            ndu.setConstant(0.0);
+            for (int index = 0; index < degree; ++index)
+            {
+                left[index] = u - knots_vector[i - degree + 1 + index];
+                right[index] = knots_vector[i + 1 + index] - u;
+            }
+            // Eigen::Vector<Scalar, Eigen::Dynamic> iterArray(degree + 2);
+            iterArray.setConstant(0.0);
+            iterArray[degree] = 1.0;
+            ndu(0, 0) = 1.0;
+
+            for (int iter_step = 1; iter_step <= degree; ++iter_step)
+            {
+                first_coeff[0] = 0.0;
+                second_coeff[iter_step] = 0.0;
+
+                const auto& first_coeff_numerator = left.block(degree - iter_step, 0, iter_step, 1).array();
+                const auto& second_coeff_numerator = right.head(iter_step).array();
+
+                coeff_denominator.head(iter_step)  = first_coeff_numerator + second_coeff_numerator;
+                auto& current_coeff_denominator = coeff_denominator.head(iter_step);
+
+                first_coeff.block(1, 0, iter_step, 1) = first_coeff_numerator / current_coeff_denominator;
+                second_coeff.block(0, 0, iter_step, 1) = second_coeff_numerator / current_coeff_denominator;
+                first_coeff.block(0, 0, iter_step + 1, 1) *= iterArray.block(degree - iter_step, 0, iter_step + 1, 1).array();
+                second_coeff.block(0, 0, iter_step + 1, 1) *= iterArray.block(degree - iter_step + 1, 0, iter_step + 1, 1).array();;
+
+                iterArray.block(degree - iter_step, 0, iter_step + 1, 1) = first_coeff.block(0, 0, iter_step + 1, 1) + second_coeff.block(0, 0, iter_step + 1, 1);
+                ndu.block(0, iter_step, iter_step + 1, 1) = iterArray.block(degree - iter_step, 0, iter_step + 1, 1);
+
+                ndu.block(iter_step, 0, 1, iter_step) = current_coeff_denominator.transpose();
+            }
+
+            ders_basis_funs_array.block(0, 0, degree + 1, 1) = ndu.block(0, degree, degree + 1, 1);
+
+            ndu_trans = ndu.transpose();
+            for (int r = i - degree; r <= i; ++r) //对基函数进行循环
+            {
+                arrays[0].setConstant(0.0);
+                arrays[1].setConstant(0.0);
+                int current_index = 0;
+                int next_index = 1;
+
+                arrays[0][0] = 1.0;
+                for (int k = 1; k <= new_n; ++k)
+                {
+                    auto& current_array = arrays[current_index];
+                    auto& next_array = arrays[next_index];
+                    next_array.setConstant(0.0);
+
+                    int left_num = r - (i - degree) - k;
+                    int left_index = std::max(0, -left_num);
+                    int right_num = r - (i - degree);
+                    int right_index = right_num > (degree - k) ? degree - k - left_num : right_num - left_num;
+                    int next_array_length = right_index - left_index + 1;
+
+                    int col_of_array = std::max(0, degree - i + r - k);
+                    int current_left_index = left_index;
+                    int current_right_index = right_index;
+                    if (left_index == 0)
+                    {
+                        next_array[0] = current_array[0] / ndu_trans(col_of_array, degree + 1 - k);
+                        current_left_index += 1;
+                    }
+                    if (right_index == k)
+                    {
+                        next_array[k] = -current_array[k - 1] / ndu_trans(next_array_length + col_of_array - 1, degree + 1 - k);
+                        current_right_index -= 1;
+                    }
+                    if (current_right_index >= current_left_index)
+                    {
+                        int arrayLength = current_right_index - current_left_index + 1;
+                        next_array.block(current_left_index, 0, arrayLength, 1) = (current_array.block(current_left_index, 0, arrayLength, 1) -
+                            current_array.block(current_left_index - 1, 0, arrayLength, 1)) / ndu_trans.block(col_of_array + current_left_index - left_index, degree + 1 - k, arrayLength, 1).array();
+                    }
+
+                    left_num = std::max(0, left_num);
+                    Eigen::Map<Eigen::VectorX<Scalar>> temp_l(&ndu(left_num, degree - k), next_array_length);
+                    Eigen::Map<Eigen::VectorX<Scalar>> temp_r(&next_array(left_index, 0), next_array_length);
+
+                    ders_basis_funs_array(r - (i - degree), k) = gammas[degree] / gammas[degree - k] *
+                        temp_l.dot(temp_r);
+                    std::swap(current_index, next_index);
+                }
+            }
+
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
+
+        template<int n>
+        ENUM_NURBS derivative_on_curve(curve_type* curve, Scalar u, std::array<Eigen::Vector<Scalar, dim>, n + 1>& result)
+        {
+            int degree = curve->m_degree;
+            const auto& knots = curve->m_knots_vector;
+            if constexpr (is_rational == false)
+            {
+                int du = std::min(n, degree);
+
+                for (int index = du + 1; index < n + 1; ++index)
+                {
+                    result[index].setConstant(0.0);
+                }
+
+                int uspan = -1;
+                find_span<Scalar>(u, degree, knots, degree, knots.rows() - degree - 1, uspan);
+                ders_basis_funs<Scalar>(uspan, du, degree, u, knots, ders_basis_funs_array);
+                const auto& control_points = curve->m_control_points();
+                for (int k = 0; k <= du; ++k)
+                {
+                    result[k] = control_points[uspan - degree + k].middleCols(uspan - degree, degree + 1) * ders_basis_funs_array.col(k);
+                }
+                return ENUM_NURBS::NURBS_SUCCESS;
+            }
+            else
+            {
+                static_assert(false, "false");
+            }
+        }
     };
 
     using nunbs3d = nurbs_curve<double, 3, false, -1, -1>;
