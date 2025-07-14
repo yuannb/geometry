@@ -318,7 +318,7 @@ namespace tnurbs{
             for (int v_index = 0; v_index < curves_count; ++v_index)
             {
                 Eigen::Vector<T, points_size> p;
-                section_curves_elevate[v_index]->get_control_point(u_index, p);
+                section_curves_elevate[v_index]->get_homo_control_point(u_index, p);
                 col_control_points.col(v_index) = p;
             }
             nurbs_curve<T, points_size, false, -1, -1> nurbs;
@@ -683,6 +683,13 @@ namespace tnurbs{
             temp_control_points[index].resize(4, nsect);
         }
 
+        Eigen::Matrix<T, 3, Eigen::Dynamic> profile_control_points = profile_curve.get_nonhomo_control_points();
+        profile_control_points.colwise() -= frames[0].origin;
+        for (Eigen::Index index = 0; index < profile_curve_control_points_count; ++index)
+        {
+			profile_control_points.col(index) = frames[0].basis.transpose() * Eigen::Vector3<T>(profile_control_points.col(index));
+        }
+
         for (int k = 0; k < nsect; ++k)
         {
             Eigen::Matrix3<T> scale_mat;
@@ -708,8 +715,8 @@ namespace tnurbs{
             }
             for (int index = 0; index < profile_curve_control_points_count; ++index)
             {
-                Eigen::Vector<T, 3> p;
-                profile_curve.get_control_point(index, p);
+                Eigen::Vector<T, 3> p = profile_control_points.col(index);
+                // profile_curve.get_control_point(index, p);
                 p = frames[k].basis * scale_mat * p;
                 p += frames[k].origin;
                 Eigen::Vector<T, 4> homo_p;

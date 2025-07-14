@@ -15,6 +15,7 @@ set(ng_global_dir "${PROJECT_SOURCE_DIR}")
 string(REGEX REPLACE "(.+)\\nodeGraph.*" "\\1" PROJECT_INIT_PATH ${PROJECT_SOURCE_DIR})
 set(pre_ng_global_dir "${PROJECT_INIT_PATH}")
 
+
 add_subdirectory(${PROJECT_SOURCE_DIR}/src)
 
 

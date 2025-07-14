@@ -31,10 +31,20 @@ namespace tnurbs
     public:
         virtual  ~curve() { };
 
-        constexpr virtual ENGEOMETRYTYPE get_type() const { return ENGEOMETRYTYPE::UNKOWN; }
+        virtual ENGEOMETRYTYPE get_type() const { return ENGEOMETRYTYPE::UNKOWN; }
 
         virtual ENUM_NURBS point_on_curve(T u, Eigen::Vector<T, dim> &point) const = 0;
+        
+        virtual ENUM_NURBS get_ends_point(std::array<Eigen::Vector<T, dim>, 2>& points) const = 0;
 
+        virtual Box<T, 1> get_domain_box() const = 0;
+
+        virtual ENUM_NURBS derivative_on_curve(T u, int n, Eigen::Vector<Eigen::Vector<T, dim>, Eigen::Dynamic> &result) const = 0;
+        
+        virtual bool is_closed() const
+        {
+            return false;
+        }
     };
 
     using curve3d = curve<double, 3>;

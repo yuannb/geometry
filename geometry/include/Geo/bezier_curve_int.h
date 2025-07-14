@@ -858,7 +858,7 @@ end_loop:
 		}
 
 		//迭代加细交点(周期性曲面待处理)(TODO: 重构)
-		ENUM_NURBS intersect_point_iteration(const Box<T, 3>& domian, Eigen::Vector<T, 2> current_param, Eigen::Vector<T, 2>& intersect_param)
+		ENUM_NURBS intersect_point_iteration(const Box<T, 2>& domian, Eigen::Vector<T, 2> current_param, Eigen::Vector<T, 2>& intersect_param)
 		{
 			// TODO: closed
 			Eigen::Vector<Eigen::Vector<T, dim>, 2> left_point_ders;
@@ -896,7 +896,7 @@ end_loop:
 				mat.col(0) = left_point_ders[1];
 				mat.col(1) = -1.0 * right_point_ders[1];
 
-				Eigen::JacobiSVD<Eigen::Matrix<T, dim, 3>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(mat);
+				Eigen::JacobiSVD<Eigen::Matrix<T, dim, 2>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(mat);
 				Eigen::Vector<T, 2> delta = matSvd.solve(vec);
 				if (matSvd.info() != Eigen::Success)
 					return ENUM_NURBS::NURBS_ERROR;
@@ -918,7 +918,7 @@ end_loop:
 
 
 		//迭代加细交点(周期性曲面待处理)(TODO: 重构)
-		ENUM_NURBS intersect_point_singular_iteration(const Box<T, 3>& domian, Eigen::Vector<T, 2> current_param, Eigen::Vector<T, 2>& intersect_param)
+		ENUM_NURBS intersect_point_singular_iteration(const Box<T, 2>& domian, Eigen::Vector<T, 2> current_param, Eigen::Vector<T, 2>& intersect_param)
 		{
 			// TODO: closed
 			Eigen::Vector<Eigen::Vector<T, dim>, 3> left_point_ders;
@@ -963,7 +963,7 @@ end_loop:
 				mat.template block<dim, 1>(0, 0) = left_point_ders[1];
                 mat.template block<dim, 1>(0, 1) = -1.0 * right_point_ders[1];
 				mat(dim, 0) = 2 * cross_vec.dot(right_point_ders[1].cross(left_point_ders[2])) * coeff;
-				mat(dim, 2) = 2 * cross_vec.dot(right_point_ders[2].cross(left_point_ders[1])) * coeff;
+				mat(dim, 1) = 2 * cross_vec.dot(right_point_ders[2].cross(left_point_ders[1])) * coeff;
 
 				Eigen::JacobiSVD<Eigen::Matrix<T, dim + 1, 2>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(mat);
 				Eigen::Vector<T, 2> delta = matSvd.solve(vec);
@@ -988,7 +988,7 @@ end_loop:
         std::vector<curve_curve_int_point<T, dim>> bezier_curve_int_bezier_curve(const left_curve_type& left, const right_curve_type& right)
 		{
 			int left_degree = left.get_degree();
-			int right_degree = left.get_degree();
+			int right_degree = right.get_degree();
 			std::array<int, 2> degrees{ left_degree, right_degree };
 			auto left_control_points = left.get_control_points();
 			auto right_control_points = right.get_control_points();
@@ -1024,7 +1024,7 @@ end_loop:
 
 			smspe<T, dim, 2> solver;
 			solver.init(coeff, degrees);
-			std::vector<Box<T, 3>> int_boxes;
+			std::vector<Box<T, 2>> int_boxes;
 			solver.compute_ipp(int_boxes);
             std::vector<curve_curve_int_point<T, dim>> int_points;
 			Box<T, 2> domian;
@@ -1099,7 +1099,7 @@ end_loop:
             std::vector<left_curve_type *> left_sub_curves;
             m_left_curve->decompose_to_bezier(left_sub_curves);
 
-            std::vector<left_curve_type *> right_sub_curves;
+            std::vector<right_curve_type *> right_sub_curves;
             m_right_curve->decompose_to_bezier(right_sub_curves);
             
             size_t left_curves_count = left_sub_curves.size();
@@ -1145,7 +1145,7 @@ end_loop:
 			std::unordered_set<remove_help, remove_hash_help> remove_mult;
             for (auto& curve_pair : curves_pairs)
             {
-                std::vector<curve_curve_int_point<T, dim>> int_points = bezier_curve_int_bezier_curve(curves_pairs.first, curves_pairs.second); 
+                std::vector<curve_curve_int_point<T, dim>> int_points = bezier_curve_int_bezier_curve(curve_pair.first, curve_pair.second); 
                 for (curve_curve_int_point<T, dim>& int_point : int_points)
                 {
                     remove_help h(int_point);

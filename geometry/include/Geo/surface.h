@@ -30,7 +30,10 @@ namespace tnurbs
         virtual	Box<T, 2> get_domain() const = 0;
 
 		virtual bool is_period(std::array<bool, 2>& periods) const = 0;
+        virtual ENGEOMETRYTYPE get_type() const = 0;
     };
+
+    using surf3d = surface<double, 3>;
 
 }
 

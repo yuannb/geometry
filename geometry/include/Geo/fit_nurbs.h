@@ -1292,7 +1292,7 @@ namespace tnurbs
     ENUM_NURBS evaulate_matrix_for_approximation(const Eigen::VectorX<T> &knots, const std::vector<T> &params, int degree, int interpolate_points_count, Eigen::SparseMatrix<T> &N)
     {
         int control_points_count = knots.size() - degree - 1;
-        int Nrows = std::min(degree + 1, control_points_count - 2);
+        int Nrows = std::min<int>(degree + 1, control_points_count - 2);
 
         for (int col = 0; col < interpolate_points_count - 2; ++col)
         {
@@ -1382,7 +1382,7 @@ namespace tnurbs
         int points_count = points.cols();
         Eigen::MatrixX<T> R;
         Eigen::SparseMatrix<T> N(control_points_count - 2, points_count - 2);
-        int Nrows = std::min(degree + 1, control_points_count - 2);
+        int Nrows = std::min<int>(degree + 1, control_points_count - 2);
         N.reserve(Eigen::VectorXi::Constant(points_count - 2, Nrows));
         evaulate_matrix_for_approximation<T, dim>(knots, params, degree, points_count, N);
         evaulate_R_matrix_for_approximation<T, dim>(points, knots, params, degree, points_count, R);
@@ -1676,7 +1676,7 @@ namespace tnurbs
         temp_control_points.reserve(v_points_count);
 
         Eigen::SparseMatrix<T> NU(u_control_points_count - 2, u_points_count - 2);
-        int Nrows = std::min(u_degree + 1, u_control_points_count - 2);
+        int Nrows = std::min<int>(u_degree + 1, u_control_points_count - 2);
         NU.reserve(Eigen::VectorXi::Constant(u_points_count - 2, Nrows));
         evaulate_matrix_for_approximation<T, dim>(u_knots, u_params, u_degree, u_points_count, NU);
         Eigen::SparseMatrix<T> mat =  NU * Eigen::SparseMatrix<T, Eigen::ColMajor>(NU.transpose());
@@ -1701,7 +1701,7 @@ namespace tnurbs
         }
 
         Eigen::SparseMatrix<T> NV(v_control_points_count - 2, v_points_count - 2);
-        Nrows = std::min(v_degree + 1, v_control_points_count - 2);
+        Nrows = std::min<int>(v_degree + 1, v_control_points_count - 2);
         NV.reserve(Eigen::VectorXi::Constant(v_points_count - 2, Nrows));
         evaulate_matrix_for_approximation<T, dim>(v_knots, v_params, v_degree, v_points_count, NV);
         mat =  NV * Eigen::SparseMatrix<T, Eigen::ColMajor>(NV.transpose());

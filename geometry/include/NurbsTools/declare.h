@@ -27,12 +27,12 @@ namespace tnurbs
         NURBS_CURVE = 1,
         
         //无理nurbs曲面
-        NUNBS_SURF = 1,
+        NUNBS_SURF = 2,
         //有理nurbs曲线
-        NURBS_SURF = 1,
+        NURBS_SURF = 3,
 
         // 交线
-        NURBS_INT_CURVE = 2
+        NURBS_INT_CURVE = 4
     };
 
 
@@ -308,7 +308,7 @@ namespace tnurbs
             {
                 if (point[i] > Max[i] || point[i] < Min[i])
                 {
-                    T min_dis = std::min(std::abs(point[i] - Max[i]), std::abs(point[i] - Min[i]));
+                    T min_dis = std::min<T>(std::abs(point[i] - Max[i]), std::abs(point[i] - Min[i]));
                     dis += (min_dis * min_dis);
                 }
             }
@@ -320,7 +320,7 @@ namespace tnurbs
             T dis = 0.0;
             for (int i = 0; i < dim; ++i)
             {
-                T max_dis = std::max(std::abs(point[i] - Max[i]), std::abs(point[i] - Min[i]));
+                T max_dis = std::max<T>(std::abs(point[i] - Max[i]), std::abs(point[i] - Min[i]));
                 dis += max_dis * max_dis;
             }
             return std::sqrt(dis);
@@ -375,8 +375,8 @@ namespace tnurbs
         {
             for (int index = 0; index < dim; ++index)
             {
-                intersect_box.Min[index] = std::max(Min[index], box.Min[index]);
-                intersect_box.Max[index] = std::min(Max[index], box.Max[index]);
+                intersect_box.Min[index] = std::max<T>(Min[index], box.Min[index]);
+                intersect_box.Max[index] = std::min<T>(Max[index], box.Max[index]);
                 if (intersect_box.Max[index] < intersect_box.Min[index])
                 {
                     return false;
@@ -440,7 +440,7 @@ namespace tnurbs
             T min_length = Max[0] - Min[0];
             for (int index = 1; index < dim; ++index)
             {
-                min_length = std::min(min_length, Max[index] - Min[index]);
+                min_length = std::min<T>(min_length, Max[index] - Min[index]);
             }
             return min_length;
         }
@@ -555,8 +555,8 @@ namespace tnurbs
                 T x1 = scale * Min[index];
                 T x2 = scale * Max[index];
 
-                result.Min[index] = std::min({ x1, x2 });
-                result.Max[index] = std::max({ x1, x2 });
+                result.Min[index] = std::min<T>({ x1, x2 });
+                result.Max[index] = std::max<T>({ x1, x2 });
             }
             return result;
         }
@@ -571,8 +571,8 @@ namespace tnurbs
                 T x3 = scale.m_interval[1] * Min[index];
                 T x4 = scale.m_interval[1] * Max[index];
 
-                result.Min[index] = std::min({ x1, x2, x3, x4 });
-                result.Max[index] = std::max({ x1, x2, x3, x4 });
+                result.Min[index] = std::min<T>({ x1, x2, x3, x4 });
+                result.Max[index] = std::max<T>({ x1, x2, x3, x4 });
             }
             return result;
         }
@@ -581,8 +581,8 @@ namespace tnurbs
         {
             for (int index = 0; index < dim; ++index)
             {
-                Min[index] = std::min(Min[index], point[index]);
-                Max[index] = std::max(Max[index], point[index]);
+                Min[index] = std::min<T>(Min[index], point[index]);
+                Max[index] = std::max<T>(Max[index], point[index]);
             }
             return;
         }
@@ -609,7 +609,7 @@ namespace tnurbs
        Box<T, dim> envelop_points(std::vector<Eigen::Vector<T, dim>>& points)
        {
            Box<T, dim> box;
-           T max = std::numeric_limits<T>::max();
+           T max = (std::numeric_limits<T>::max)();
            box.Min.setConstant(max);
            box.Max.setConstant(-max);
            for (const auto point : points)

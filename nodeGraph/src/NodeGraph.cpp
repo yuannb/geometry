@@ -18,17 +18,22 @@ NodeGraph::~NodeGraph()
         delete it->second;
     }
 
-    // std::map<std::string, tnurbs::curve3d*> m_curves;
-    // std::map<std::string, tnurbs::mesh<1>*> m_curves_disc;
+    for (auto it = m_node_data.begin(); it != m_node_data.end(); ++it)
+    {
+        delete *it;
+    }
 }
 
 bool NodeGraph::calculate()
 {
     for (auto node_id : m_nodes_sort)
     {
-        Node *node = m_nodes[node_id];
-        node->collect_data();
-        node->calculate();
+        if (m_nodes.contains(node_id))
+        {
+			Node* node = m_nodes[node_id];
+			node->collect_data();
+			node->calculate();
+        }
     }
     return true;
 }

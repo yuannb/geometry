@@ -1,0 +1,2 @@
+3rd/MySQL/MySQL[[:space:]]Server[[:space:]]9.3/* filter=lfs diff=lfs merge=lfs -text
+3rd/MySQL/** filter=lfs diff=lfs merge=lfs -text

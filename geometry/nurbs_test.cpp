@@ -1880,7 +1880,8 @@ TEST(BEZIER_INT, test8)
     control_points2[3] = points14;
     nurbs_surface<double, 3, -1, -1, -1, -1, false>* test_surface2 = new nurbs_surface<double, 3, -1, -1, -1, -1, false>(u_knots_vector2, v_knots_vector2, control_points2);
     _set_error_mode(_OUT_TO_MSGBOX);
-    // save_obj2(*test_surface, "test_surface.obj");
+    save_obj2(*test_surface2, "test_surface.obj");
+    save_obj3(*test_surface2, "test_surface2.obj");
     // save_obj2(*test_surface2, "test_surface2.obj");
     nurbs_surfaces_intersect<nunbs_surface3d, nunbs_surface3d> ts;
     ts.init(test_surface, test_surface2);
@@ -2661,6 +2662,6 @@ int main(int argc, char **argv)
 {
     testing::InitGoogleTest(&argc, argv);
     
-    // ::testing::FLAGS_gtest_filter = "BEZIER_INT.test*";
+    ::testing::FLAGS_gtest_filter = "BEZIER_INT.test8";
     return RUN_ALL_TESTS();
 }

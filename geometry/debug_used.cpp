@@ -353,12 +353,33 @@ namespace tnurbs
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
+    ENUM_NURBS save_obj3(const nurbs_surface<double, 3, -1, -1, -1, -1, false>& surf, const char* path)
+    {
+        surface_mesh_helper<nurbs_surface<double, 3, -1, -1, -1, -1, false>> mh;
+        disc_surface(&surf, mh, TDEFAULT_ERROR<double>::value, 10.0, 0.1, 1.0);
+        mesh<2> surface_mesh;
+        mesh_help_to_mesh2(mh, surface_mesh);
+
+        save_obj(&surface_mesh, path);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
     ENUM_NURBS save_obj2(const nurbs_surface<double, 3, -1, -1, -1, -1, true>& surf, const char* path)
     {
         surface_mesh_helper<nurbs_surface<double, 3, -1, -1, -1, -1, true>> mh;
         disc_surface(&surf, mh, TDEFAULT_ERROR<double>::value, 10.0, 0.1, 1.0);
         mesh<2> surface_mesh;
         mesh_help_to_mesh(mh, surface_mesh);
+
+        save_obj(&surface_mesh, path);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+    
+    ENUM_NURBS save_obj3(const nurbs_surface<double, 3, -1, -1, -1, -1, true>& surf, const char* path)
+    {
+        surface_mesh_helper<nurbs_surface<double, 3, -1, -1, -1, -1, true>> mh;
+        disc_surface(&surf, mh, TDEFAULT_ERROR<double>::value, 10.0, 0.1, 1.0);
+        mesh<2> surface_mesh;
+        mesh_help_to_mesh2(mh, surface_mesh);
 
         save_obj(&surface_mesh, path);
         return ENUM_NURBS::NURBS_SUCCESS;

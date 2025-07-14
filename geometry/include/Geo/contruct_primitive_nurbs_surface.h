@@ -42,7 +42,7 @@ namespace tnurbs
         Eigen::Matrix<T, point_size, Eigen::Dynamic> control_points2;
         if constexpr (is_rational == false)
         {
-            control_points2 = control_points2.rowwise() + d * direction;
+            control_points2 = control_points.colwise() + d * direction;
         }
         else
         {
@@ -55,7 +55,7 @@ namespace tnurbs
                 control_points2(dim, index) = control_points(dim, index);
             }
         }
-        Eigen::VectorX<Eigen::Matrix<T, point_size, Eigen::Dynamic>> surface_control_points(2);
+        std::vector<Eigen::Matrix<T, point_size, Eigen::Dynamic>> surface_control_points(2);
         surface_control_points[0] = control_points;
         surface_control_points[1] = control_points2;
         surf.set_uv_degree(section_curve.get_degree(), 1);

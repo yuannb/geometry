@@ -1,28 +1,71 @@
 #pragma once
 #include <string>
-#include <map>
-#include <list>
 #include <vector>
-#include <memory>
-#include "curve.h"
 #include <type_traits>
-#include "fit_nurbs.h"
+#include "magic_enum.hpp"
 #include "parameter.hpp"
-
+#include "json.hpp"
 
 class NodeGraph;
+
+
+
+class NodeIterator
+{
+public:
+	std::vector<InterfaceIter> m_node_iter;
+    bool m_is_end{ false };
+public:
+    explicit NodeIterator(const std::vector<InterfaceIter>& node_iter);
+
+    bool is_item_end() const;
+
+    NodeIterator& operator++();
+
+    bool is_end() const;
+};
+
+
+struct NodeType
+{
+    static constexpr const char* interpolateCurve = "InterpolateCurve";
+    static constexpr const char* numberNode = "NumberNode";
+    static constexpr const char* merge = "Merge";
+    static constexpr const char* constructPoint = "ConstructPoint";
+    static constexpr const char* extrude = "Extrude";
+    static constexpr const char* ellipse = "Ellipse";
+    static constexpr const char* rotate = "Rotate";
+    static constexpr const char* ranges = "Ranges";
+    static constexpr const char* scale = "Scale";
+    static constexpr const char* curveSplit = "CurveSplit";
+    static constexpr const char* loft = "Loft";
+    static constexpr const char* flatten = "Flatten";
+    static constexpr const char* listItem = "ListItem";
+    static constexpr const char* line = "Line";
+    static constexpr const char* curvesInt = "CurvesInt";
+    static constexpr const char* distancePt = "DistancePt";
+    static constexpr const char* EndPts = "EndPts";
+    static constexpr const char* prepFrame = "PrepFrame";
+    static constexpr const char* rectangle = "Rectangle";
+    static constexpr const char* sweep = "Sweep";
+};
+
+std::string create_uuid();
 
 class Node 
 {
 public:
 
-    //没有nodegraph的内存所有权; 不管理nodegraph的内存(且必须保证m_parent是合法的)
     NodeGraph *m_parent;
     
     std::string m_id;
-    std::vector<NodeInterface* > m_inputs;
-    std::vector<NodeInterface* > m_outputs;
+    std::vector<NodeInterface> m_inputs;
+    std::vector<NodeInterface> m_outputs;
 
+private:
+    bool need_add_output{false};
+public:
+    bool is_calculate = false;
 public:
 
     Node() = default;
@@ -30,118 +73,45 @@ public:
 
     virtual ~Node() 
     {
-        //现在会议内存泄露
     }
+    
+    std::vector<AbstractNodeData*> get_data_list(size_t index, const NodeIterator& node_iter)
+    {
+		auto iter = node_iter.m_node_iter[index].m_iter;
+        return iter.m_path_iter->second;
+    }
+    
+    AbstractNodeData* get_data_item(size_t index, const NodeIterator& node_iter)
+    {
+		auto iter = node_iter.m_node_iter[index].m_iter;
+		return iter.m_path_iter->second[iter.m_index];
+    }
+    NodeIterator begin();
 
     bool set_parent_graph(NodeGraph *ng);
-    // {
-    //     m_parent = ng;
-    //     return true;
-    // }
 
+    bool add_output(const std::vector<Path>& node_iter, const std::vector<std::vector<AbstractNodeData*>>& datas);
 
-    bool add_input(NodeInterface *input);
-    // {
-    //     m_inputs.push_back(input);
-    //     return true;
-    // }
-
-    bool add_output(NodeInterface *output);
-    // {
-    //     m_outputs.push_back(output);
-    //     return true;
-    // }
+    virtual std::string get_type() const 
+    {
+        return "unknown";
+    }
 
     bool collect_data();
-    // {
-    //     size_t inputCount = m_inputs.size();
-    //     for (size_t index = 0; index < inputCount; ++index)
-    //     {
-
-    //         NodeInterface *interface = m_inputs[index];
-    //         interface->collect_data();
-    //     }
-    //     return true;
-    // }
 
     size_t get_input_count() { return m_inputs.size(); }
 
 
-    bool calculate_path(std::vector<DataRelation> &relations) const;
-    // {
-    //     size_t inputs_count = m_inputs.size();
-        
-    //     std::vector<std::vector<const Path &>> paths;
-    //     paths.reserve(inputs_count);
-    //     size_t max_path_count = 0;
-    //     std::vector<size_t> paths_count;
-    //     paths_count.reserve(inputs_count);
-    //     for (size_t index = 0; index < inputs_count; ++index)
-    //     {
-    //         paths.push_back(m_inputs[index]->get_all_path());
-    //         size_t path_count = m_inputs[index]->get_path_count();
-    //         if (path_count > max_path_count)
-    //             max_path_count = path_count;
-    //         paths_count.push_back(path_count);
-    //     }
-    //     relations.resize(max_path_count);
-    //     for (size_t index = 0; index < max_path_count; ++index)
-    //     {
-    //         DataRelation &rel = relations[index];
-    //         rel.m_paths.reserve(inputs_count);
-    //         rel.m_indexs.reserve(inputs_count);
-    //         for (size_t param_index = 0; param_index < inputs_count; ++param_index)
-    //         {
-    //             size_t current_index = index < paths_count[param_index] ? index : paths_count[param_index] - 1;
-    //             rel.m_indexs.push_back(current_index);
-    //             rel.m_paths.push_back(paths[param_index][current_index]);
-    //         }
-    //     }
-
-    //     //第几个参数是否是asitem
-    //     std::vector<unsigned> item_index;
-
-    //     for (size_t index = 0; index < inputs_count; ++index)
-    //     {
-    //         bool is_item = m_inputs[index]->get_data_kind() == KindData::AsItem;
-    //         if (is_item == true)
-    //         {
-    //             item_index.push_back(index);
-    //         }
-    //     }
-    //     size_t item_count = item_index.size();
-    //     if (item_count == 0)
-    //         return true;
-    //     for (size_t index = 0; index < max_path_count; ++index)
-    //     {
-    //         DataRelation &rel = relations[index];
-    //         size_t max_values_count = 0;
-    //         std::vector<size_t> values_count;
-    //         values_count.resize(item_count);
-    //         for (size_t i = 0; i < item_count; ++i)
-    //         {
-    //             size_t value_count = m_inputs[item_index[i]]->get_value_count(rel.m_paths[item_index[i]]);
-    //             if (value_count > max_values_count)
-    //                 max_values_count = value_count;
-    //             values_count[i] = value_count;
-    //         }
-    //         rel.m_list_indexs.resize(max_values_count);
-    //         for (size_t j = 0; j < max_values_count; ++j)
-    //         {
-    //             rel.m_list_indexs[j].resize(inputs_count, NAN);
-    //             for (size_t k = 0; k < item_count; ++k)
-    //             {
-    //                 size_t current_index = j < values_count[k] ? j : values_count[k] - 1;
-    //                 rel.m_list_indexs[j][item_index[k]] = current_index;
-    //             }
-    //         }
-    //     }
-
-    //     return true;
-    // }
+     bool calculate_path(const NodeIterator& node_iter, std::vector<Path>& paths);
 
 
-    virtual bool calculate() = 0;
+    virtual bool calculate();
+    virtual std::vector<std::vector<AbstractNodeData*>> calculate_inner(const NodeIterator& node_iter)
+    {
+        return { {nullptr} };
+    }
+
+    nlohmann::ordered_json to_json() const;
 
 };
 

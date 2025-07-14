@@ -6,6 +6,7 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <deque>
+#include "CDT.h"
 namespace tnurbs
 {
     //计算nurbs的切向向锥
@@ -179,7 +180,7 @@ namespace tnurbs
         T chord_dis = temp.norm();
         temp = p1_ders[0] - p2_ders[0];
         temp -= (temp.dot(u_dir) * u_dir);
-        chord_dis = std::max(chord_dis, temp.norm());
+        chord_dis = std::max<T>(chord_dis, temp.norm());
 
         
 
@@ -382,6 +383,7 @@ namespace tnurbs
         }
 
         std::vector<Eigen::Matrix<Eigen::Vector<T, dim>, 2, 2>> ders;
+        std::vector<Eigen::Vector2<T>> params;
         // std::vector<std::array<int, 4>> point_indexs;
         surface_patch<surface_type> *root;
 
@@ -583,12 +585,16 @@ namespace tnurbs
         surf->template derivative_on_surface<1>(root->uv_box.Min[0], root->uv_box.Max[1], left_top);
 
         mh.ders.push_back(left_bottom);
+        mh.params.push_back(root->uv_box.Min);
         mh.root->point_index[0] = 0;
         mh.ders.push_back(right_bottom);
+        mh.params.emplace_back(root->uv_box.Max[0], root->uv_box.Min[1]);
         mh.root->point_index[1] = 1;
         mh.ders.push_back(right_top);
+        mh.params.push_back(root->uv_box.Max);
         mh.root->point_index[2] = 2;
         mh.ders.push_back(left_top);
+        mh.params.push_back({ root->uv_box.Min[0], root->uv_box.Max[1] });
         mh.root->point_index[3] = 3;
 
         surface_patch<surface_type> *curent = root;
@@ -650,6 +656,9 @@ namespace tnurbs
                     right->uv_box.Min[0] = left->uv_box.Max[0];
                     right->point_index = std::array<int, 4>{ m_ders_size - 1, curent->point_index[1], curent->point_index[2], m_ders_size };
                     curent->split_direction = ENUM_DIRECTION::U_DIRECTION;
+					
+                    mh.params.push_back(right->uv_box.Min);
+                    mh.params.push_back(left->uv_box.Max);
                 }
                 else
                 {
@@ -663,6 +672,9 @@ namespace tnurbs
                     right->uv_box.Min[1] = left->uv_box.Max[1];
                     right->point_index = std::array<int, 4>{ m_ders_size, m_ders_size - 1, curent->point_index[2], curent->point_index[3] };
                     curent->split_direction = ENUM_DIRECTION::V_DIRECTION;
+                    
+                    mh.params.push_back(left->uv_box.Max);
+                    mh.params.push_back(right->uv_box.Min);
                 }
                 curent->left = left;
                 curent->right = right;
@@ -705,20 +717,36 @@ namespace tnurbs
     };
 
     template<typename surface_type, typename T = typename surface_type::Type, int dim = surface_type::dimension>
-    ENUM_NURBS remove_multiple_point(surface_mesh_helper<surface_type> &mh)
+    ENUM_NURBS remove_multiple_point(surface_mesh_helper<surface_type> &mh, bool notCareParam = true)
     {
         struct help
         {
             int m_index;
             T m_eps;
+            T m_param_eps;
             Eigen::Vector<T, dim> m_point;
-            help(const Eigen::Vector<T, dim> &point, int index, T eps = TDEFAULT_ERROR<T>::value) { m_index = index; m_point = point; m_eps = eps; }
+            Eigen::Vector<T, 2> m_param;
+            help(const Eigen::Vector<T, dim> &point, const Eigen::Vector<T, 2> &param, int index, T param_eps,  T eps = TDEFAULT_ERROR<T>::value)
+            { 
+                m_index = index;
+                m_point = point;
+                m_eps = eps; 
+                m_param = param;
+                m_param_eps = param_eps;
+            }
             ~help() { }
+            __declspec(noinline)
             const bool operator==(const help &right) const
             {
-                if ((m_point - right.m_point).squaredNorm() < m_eps)
-                    return true;
-                return false;
+                if ((m_point - right.m_point).squaredNorm() > m_eps * m_eps)
+                {
+                    return false;
+                }
+                if ((m_param - right.m_param).squaredNorm() > m_param_eps * m_param_eps)
+                {
+                    return false;
+                }
+                return true;
             }
         };
         class hash_help {
@@ -733,20 +761,32 @@ namespace tnurbs
                 return std::hash<std::string>()(temp);
             }
         };
+        const Box<double, 2>& domain = mh.root->uv_box;
+        double param_tol = std::max(1e-8, 1e-4 * domain.get_min_lenght());
+        param_tol = notCareParam ? 100000 : param_tol;
         std::unordered_set<help, hash_help> new_ders;
         std::vector<Eigen::Matrix<Eigen::Vector<T, dim>, 2, 2>> result_vec;
+        std::vector<Eigen::Vector2<T>> result_params;
         std::unordered_map<int, int> index_map;
         int difference = 0;
         int mh_ders_size = mh.ders.size();
         result_vec.reserve(mh_ders_size);
         for (int index = 0; index < mh_ders_size; ++index)
         {
-            help temp(mh.ders[index](0, 0), index - difference);
+            help temp(mh.ders[index](0, 0), mh.params[index], index - difference, param_tol);
+            // if (new_ders.size() > 1)
+            // {
+            //     if (temp == *(new_ders.begin()))
+            //     {
+            //         std::cout << 1;
+            //     }
+            // }
             auto it = new_ders.find(temp);
             if (it == new_ders.end())
             {
                 new_ders.insert(temp);
                 result_vec.push_back(mh.ders[index]);
+                result_params.push_back(mh.params[index]);
                 index_map.insert(std::make_pair(index, index - difference));
             }
             else
@@ -788,6 +828,7 @@ namespace tnurbs
                 
         }
         mh.ders = result_vec;
+        mh.params = result_params;
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
@@ -1057,6 +1098,18 @@ namespace tnurbs
                 
                 if (begin_it == temp_indexs.end() || end_it == temp_indexs.end())
                     indexs.push_back(current->point_index[0]);
+                else if (begin_it > end_it)
+                {
+                    //todo
+                    if (end_it == temp_indexs.begin() && temp_indexs.front() == temp_indexs.back())
+                    {
+						indexs.insert(indexs.end(), begin_it, temp_indexs.end() - 1);
+                    }
+                    else
+                    {
+						continue;
+                    }
+                }
                 else
                     indexs.insert(indexs.end(), begin_it, end_it);
             }
@@ -1088,6 +1141,18 @@ namespace tnurbs
                 
                 if (begin_it == temp_indexs.end() || end_it == temp_indexs.end())
                     indexs.push_back(current->point_index[1]);
+                else if (begin_it > end_it)
+                {
+                    //todo
+                    if (end_it == temp_indexs.begin() && temp_indexs.front() == temp_indexs.back())
+                    {
+						indexs.insert(indexs.end(), begin_it, temp_indexs.end() - 1);
+                    }
+                    else
+                    {
+						continue;
+                    }
+                }
                 else
                     indexs.insert(indexs.end(), begin_it, end_it);
             }
@@ -1122,7 +1187,14 @@ namespace tnurbs
                 else if (begin_it > end_it)
                 {
                     //todo
-                    continue;
+                    if (end_it == temp_indexs.begin() && temp_indexs.front() == temp_indexs.back())
+                    {
+						indexs.insert(indexs.end(), begin_it, temp_indexs.end() - 1);
+                    }
+                    else
+                    {
+						continue;
+                    }
                 }
                 else
                     indexs.insert(indexs.end(), begin_it, end_it);
@@ -1155,10 +1227,44 @@ namespace tnurbs
                 
                 if (begin_it == temp_indexs.end() || end_it == temp_indexs.end())
                     indexs.push_back(current->point_index[3]);
+                else if (begin_it > end_it)
+                {
+                    //todo
+                    if (end_it == temp_indexs.begin() && temp_indexs.front() == temp_indexs.back())
+                    {
+						indexs.insert(indexs.end(), begin_it, temp_indexs.end() - 1);
+                    }
+                    else
+                    {
+						continue;
+                    }
+                }
                 else
                     indexs.insert(indexs.end(), begin_it, end_it);
             }
-            surface_mesh.m_indexs.push_back(indexs);
+
+            size_t index_count = indexs.size();
+            if (index_count == 4)
+            {
+                surface_mesh.m_indexs.push_back(std::vector<int>{indexs[0], indexs[1], indexs[2]});
+                surface_mesh.m_indexs.push_back(std::vector<int>{indexs[2], indexs[3], indexs[0]});
+            }
+            else
+            {
+                Eigen::Vector2<T> middle_param = current->uv_box.get_middle_point();
+                Eigen::Matrix2<Eigen::Vector<T, dim>> result;
+                current->surface->derivative_on_surface<1>(middle_param[0], middle_param[1], result);
+                surface_mesh.m_ders.push_back(result);
+
+                for (size_t index = 0; index < index_count; ++index)
+                {
+                    std::vector<int> sub_indexs{ indexs[index], indexs[(index + 1) % index_count], ders_count };
+                    surface_mesh.m_indexs.push_back(sub_indexs);
+                }
+                ders_count += 1;
+            }
+
+            // surface_mesh.m_indexs.push_back(indexs);
 
             //寻找下一个叶子节点
             if (current->root == nullptr)
@@ -1187,12 +1293,7 @@ namespace tnurbs
                 {
                     current = current->left;
                 }
-                
-                
             }
-
-           
-
         }
         return ENUM_NURBS::NURBS_SUCCESS;
     }
@@ -1205,6 +1306,130 @@ namespace tnurbs
         return ENUM_NURBS::NURBS_SUCCESS;
     }
 
+    template<typename surface_type, typename T = typename surface_type::Type, int dim = surface_type::dimension>
+    ENUM_NURBS mesh_help_to_mesh2(surface_mesh_helper<surface_type> &mh, mesh<2, T, dim> &surface_mesh)
+    {
+        remove_multiple_point(mh, false);
+        CDT::Triangulation<T> cdt;
+        cdt.insertVertices(mh.params.begin(), mh.params.end(),
+            [](const Eigen::Vector2<T>& p) { return p[0]; },
+            [](const Eigen::Vector2<T>& p) { return p[1]; }
+            );
+
+        // find all edges
+        // left
+        surface_patch<surface_type>* left = mh.root;
+
+        std::vector<surface_patch<surface_type>*> root_deque;
+        root_deque.reserve(mh.ders.size() * 4);
+
+
+        // position = 0 : left, position = 1 : bottom, position = 2 : right, position = 3 : up
+        auto find_edges = [&](std::vector<CDT::Edge>& edges, int position)
+            {
+                ENUM_DIRECTION dir = ENUM_DIRECTION::V_DIRECTION;
+                if (position == 0 || position == 2)
+                {
+                    dir = ENUM_DIRECTION::U_DIRECTION;
+                }
+                int start_index = 0;
+                int end_index = 1;
+                if (position == 1)
+                {
+					start_index = 1;
+					end_index = 2;
+                }
+                else if (position == 2)
+                {
+					start_index = 3;
+					end_index = 2;
+                }
+                else if (position == 3)
+                {
+					start_index = 0;
+					end_index = 3;
+                }
+
+				while (root_deque.empty() == false)
+				{
+					surface_patch<surface_type>* path = root_deque.back();
+					root_deque.pop_back();
+					while (path->left)
+					{
+						if (path->split_direction == dir)
+						{
+							root_deque.push_back(path->right);
+							path = path->left;
+                            continue;
+						}
+                        if (position == 0 || position == 3)
+                        {
+							path = path->left;
+                        }
+                        else
+                        {
+                            path = path->right;
+                        }
+					}
+					edges.emplace_back(static_cast<CDT::VertInd> (path->point_index[start_index]), static_cast<CDT::VertInd> (path->point_index[end_index]));
+				}
+            };
+
+        auto modify_edges = [](std::vector<CDT::Edge>& edges)
+            {
+                size_t edges_count = edges.size();
+                for (size_t index = 1; index < edges_count; ++index)
+                {
+                    if (edges[index].v1() != edges[index - 1].v2())
+                    {
+						edges[index] = CDT::Edge(edges[index].v2(), edges[index].v1());
+                    }
+                }
+            };
+
+        std::vector<CDT::Edge> left_edges;
+        root_deque.resize(0);
+        root_deque.push_back(mh.root);
+        find_edges(left_edges, 0);
+        modify_edges(left_edges);
+        cdt.insertEdges(left_edges);
+        
+        std::vector<CDT::Edge> bottom_edges;
+        root_deque.resize(0);
+        root_deque.push_back(mh.root);
+        find_edges(bottom_edges, 1);
+        modify_edges(bottom_edges);
+        cdt.insertEdges(bottom_edges);
+
+        std::vector<CDT::Edge> right_edges;
+        root_deque.resize(0);
+        root_deque.push_back(mh.root);
+        find_edges(right_edges, 2);
+        modify_edges(right_edges);
+        cdt.insertEdges(right_edges);
+        
+        std::vector<CDT::Edge> up_edges;
+        root_deque.resize(0);
+        root_deque.push_back(mh.root);
+        find_edges(up_edges, 3);
+        modify_edges(up_edges);
+        cdt.insertEdges(up_edges);
+		
+        cdt.eraseOuterTrianglesAndHoles();
+
+        surface_mesh.m_ders.insert(surface_mesh.m_ders.end(), mh.ders.begin(), mh.ders.end());
+        size_t triangles_count = cdt.triangles.size();
+        surface_mesh.m_indexs.reserve(triangles_count);
+        for (auto& triangle : cdt.triangles)
+        {
+            auto& vertices = triangle.vertices;
+            surface_mesh.m_indexs.push_back({});
+            auto& vec = surface_mesh.m_indexs.back();
+            vec = std::vector<int>{ (int)vertices[0], (int)vertices[1], (int)vertices[2] };
+        }
+
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
 
     template<typename curve_type, typename T = typename curve_type::Type, int dim = curve_type::dimension>
     ENUM_NURBS mesh_help_to_mesh(curve_mesh_helper<curve_type> &mh, mesh<1, T, dim> &curve_mesh)

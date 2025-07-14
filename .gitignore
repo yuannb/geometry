@@ -5,3 +5,6 @@ geometry/CMakeSettings.json
 .vs/*
 .vscode/*
 .vscode/launch.json
+
+service/build/*
+cach/*

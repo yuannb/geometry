@@ -115,7 +115,7 @@ namespace tnurbs
             return count;
         }
 
-        ENUM_NURBS get_ends_point(std::array<Eigen::Vector<T, dim>, 2> &points) const
+        virtual ENUM_NURBS get_ends_point(std::array<Eigen::Vector<T, dim>, 2> &points) const override
         {
             points[0] = project_point<T, is_rational, rows>::project_point_to_euclidean_space(m_control_points.col(0));
             // int points_count = m_control_points.cols();
@@ -343,7 +343,7 @@ namespace tnurbs
                 repeat += 1;
                 current -= 1;
             }
-            count = std::min(repeat, count);
+            count = std::min<int>(repeat, count);
             Eigen::VectorX<T> new_knots_vector;
             Eigen::Matrix<T, rows, Eigen::Dynamic> new_control_points;
             remove_curve_knots<T, degree, points_count, rows, is_rational>(span, count, repeat, m_knots_vector, m_control_points,
@@ -788,7 +788,7 @@ namespace tnurbs
                 repeat += 1;
                 current -= 1;
             }
-            count = std::min(repeat, count);
+            count = std::min<int>(repeat, count);
             remove_curve_knots<T, rows, is_rational>(span, count, degree, repeat, m_knots_vector, m_control_points, time, error);
             return ENUM_NURBS::NURBS_SUCCESS;
         }
@@ -935,6 +935,7 @@ namespace tnurbs
     class nurbs_curve<T, dim, is_rational, -1, -1> : public curve<T, dim>
     {
         friend class nurbs_surface<T, dim, -1, -1, -1, -1, is_rational>;
+        using curve_type = nurbs_curve<T, dim, is_rational, -1, -1>;
     public:
         using Type = T;
         static constexpr bool is_ratio = is_rational;
@@ -1005,7 +1006,7 @@ namespace tnurbs
         //     return id_nurbs;
         // }
 
-        virtual ENGEOMETRYTYPE  get_type() const override
+        virtual  ENGEOMETRYTYPE  get_type() const override
         {
             if constexpr (is_rational == true)
             {
@@ -1144,19 +1145,11 @@ namespace tnurbs
             return ENUM_NURBS::NURBS_SUCCESS;
         }
 
-        ENUM_NURBS get_homo_control_point(int index, Eigen::Vector<T, dim + 1> &point) const
+        ENUM_NURBS get_homo_control_point(int index, Eigen::Vector<T, rows> &point) const
         {
             if (index < 0 || index >= m_control_points.cols())
                 return ENUM_NURBS::NURBS_ERROR;
-            if constexpr (is_rational == true)
-            {
-                point = m_control_points.col(index);
-            }
-            else
-            {
-                point.block(0, 0, dim, 1) = m_control_points.col(index);
-                point[dim] = 1.0;
-            }
+            point = m_control_points.col(index);
 
             return ENUM_NURBS::NURBS_SUCCESS;
         }
@@ -1260,6 +1253,11 @@ namespace tnurbs
             return m_knots_vector;
         }
 
+        const Eigen::VectorX<T>& get_knots_ref() const
+        {
+            return m_knots_vector;
+        }
+
         ENUM_NURBS get_different_knots_vector(std::vector<T> &vec) const
         {
             return  get_all_defference_knots(m_degree, m_knots_vector, vec);
@@ -1315,7 +1313,7 @@ namespace tnurbs
         /// @param result out_put_pram, result[i]为nurbs曲线的第n次导数
         /// @return ENUM_NURBS错误码
         template<ENUM_LIMITDIRECTION flag = ENUM_LIMITDIRECTION::RIGHT>
-        ENUM_NURBS derivative_on_curve(T u, int n, Eigen::Vector<Eigen::Vector<T, dim>, Eigen::Dynamic> &result) const
+        ENUM_NURBS derivative_on_curve(T u, int n, Eigen::Vector<Eigen::Vector<T, dim>, Eigen::Dynamic> &result) const 
         {
             int index = -1;
             find_span<T, flag>(u, m_degree, m_knots_vector, index);
@@ -1332,6 +1330,10 @@ namespace tnurbs
             return ENUM_NURBS::NURBS_SUCCESS;
         }
 
+        virtual ENUM_NURBS derivative_on_curve(T u, int n, Eigen::Vector<Eigen::Vector<T, dim>, Eigen::Dynamic> &result) const override
+        {
+            return derivative_on_curve<ENUM_LIMITDIRECTION::RIGHT>(u, n, result);
+        }
 
         /// @brief 计算nurbs曲线的右导数(结果向量不单位化)
         /// @tparam n 求(0, 1, 2 ... n)右导数 < m_degree
@@ -1606,7 +1608,7 @@ namespace tnurbs
                 repeat += 1;
                 current -= 1;
             }
-            count = std::min(repeat, count);
+            count = std::min<int>(repeat, count);
             remove_curve_knots<T, rows, is_rational>(span, count, m_degree, repeat, m_knots_vector, m_control_points, time, error);
             return ENUM_NURBS::NURBS_SUCCESS;
         }
@@ -1643,12 +1645,12 @@ namespace tnurbs
         }
 
 
-        bool is_closed() const
+        virtual bool is_closed() const override
         {
             int points_count = m_control_points.cols();
             Eigen::Vector<T, dim> start = project_point<T, is_rational, rows>::project_point_to_euclidean_space(m_control_points.col(0));
             Eigen::Vector<T, dim> end = project_point<T, is_rational, rows>::project_point_to_euclidean_space(m_control_points.col(points_count - 1));
-            return (start - end).squaredNorm() < DEFAULT_ERROR * DEFAULT_ERROR;
+            return (start - end).squaredNorm() < TDEFAULT_ERROR<T>::value * TDEFAULT_ERROR<T>::value;
         }
 
         //TODO: 写个多线程, 多线程每次结果可能都会不同
@@ -1799,7 +1801,7 @@ namespace tnurbs
 
                     int repeat1 = reparameter_function.get_knots_multiplicity(index);
                     int repeat2 = get_knots_multiplicity(knots_index);
-                    int repeat = std::min(reparameter_function_degree - repeat1, m_degree - repeat2);
+                    int repeat = std::min<int>(reparameter_function_degree - repeat1, m_degree - repeat2);
                     equal_knots_degree.push_back(repeat);
                 }
             }
@@ -1985,7 +1987,7 @@ namespace tnurbs
 
                     int repeat1 = reparameter_function.get_knots_multiplicity(index);
                     int repeat2 = get_knots_multiplicity(knots_index);
-                    int repeat = std::min(reparameter_function_degree - repeat1, m_degree - repeat2);
+                    int repeat = std::min<int>(reparameter_function_degree - repeat1, m_degree - repeat2);
                     equal_knots_degree.push_back(repeat);
                 }
             }
@@ -2347,8 +2349,8 @@ namespace tnurbs
                     error = temp_error;
                     T remove_knot = new_knots_vector[r];
                     int new_points_count = new_control_points.cols();
-                    int beg = std::max(r - m_degree, m_degree + 1);
-                    int end = std::min(r + m_degree - mul + 1, new_points_count - 1);
+                    int beg = std::max<int>(r - m_degree, m_degree + 1);
+                    int end = std::min<int>(r + m_degree - mul + 1, new_points_count - 1);
 
                     remove_curve_knots_no_check_error<T, dim, false>(r, 1, m_degree, mul, new_knots_vector, new_control_points);
                     if (new_knots_vector.size() == 2 * (m_degree + 1))
@@ -2384,7 +2386,7 @@ namespace tnurbs
                         {
                             if (different_knots[index] == remove_knot && 1 == mul)
                             {
-                                end = std::min(r + m_degree - mul + 1, new_points_count - 2);
+                                end = std::min<int>(r + m_degree - mul + 1, new_points_count - 2);
                                 --kont_index_end;
                                 --mul;
                                 knot_index_start = kont_index_end + 1;
@@ -2393,7 +2395,7 @@ namespace tnurbs
                             }
                             if (different_knots[index] == remove_knot)
                             {
-                                end = std::min(r + m_degree - mul + 1, new_points_count - 2);
+                                end = std::min<int>(r + m_degree - mul + 1, new_points_count - 2);
                                 kont_index_end -= 1;
                                 --multiple[index];
                             }
@@ -2478,10 +2480,10 @@ namespace tnurbs
         {
             int u_begin_index;
             int u_begin_mul = konts_multiple<T>(u_box.Min[0],  m_knots_vector, m_degree, u_begin_index);
-            int u_begin_insert_num = std::max(0, m_degree - u_begin_mul);
+            int u_begin_insert_num = std::max<int>(0, m_degree - u_begin_mul);
             int u_end_index;
             int u_end_mul = konts_multiple<T>(u_box.Max[0], m_knots_vector, m_degree, u_end_index);
-            int u_end_insert_num = std::max(m_degree - u_end_mul, 0);
+            int u_end_insert_num = std::max<int>(m_degree - u_end_mul, 0);
             Eigen::VectorX<T> insert_knots(u_begin_insert_num + u_end_insert_num);
             insert_knots.block(0, 0, u_begin_insert_num, 1).setConstant(u_box.Min[0]);
             insert_knots.block(u_begin_insert_num, 0, u_end_insert_num, 1).setConstant(u_box.Max[0]);
@@ -2505,9 +2507,9 @@ namespace tnurbs
             // Eigen::VectorX<T> temp_u_knots = temp_nurbs.get_knots_vector();
             u_new_knots[0] = u_box.Min[0];
             u_new_knots[u_new_knots_count - 1] = u_box.Max[0];
-            u_new_knots.block(1, 0, u_new_knots_count - 2, 1) = temp_u_knots.block(std::max(u_begin_index, 1), 0, u_new_knots_count - 2, 1);
+            u_new_knots.block(1, 0, u_new_knots_count - 2, 1) = temp_u_knots.block(std::max<int>(u_begin_index, 1), 0, u_new_knots_count - 2, 1);
             
-            int u_start = std::max(u_begin_index - 1, 0);
+            int u_start = std::max<int>(u_begin_index - 1, 0);
             // new_control_points = points.block(0, u_start, rows, u_new_knots_count - m_degree - 1);
             
             m_control_points = std::move(points.block(0, u_start, rows, u_new_knots_count - m_degree - 1).eval());
@@ -2615,7 +2617,7 @@ namespace tnurbs
             return ENUM_NURBS::NURBS_SUCCESS;
         }
        
-        Box<T, 1> get_domain_box() const
+        virtual Box<T, 1> get_domain_box() const override
         {
             Box<T, 1> domain;
             domain.Min[0] = m_knots_vector[0];
@@ -2659,6 +2661,18 @@ namespace tnurbs
         //    return ENUM_NURBS::NURBS_SUCCESS;
         //}
 
+
+        ENUM_NURBS scale_curve(const Eigen::Vector<T, dim> &center, const Eigen::Matrix<T, dim, dim> &mat, const Eigen::Vector<T, dim> &scale_factory)
+        {
+            int cols = m_control_points.cols();
+            for (int cols_index = 0; cols_index < cols; ++cols_index)
+            {
+                Eigen::Vector<T, rows> vec = m_control_points.col(cols_index);
+                sacle_point<T, dim, is_rational>(vec, mat, scale_factory, center);
+                m_control_points.col(cols_index) = vec;
+            }
+            return ENUM_NURBS::NURBS_SUCCESS;
+        }
     private:
 
         ENUM_NURBS bezier_curve_reparameter(const nurbs_curve<T, 1, false, -1, -1> &reparameter_function,
@@ -2923,7 +2937,7 @@ namespace tnurbs
             }
 
             int new_span = end_span - start_span + rs[0];
-            new_span = std::max(degree, new_span);
+            new_span = std::max<int>(degree, new_span);
             valid_auxiliary_knots_count = new_span + degree + 2;
             auxiliary_points.middleCols(rs[0], repeat_count + 1) = old_control_points.middleCols(start_span - repeat_count, repeat_count + 1);
 
@@ -2982,7 +2996,7 @@ namespace tnurbs
                     }
                 }
             }
-            result = std::max(0, result);
+            result = std::max<int>(0, result);
             return result;
         }
         
@@ -3053,7 +3067,7 @@ namespace tnurbs
             }
 
             int new_span = end_span - start_span + rs[0];
-            new_span = std::max(degree, new_span);
+            new_span = std::max<int>(degree, new_span);
             valid_auxiliary_knots_count = new_span + degree + 2;
             auxiliary_points.middleCols(rs[0], repeat_count + 1) = control_points.middleCols(start_span - repeat_count, repeat_count + 1);
 
@@ -3084,10 +3098,10 @@ namespace tnurbs
 
             int u_begin_index;
             int u_begin_mul = konts_multiple<Scalar>(low, knots, degree, u_begin_index);
-            rs[0] = std::max(0, degree - u_begin_mul);
+            rs[0] = std::max<int>(0, degree - u_begin_mul);
             int u_end_index;
             int u_end_mul = konts_multiple<Scalar>(high, knots, degree, u_end_index);
-            rs[1] = std::max(degree - u_end_mul, 0);
+            rs[1] = std::max<int>(degree - u_end_mul, 0);
 
             insert_knots(curve, low, high, rs);
 
@@ -3113,10 +3127,10 @@ namespace tnurbs
 
             int u_begin_index;
             int u_begin_mul = konts_multiple<Scalar>(low, knots, degree, u_begin_index);
-            rs[0] = std::max(0, degree - u_begin_mul);
+            rs[0] = std::max<int>(0, degree - u_begin_mul);
             int u_end_index;
             int u_end_mul = konts_multiple<Scalar>(high, knots, degree, u_end_index);
-            rs[1] = std::max(degree - u_end_mul, 0);
+            rs[1] = std::max<int>(degree - u_end_mul, 0);
 
             insert_knots(curve, low, high, rs);
 
@@ -3132,7 +3146,7 @@ namespace tnurbs
 
         ENUM_NURBS ders_basis_funs(int i, int n, int degree, Scalar u, const KnotsType & knots_vector, Eigen::MatrixX<Scalar>& ders_basis_funs_array)
         {
-            int new_n = std::min(n, degree);
+            int new_n = std::min<int>(n, degree);
             // result.resize(degree + 1, n + 1);
             ders_basis_funs_array.setConstant(0.0);
             // result.setConstant(0.0);
@@ -3187,12 +3201,12 @@ namespace tnurbs
                     next_array.setConstant(0.0);
 
                     int left_num = r - (i - degree) - k;
-                    int left_index = std::max(0, -left_num);
+                    int left_index = std::max<int>(0, -left_num);
                     int right_num = r - (i - degree);
                     int right_index = right_num > (degree - k) ? degree - k - left_num : right_num - left_num;
                     int next_array_length = right_index - left_index + 1;
 
-                    int col_of_array = std::max(0, degree - i + r - k);
+                    int col_of_array = std::max<int>(0, degree - i + r - k);
                     int current_left_index = left_index;
                     int current_right_index = right_index;
                     if (left_index == 0)
@@ -3212,7 +3226,7 @@ namespace tnurbs
                             current_array.block(current_left_index - 1, 0, arrayLength, 1)) / ndu_trans.block(col_of_array + current_left_index - left_index, degree + 1 - k, arrayLength, 1).array();
                     }
 
-                    left_num = std::max(0, left_num);
+                    left_num = std::max<int>(0, left_num);
                     Eigen::Map<Eigen::VectorX<Scalar>> temp_l(&ndu(left_num, degree - k), next_array_length);
                     Eigen::Map<Eigen::VectorX<Scalar>> temp_r(&next_array(left_index, 0), next_array_length);
 
@@ -3232,7 +3246,7 @@ namespace tnurbs
             const auto& knots = curve->m_knots_vector;
             if constexpr (is_rational == false)
             {
-                int du = std::min(n, degree);
+                int du = std::min<int>(n, degree);
 
                 for (int index = du + 1; index < n + 1; ++index)
                 {
@@ -3258,6 +3272,8 @@ namespace tnurbs
 
     using nunbs3d = nurbs_curve<double, 3, false, -1, -1>;
     using nurbs3d = nurbs_curve<double, 3, true, -1, -1>;
+    using nunbs_surf3d = nurbs_surface<double, 3, -1, -1, -1, -1, false>;
+    using nurbs_surf3d = nurbs_surface<double, 3, -1, -1, -1, -1, true>;
 
 }
 

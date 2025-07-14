@@ -7,6 +7,7 @@
 #include <iostream>
 #include <fstream>
 #include "declare.h"
+#include <corecrt_math_defines.h>
 
 // #define KNOTS_VECTOR_EPS    1e-8
 #define KNOTS_VECTOR_ERROR     1e-10
@@ -979,7 +980,7 @@ namespace tnurbs
     ENUM_NURBS ders_basis_funs(int i, T u, const Eigen::Vector<T, degree + 1 + points_count> &knots_vector,
                     Eigen::Matrix<T, degree + 1, n + 1> &result)
     {
-        constexpr int new_n = std::min(degree, n);
+        constexpr int new_n = std::min<T>(degree, n);
         result.setConstant(0.0);
         // 可以将下面left和right的计算改成多线程, 不过节点向量应该不大, 该不该影响应该不大
         //将u-u_j(j = i - p + 1, ... , i, 理论上应该算到u-u_(i - p), 但是其对应的基函数为0, 因此可以设置为0)
@@ -1043,13 +1044,13 @@ namespace tnurbs
                 next_array.setConstant(0.0);
 
                 int left_num = r - (i - degree) - k;
-                int left_index = std::max(0, -left_num);
+                int left_index = std::max<int>(0, -left_num);
                 int right_num = r - (i - degree);
                 int right_index = right_num > (degree - k) ? degree - k - left_num : right_num - left_num;
                 int next_array_length = right_index - left_index + 1;
 
                 // int col_of_array = std::max(0, degree - i + r - 1);
-                int col_of_array = std::max(0, degree - i + r - k);
+                int col_of_array = std::max<int>(0, degree - i + r - k);
                 Eigen::Array<T, Eigen::Dynamic, 1> denominator = ndu.block(degree + 1 - k, col_of_array, 1, next_array_length).transpose();
                 int current_left_index = left_index;
                 int current_right_index = right_index;
@@ -1070,7 +1071,7 @@ namespace tnurbs
                         current_array.block(current_left_index - 1, 0, arrayLength, 1)).array() / denominator.block(current_left_index - left_index, 0, arrayLength, 1).array();
                 }
 
-                left_num = std::max(0, left_num);
+                left_num = std::max<int>(0, left_num);
                 Eigen::VectorX<T> temp_r = ndu.block(left_num, degree - k,  next_array_length, 1);
                 Eigen::VectorX<T> temp_l = next_array.block(left_index, 0, next_array_length, 1);
                 result(r - (i - degree), k) = my_factorial<degree>::value / std::tgamma<int>(degree - k + 1) *
@@ -1097,7 +1098,7 @@ namespace tnurbs
     ENUM_NURBS ders_basis_funs(int i, int n, T u, const Eigen::Vector<T, degree + 1 + points_count> &knots_vector,
                     Eigen::Matrix<T, degree + 1, Eigen::Dynamic> &result)
     {
-        int new_n = std::min(n, degree);
+        int new_n = std::min<T>(n, degree);
         result.resize(degree + 1, n + 1);
         result.setConstant(0.0);
         // 可以将下面left和right的计算改成多线程, 不过节点向量应该不大, 该不该影响应该不大
@@ -1159,13 +1160,13 @@ namespace tnurbs
                 next_array.setConstant(0.0);
 
                 int left_num = r - (i - degree) - k;
-                int left_index = std::max(0, -left_num);
+                int left_index = std::max<T>(0, -left_num);
                 int right_num = r - (i - degree);
                 int right_index = right_num > (degree - k) ? degree - k - left_num : right_num - left_num;
                 int next_array_length = right_index - left_index + 1;
 
                 // int col_of_array = std::max(0, degree - i + r - 1);
-                int col_of_array = std::max(0, degree - i + r - k);
+                int col_of_array = std::max<int>(0, degree - i + r - k);
                 Eigen::Array<T, Eigen::Dynamic, 1> denominator = ndu.block(degree + 1 - k, col_of_array, 1, next_array_length).transpose();
                 int current_left_index = left_index;
                 int current_right_index = right_index;
@@ -1186,7 +1187,7 @@ namespace tnurbs
                         current_array.block(current_left_index - 1, 0, arrayLength, 1)).array() / denominator.block(current_left_index - left_index, 0, arrayLength, 1).array();
                 }
 
-                left_num = std::max(0, left_num);
+                left_num = std::max<int>(0, left_num);
                 Eigen::VectorX<T> temp_r = ndu.block(left_num, degree - k,  next_array_length, 1);
                 Eigen::VectorX<T> temp_l = next_array.block(left_index, 0, next_array_length, 1);
                 result(r - (i - degree), k) = my_factorial<degree>::value / std::tgamma<int>(degree - k + 1) *
@@ -1212,7 +1213,7 @@ namespace tnurbs
     ENUM_NURBS ders_basis_funs(int i, int n, T u, const Eigen::Vector<T, Eigen::Dynamic> &knots_vector,
                     Eigen::Matrix<T, degree + 1, Eigen::Dynamic> &result)
     {
-        int new_n = std::min(degree, n);
+        int new_n = std::min<int>(degree, n);
         result.resize(degree + 1, n + 1);
         result.setConstant(0.0);
         // 可以将下面left和right的计算改成多线程, 不过节点向量应该不大, 该不该影响应该不大
@@ -1275,13 +1276,13 @@ namespace tnurbs
                 next_array.setConstant(0.0);
 
                 int left_num = r - (i - degree) - k;
-                int left_index = std::max(0, -left_num);
+                int left_index = std::max<int>(0, -left_num);
                 int right_num = r - (i - degree);
                 int right_index = right_num > (degree - k) ? degree - k - left_num : right_num - left_num;
                 int next_array_length = right_index - left_index + 1;
 
                 // int col_of_array = std::max(0, degree - i + r - 1);
-                int col_of_array = std::max(0, degree - i + r - k);
+                int col_of_array = std::max<int>(0, degree - i + r - k);
                 Eigen::Array<T, Eigen::Dynamic, 1> denominator = ndu.block(degree + 1 - k, col_of_array, 1, next_array_length).transpose();
                 int current_left_index = left_index;
                 int current_right_index = right_index;
@@ -1302,7 +1303,7 @@ namespace tnurbs
                         current_array.block(current_left_index - 1, 0, arrayLength, 1)).array() / denominator.block(current_left_index - left_index, 0, arrayLength, 1).array();
                 }
 
-                left_num = std::max(0, left_num);
+                left_num = std::max<int>(0, left_num);
                 Eigen::VectorX<T> temp_r = ndu.block(left_num, degree - k,  next_array_length, 1);
                 Eigen::VectorX<T> temp_l = next_array.block(left_index, 0, next_array_length, 1);
                 result(r - (i - degree), k) = my_factorial<degree>::value / std::tgamma<int>(degree - k + 1) *
@@ -1329,7 +1330,7 @@ namespace tnurbs
     ENUM_NURBS ders_basis_funs(int i, T u, const Eigen::Vector<T, Eigen::Dynamic> &knots_vector,
                     Eigen::Matrix<T, degree + 1, n + 1> &result)
     {
-        constexpr int new_n = std::min(n, degree);
+        constexpr int new_n = std::min<int>(n, degree);
         result.setConstant(0.0);
         // 可以将下面left和right的计算改成多线程, 不过节点向量应该不大, 该不该影响应该不大
         //将u-u_j(j = i - p + 1, ... , i, 理论上应该算到u-u_(i - p), 但是其对应的基函数为0, 因此可以设置为0)
@@ -1391,13 +1392,13 @@ namespace tnurbs
                 next_array.setConstant(0.0);
 
                 int left_num = r - (i - degree) - k;
-                int left_index = std::max(0, -left_num);
+                int left_index = std::max<int>(0, -left_num);
                 int right_num = r - (i - degree);
                 int right_index = right_num > (degree - k) ? degree - k - left_num : right_num - left_num;
                 int next_array_length = right_index - left_index + 1;
 
                 // int col_of_array = std::max(0, degree - i + r - 1);
-                int col_of_array = std::max(0, degree - i + r - k);
+                int col_of_array = std::max<int>(0, degree - i + r - k);
                 Eigen::Array<T, Eigen::Dynamic, 1> denominator = ndu.block(degree + 1 - k, col_of_array, 1, next_array_length).transpose();
                 int current_left_index = left_index;
                 int current_right_index = right_index;
@@ -1418,7 +1419,7 @@ namespace tnurbs
                         current_array.block(current_left_index - 1, 0, arrayLength, 1)).array() / denominator.block(current_left_index - left_index, 0, arrayLength, 1).array();
                 }
 
-                left_num = std::max(0, left_num);
+                left_num = std::max<int>(0, left_num);
                 Eigen::VectorX<T> temp_r = ndu.block(left_num, degree - k,  next_array_length, 1);
                 Eigen::VectorX<T> temp_l = next_array.block(left_index, 0, next_array_length, 1);
                 result(r - (i - degree), k) = my_factorial<degree>::value / std::tgamma<int>(degree - k + 1) *
@@ -1444,7 +1445,7 @@ namespace tnurbs
     ENUM_NURBS ders_basis_funs(int i, int n, int degree, T u, const Eigen::Vector<T, Eigen::Dynamic> &knots_vector,
                     Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> &result)
     {
-        int new_n = std::min(n, degree);
+        int new_n = std::min<int>(n, degree);
         result.resize(degree + 1, n + 1);
         result.setConstant(0.0);
         // 可以将下面left和right的计算改成多线程, 不过节点向量应该不大, 该不该影响应该不大
@@ -1524,13 +1525,13 @@ namespace tnurbs
                 next_array.setConstant(0.0);
 
                 int left_num = r - (i - degree) - k;
-                int left_index = std::max(0, -left_num);
+                int left_index = std::max<int>(0, -left_num);
                 int right_num = r - (i - degree);
                 int right_index = right_num > (degree - k) ? degree - k - left_num : right_num - left_num;
                 int next_array_length = right_index - left_index + 1;
 
                 // int col_of_array = std::max(0, degree - i + r - 1);
-                int col_of_array = std::max(0, degree - i + r - k);
+                int col_of_array = std::max<int>(0, degree - i + r - k);
                 // const auto& denominator = ndu.block(degree + 1 - k, col_of_array, 1, next_array_length).transpose();
                 int current_left_index = left_index;
                 int current_right_index = right_index;
@@ -1553,7 +1554,7 @@ namespace tnurbs
                         current_array.block(current_left_index - 1, 0, arrayLength, 1)) / denominator.block(col_of_array + current_left_index - left_index, degree + 1 - k, arrayLength, 1).array();
                 }
 
-                left_num = std::max(0, left_num);
+                left_num = std::max<int>(0, left_num);
                 Eigen::Map<Eigen::VectorX<T>> temp_l(&ndu(left_num, degree - k), next_array_length);
                 Eigen::Map<Eigen::VectorX<T>> temp_r(&next_array(left_index, 0), next_array_length);
                 // Eigen::VectorX<T> temp_r = ndu.block(left_num, degree - k, next_array_length, 1);
@@ -1586,7 +1587,7 @@ namespace tnurbs
     ENUM_NURBS ders_basis_funs(int i, int degree, T u, const Eigen::Vector<T, Eigen::Dynamic> &knots_vector,
                     Eigen::Matrix<T, Eigen::Dynamic, n + 1> &result)
     {
-        int new_n = std::min(n, degree);
+        int new_n = std::min<int>(n, degree);
         result.resize(degree + 1, n + 1);
         result.setConstant(0.0);
         // 可以将下面left和right的计算改成多线程, 不过节点向量应该不大, 该不该影响应该不大
@@ -1666,13 +1667,13 @@ namespace tnurbs
                 next_array.setConstant(0.0);
 
                 int left_num = r - (i - degree) - k;
-                int left_index = std::max(0, -left_num);
+                int left_index = std::max<int>(0, -left_num);
                 int right_num = r - (i - degree);
                 int right_index = right_num > (degree - k) ? degree - k - left_num : right_num - left_num;
                 int next_array_length = right_index - left_index + 1;
 
                 // int col_of_array = std::max(0, degree - i + r - 1);
-                int col_of_array = std::max(0, degree - i + r - k);
+                int col_of_array = std::max<int>(0, degree - i + r - k);
                 const auto& denominator = ndu.block(degree + 1 - k, col_of_array, 1, next_array_length).transpose();
                 int current_left_index = left_index;
                 int current_right_index = right_index;
@@ -1693,7 +1694,7 @@ namespace tnurbs
                         current_array.block(current_left_index - 1, 0, arrayLength, 1)).array() / denominator.block(current_left_index - left_index, 0, arrayLength, 1).array();
                 }
 
-                left_num = std::max(0, left_num);
+                left_num = std::max<int>(0, left_num);
                 Eigen::Map<Eigen::VectorX<T>> temp_l(&ndu(left_num, degree - k), next_array_length);
                 Eigen::Map<Eigen::VectorX<T>> temp_r(&next_array(left_index, 0), next_array_length);
                 // Eigen::VectorX<T> temp_r = ndu.block(left_num, degree - k, next_array_length, 1);
@@ -3112,14 +3113,14 @@ namespace tnurbs
         for (int i = 1; i <= ph2; ++i)
         {
             T inv = 1.0 / Bin(ph, i);
-            int mpi = std::min(degree, i);
-            for (int j = std::max(0, i - t); j <= mpi; ++j)
+            int mpi = std::min<int>(degree, i);
+            for (int j = std::max<int>(0, i - t); j <= mpi; ++j)
                 bezalfs(i, j) = inv * Bin(degree, j) * Bin(t, i - j);
         }
         for (int i = ph2 + 1; i < ph; ++i)
         {
-            int mpi = std::min(degree, i);
-            for (int j = std::max(0, i - t); j <= mpi; ++j)
+            int mpi = std::min<int>(degree, i);
+            for (int j = std::max<int>(0, i - t); j <= mpi; ++j)
                 bezalfs(i, j) = bezalfs(ph - i, degree - j);
         }
         int knots_num;
@@ -3175,8 +3176,8 @@ namespace tnurbs
             for (int i = lbz; i <= ph; ++i)
             {
                 ebpts.col(i) = zero_vector;
-                int mpi = std::min(degree, i);
-                for (int j = std::max(0, i - t); j <= mpi; ++j)
+                int mpi = std::min<int>(degree, i);
+                for (int j = std::max<int>(0, i - t); j <= mpi; ++j)
                     ebpts.col(i) = ebpts.col(i) + bezalfs(i, j) * bpts.col(j);
             }
             if (older > 1)
@@ -3590,7 +3591,7 @@ namespace tnurbs
 
         Eigen::VectorX<Eigen::Vector<T, point_size>> ders_low(ml + 1);
         Eigen::Matrix<T, Eigen::Dynamic, Eigen::Dynamic> ders_temp;
-        int new_n = std::min(ml, old_degree);
+        int new_n = std::min<int>(ml, old_degree);
         ders_basis_funs<T>(old_degree, new_n, old_degree, old_knots_vector[0], old_knots_vector, ders_temp);
         Eigen::Vector<T, point_size> zero;
         zero.setConstant(0.0);
@@ -3604,7 +3605,7 @@ namespace tnurbs
             ders_low[idx] = zero;
         }
 
-        new_n = std::min(mr, old_degree);
+        new_n = std::min<int>(mr, old_degree);
         ders_basis_funs<T>(old_degree, new_n, old_degree, old_knots_vector[old_degree + 1], old_knots_vector, ders_temp);
         Eigen::VectorX<Eigen::Vector<T, point_size>> ders_high(mr + 1);
         int knots_index = old_knots_vector.size() - old_degree * 2 - 2;

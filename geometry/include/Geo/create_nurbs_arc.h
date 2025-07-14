@@ -3,6 +3,7 @@
 #include "nurbs_curve.h"
 #include "nurbs_surface.h"
 #include <numbers>
+#include <corecrt_math_defines.h>
 
 namespace tnurbs
 {
@@ -47,6 +48,96 @@ namespace tnurbs
             if (rankMat != 2 && rankExternMat != 2)
             {
                 if (radius < DEFAULT_ERROR)
+                {
+                    control_points(dim, index + 1) = w1;
+                    control_points.template block<dim, 1>(0, index + 1) = w1 * center;
+                    index += 2;
+                    if (i < narcs)
+                    {
+                        P0 = P2;
+                        T0 = T2;
+                    }
+                    continue;
+                }
+                else
+                    return ENUM_NURBS::NURBS_ERROR;
+            }
+            Eigen::Vector2<T> v = matSvd.solve(vec);
+            Eigen::Vector<T, dim> middle_point = ((v[0] * T0 + P0) + (v[1] * T2 + P2)) / 2.0;
+            control_points(dim, index + 1) = w1;
+            control_points.template block<dim, 1>(0, index + 1) = w1 * middle_point;
+            index += 2;
+            if (i < narcs)
+            {
+                P0 = P2;
+                T0 = T2;
+            }
+        }
+        int len = (narcs - 1) * 2;
+        Eigen::VectorX<T> knots_vector(6 + len);
+        knots_vector.template block<3, 1>(0, 0).setConstant(0.0);
+        knots_vector.template block<3, 1>(3 + len, 0).setConstant(1.0);
+        if (narcs == 2)
+        {
+            knots_vector[3] = 0.5;
+            knots_vector[4] = 0.5;
+        }
+        else if (narcs == 3)
+        {
+            knots_vector[3] = knots_vector[4] = 1.0 / 3.0;
+            knots_vector[5] = knots_vector[6] = 2.0 * knots_vector[3];
+        }
+        else if (narcs == 4)
+        {
+            knots_vector[3] = knots_vector[4] = 0.25;
+            knots_vector[5] = knots_vector[6] = 0.5;
+            knots_vector[7] = knots_vector[8] = 0.75;
+        }
+        nurbs.set_control_points(control_points);
+        nurbs.set_knots_vector(knots_vector);
+        nurbs.set_degree(2);
+        return ENUM_NURBS::NURBS_SUCCESS;
+    }
+    //start_angle < end_angle : 逆时针圆弧;  start_angle > end_angle : 顺时针的圆弧
+    template<typename T, int dim>
+    ENUM_NURBS create_nurbs_ellipse(const Eigen::Vector<T, dim> &center, const Eigen::Vector<T, dim> &u_dir, const Eigen::Vector<T, dim> &v_dir,
+        T major_radius, T minor_radius, T start_angle, T end_angle, nurbs_curve<T, dim, true, -1, -1> &nurbs)
+    {
+        // if(end_angle < start_angle)
+        //     return ENUM_NURBS::NURBS_ERROR;
+        T theta = end_angle - start_angle;
+        if (theta > M_PI * 2 + DEFAULT_ERROR)
+            return ENUM_NURBS::NURBS_ERROR;
+        int narcs = std::ceil(theta / M_PI_2);
+        T delta_theta = theta / static_cast<T>(narcs);
+        T w1 = std::cos(delta_theta / 2.0);
+        Eigen::Vector<T, dim> P0 = center + major_radius * std::cos(start_angle) * u_dir + minor_radius * std::sin(start_angle) * v_dir;
+        Eigen::Vector<T, dim> T0 = -std::sin(start_angle) * u_dir + std::cos(start_angle) * v_dir;
+        Eigen::Matrix<T, dim + 1, Eigen::Dynamic> control_points(dim + 1, 2 * narcs + 1);
+        control_points.col(0).template block<dim, 1>(0, 0) = P0;
+        control_points(dim, 0) = 1.0;
+        int index = 0;
+        T angle = start_angle;
+        for (int i = 1; i <= narcs; ++i)
+        {
+            angle += delta_theta;
+            Eigen::Vector<T, dim> P2 = center + major_radius * std::cos(angle) * u_dir + minor_radius * std::sin(angle) * v_dir;
+            control_points.template block<dim, 1>(0, index + 2) = P2;
+            control_points(dim, index + 2) = 1.0;
+            Eigen::Vector<T, dim> T2 = -std::sin(angle) * u_dir + std::cos(angle) * v_dir;
+
+            Eigen::Matrix<T, dim, 2> mat;
+            mat << T0, -T2;
+            Eigen::Vector<T, dim> vec = P2 - P0;
+            Eigen::Matrix<T, dim, 3> externMat;
+            externMat << T0, -T2, vec;
+            Eigen::JacobiSVD<Eigen::MatrixX<T>, Eigen::ComputeThinU | Eigen::ComputeThinV> matSvd(mat);
+            Eigen::JacobiSVD<Eigen::MatrixX<T>, Eigen::ComputeThinU | Eigen::ComputeThinV> externMatSvd(externMat);
+            int rankMat = matSvd.rank();
+            int rankExternMat = externMatSvd.rank();
+            if (rankMat != 2 && rankExternMat != 2)
+            {
+                if (major_radius < DEFAULT_ERROR)
                 {
                     control_points(dim, index + 1) = w1;
                     control_points.template block<dim, 1>(0, index + 1) = w1 * center;
